@@ -53,6 +53,7 @@ add_library(linopus_core STATIC
     src/core/CommandEngine.cpp
     src/core/Zip.cpp
     src/core/RenameEngine.cpp
+    src/core/FolderSync.cpp
     src/core/CommandCatalog.cpp
     src/core/Condition.cpp
     src/core/DriveList.cpp
@@ -95,6 +96,8 @@ add_library(linopus_ui STATIC
     src/ui/CustomizeDialog.cpp
     src/ui/CommandConsole.cpp
     src/ui/AdvancedRenameDialog.cpp
+    src/ui/SyncDialog.cpp
+    src/ui/DuplicatesDialog.cpp
     src/ui/ListerWindow.cpp
     src/ui/AppContext.cpp
 )
@@ -123,7 +126,7 @@ endif()
 if(LINOPUS_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS Test)
     enable_testing()
-    foreach(t aliases commandparser fileops trash jobmanager commandengine drives location listing condition rename)
+    foreach(t aliases commandparser fileops trash jobmanager commandengine drives location listing condition rename foldersync)
         add_executable(tst_${t} tests/tst_${t}.cpp)
         target_link_libraries(tst_${t} PRIVATE linopus_core Qt6::Test)
         add_test(NAME ${t} COMMAND tst_${t})

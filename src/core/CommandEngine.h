@@ -42,6 +42,14 @@ public:
             *error = QStringLiteral("Advanced Rename needs a lister window.");
         return false;
     }
+    // Tools that open their own window (Sync, Duplicates).
+    virtual bool tool(const ParsedCommand &cmd, QString *error)
+    {
+        Q_UNUSED(cmd)
+        if (error)
+            *error = QStringLiteral("This needs a lister window.");
+        return false;
+    }
     virtual bool settings(const ParsedCommand &cmd, QString *error)
     {
         Q_UNUSED(cmd)
@@ -88,6 +96,9 @@ public:
 //       VIEW=details|list|icons  HIDDEN=on|off|toggle
 //   Select ALL|NONE|INVERT|PATTERN=<wildcard>
 //   Settings BACKUP=<file|ask> | RESTORE=<file|ask> [QUIET]
+//   Sync [LEFT=] [RIGHT=] [MODE=update|mirror|twoway] [COMPARE=date|size|datesize|contents]
+//        [EXCLUDE=] [RUN]
+//   Duplicates [IN=...] [BY=contents|namesize|name] [MINSIZE=bytes] [HIDDEN]
 //   Print FOLDER [AS=text|csv|html] [TO=clipboard|ask|<file>] [SELECTED]
 //   Toolbar NAME=buttons|drives PLACE=top|bottom|left|right|between [NEWROW]
 //           STATE=on|off|toggle

@@ -61,6 +61,8 @@ Servers and archives (KIO):
 - Print Folder (File > Print Folder): the listing as shown, as text, CSV or HTML, to the clipboard or a file
 - Settings backup (File > Settings): every setting in one zip, restored in one step on another machine
 - Text and icon size (View > Text and Icon Size): Large and Larger for the Deck's screen
+- Synchronize (Tools > Synchronize): compare the source and destination (or any two folders) by date, size or contents; see every difference with what will happen to it, change any of them, then copy. Update the right, mirror to it (extras go to the trash), or both ways. Allows for the 2-second timestamps of FAT SD cards. `Sync ... RUN` does it from a button without asking
+- Find Duplicates (Tools > Find Duplicates): identical files by contents (renamed copies too), by name and size, or by name, across several folders; check all but the newest, oldest or shortest path in each group and send the rest to the trash
 
 ## Commands
 
@@ -76,6 +78,8 @@ Every button, menu item, hotkey, drop and inline rename runs one of these. Butto
 | `CreateFolder` | `NAME="A, B, C"` makes all three; no name asks; `IN=...` |
 | `Clipboard` | `COPY`, `CUT`, `PASTE` (a picture or text pastes as a new file), `AS` |
 | `Print` | `FOLDER`, `AS=text\|csv\|html`, `TO=clipboard\|ask\|<file>`, `SELECTED` |
+| `Sync` | `LEFT=`, `RIGHT=`, `MODE=update\|mirror\|twoway`, `COMPARE=datesize\|date\|size\|contents`, `EXCLUDE=*.tmp;...`, `RUN` |
+| `Duplicates` | `IN=...` (several allowed), `BY=contents\|namesize\|name`, `MINSIZE=<bytes>`, `HIDDEN` |
 | `Settings` | `BACKUP=<file>\|ask`, `RESTORE=<file>\|ask`, `QUIET` |
 | `Set` | `DUAL=on\|off\|toggle\|vertical\|horizontal\|flip`, `SOURCE=toggle`, `DESTLOCK=`, `NAVLOCK=`, `VIEW=details\|list\|icons`, `HIDDEN=`, `THEME=<name>\|next`, `SIZE=normal\|large\|larger\|bigger\|smaller`, `GROUPBY=none\|type\|name\|size\|modified\|extension\|folder`, `GROUPCOLLAPSE=all\|none\|toggle`, `FILTERBAR=`, `FILTER=<text>` (a leading `!` hides matches), `CHECKBOXES=`, `FOLDERSIZES=`, `FLATVIEW=off\|grouped\|mixed\|nofolders\|toggle`, `TREE=off\|shared\|separate\|toggle`, `FORMAT=save\|savesub\|clear\|savedefault\|cleardefault`, `AUTOFORMAT=`, `COLUMNSTOGGLE=<column>`. Switches take `on\|off\|toggle` |
 | `Select` | `ALL`, `NONE`, `INVERT`, `PATTERN=*.mp3` |

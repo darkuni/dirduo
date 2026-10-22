@@ -8,6 +8,8 @@
 #include "core/RemoteBackend.h"
 #include "ui/AdvancedRenameDialog.h"
 #include "ui/AppContext.h"
+#include "ui/DuplicatesDialog.h"
+#include "ui/SyncDialog.h"
 #include "ui/BreadcrumbBar.h"
 #include "ui/ButtonBar.h"
 #include "ui/CommandConsole.h"
@@ -365,6 +367,12 @@ void ListerWindow::buildMenus()
     go->addSeparator();
     m_aliasMenu = go->addMenu(QIcon::fromTheme(QStringLiteral("bookmarks")), QStringLiteral("Aliases"));
     connect(m_aliasMenu, &QMenu::aboutToShow, this, &ListerWindow::rebuildAliasMenu);
+
+    QMenu *tools = menuBar()->addMenu(QStringLiteral("&Tools"));
+    tools->addAction(commandAction(QStringLiteral("Synchronize..."), QStringLiteral("Sync"), {}, QStringLiteral("folder-sync")));
+    tools->addAction(commandAction(QStringLiteral("Find Duplicates..."), QStringLiteral("Duplicates"), {}, QStringLiteral("edit-copy")));
+    tools->addSeparator();
+    tools->addAction(commandAction(QStringLiteral("Advanced Rename..."), QStringLiteral("Rename ADVANCED"), {}, QStringLiteral("edit-rename")));
 
     QMenu *window = menuBar()->addMenu(QStringLiteral("&Window"));
     m_toolbarsMenu = window->addMenu(QIcon::fromTheme(QStringLiteral("configure-toolbars")), QStringLiteral("Toolbars"));
@@ -1859,5 +1867,75 @@ bool ListerWindow::advancedRename(const QStringList &paths, const RenameOptions 
     for (const auto &d : dlg.done())
         renamed << d.first;
     afterLocalChange(renamed);
+    return true;
+}
+
+bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
+{
+    auto fail = [error](const QString &msg) {
+        if (error)
+            *error = msg;
+        return false;
+    };
+    CommandEngine &engine = m_app.engine();
+    if (cmd.is(QStringLiteral("Sync"))) {
+        SyncOptions o;
+        if (cmd.hasArg(QStringLiteral("MODE")) && !SyncOptions::modeFromName(cmd.value(QStringLiteral("MODE")), o.mode))
+            return fail(QStringLiteral("MODE takes update, mirror or twoway."));
+        if (cmd.hasArg(QStringLiteral("COMPARE"))
+            && !SyncOptions::compareFromName(cmd.value(QStringLiteral("COMPARE")), o.compareBy))
+            return fail(QStringLiteral("COMPARE takes datesize, date, size or contents."));
+        if (cmd.hasArg(QStringLiteral("EXCLUDE")))
+            o.exclude = cmd.value(QStringLiteral("EXCLUDE")).split(QLatin1Char(';'), Qt::SkipEmptyParts);
+        const QString left = cmd.hasArg(QStringLiteral("LEFT")) ? engine.resolvePath(cmd.value(QStringLiteral("LEFT")), sourcePath()) : sourcePath();
+        const QString right = cmd.hasArg(QStringLiteral("RIGHT")) ? engine.resolvePath(cmd.value(QStringLiteral("RIGHT")), sourcePath()) : destPath();
+        if (!Location::isLocal(left) || !Location::isLocal(right))
+            return fail(QStringLiteral("Synchronize works with local folders (including SD cards and mounted drives) for now."));
+        if (cmd.hasFlag(QStringLiteral("RUN"))) {
+            if (!QFileInfo(left).isDir() || !QFileInfo(right).isDir())
+                return fail(QStringLiteral("Both folders need to exist."));
+            if (QFileInfo(left).canonicalFilePath() == QFileInfo(right).canonicalFilePath())
+                return fail(QStringLiteral("Left and right are the same folder."));
+            FolderSync::run(FolderSync::plan(FolderSync::compare(left, right, o), left, right), engine);
+            return true;
+        }
+        auto *dlg = new SyncDialog(engine, left, right, o, this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        dlg->show();
+        if (!right.isEmpty())
+            dlg->startCompare();
+        return true;
+    }
+    // Duplicates
+    DuplicateOptions o;
+    const QString by = cmd.value(QStringLiteral("BY")).toLower();
+    if (by == QLatin1String("name"))
+        o.by = DuplicateOptions::By::Name;
+    else if (by == QLatin1String("namesize") || by == QLatin1String("nameandsize"))
+        o.by = DuplicateOptions::By::NameAndSize;
+    else if (!by.isEmpty() && by != QLatin1String("contents"))
+        return fail(QStringLiteral("BY takes contents, namesize or name."));
+    if (cmd.hasArg(QStringLiteral("MINSIZE")))
+        o.minSize = qMax<qint64>(1, cmd.value(QStringLiteral("MINSIZE")).toLongLong());
+    o.includeHidden = cmd.hasFlag(QStringLiteral("HIDDEN"));
+    QStringList folders;
+    for (const QString &f : cmd.values(QStringLiteral("IN")))
+        folders << engine.resolvePath(f, sourcePath());
+    if (folders.isEmpty())
+        folders << sourcePath();
+    for (const QString &f : std::as_const(folders)) {
+        if (!Location::isLocal(f))
+            return fail(QStringLiteral("Finding duplicates works with local folders for now."));
+    }
+    auto *dlg = new DuplicatesDialog(engine, folders, o, this);
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dlg, &DuplicatesDialog::showRequested, this, [this](const QString &path) {
+        if (FolderTab *t = sourceTab()) {
+            t->navigate(Location::parent(path));
+            t->selectPaths({path});
+        }
+    });
+    dlg->show();
+    dlg->startSearch();
     return true;
 }

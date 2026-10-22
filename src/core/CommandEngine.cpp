@@ -59,9 +59,9 @@ CommandEngine::CommandEngine(AliasManager &aliases, JobManager &jobs, QObject *p
 QStringList CommandEngine::commandNames()
 {
     return {QStringLiteral("Clipboard"), QStringLiteral("Copy"), QStringLiteral("CreateFolder"),
-            QStringLiteral("Delete"), QStringLiteral("Go"), QStringLiteral("Move"), QStringLiteral("Print"),
+            QStringLiteral("Delete"), QStringLiteral("Duplicates"), QStringLiteral("Go"), QStringLiteral("Move"), QStringLiteral("Print"),
             QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Set"), QStringLiteral("Settings"),
-            QStringLiteral("Toolbar")};
+            QStringLiteral("Sync"), QStringLiteral("Toolbar")};
 }
 
 QString CommandEngine::resolvePath(const QString &input, const QString &base) const
@@ -173,6 +173,8 @@ bool CommandEngine::execute(const ParsedCommand &cmd, CommandContext &ctx, QStri
         return ctx.printFolder(cmd, error);
     if (cmd.is(QStringLiteral("Settings")))
         return ctx.settings(cmd, error);
+    if (cmd.is(QStringLiteral("Sync")) || cmd.is(QStringLiteral("Duplicates")))
+        return ctx.tool(cmd, error);
     if (error)
         *error = QStringLiteral("Unknown command \"%1\".").arg(cmd.name);
     return false;

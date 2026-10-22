@@ -36,6 +36,12 @@ QList<CommandInfo> buildCommands()
                      {arg("NORECYCLE", {}, "Delete for good instead of using the trash"),
                       arg("QUIET", {}, "Do not ask first"), arg("FILE=", {}, "What to delete instead of the selection")},
                      QStringLiteral("Delete NORECYCLE")};
+    c << CommandInfo{QStringLiteral("Duplicates"), QStringLiteral("Find files that are the same and get rid of the copies"),
+                     {arg("IN=", {}, "Folders to search (the source folder when left out)"),
+                      arg("BY=", {QStringLiteral("contents"), QStringLiteral("namesize"), QStringLiteral("name")}, "What makes files the same"),
+                      arg("MINSIZE=", {}, "Ignore files smaller than this many bytes"),
+                      arg("HIDDEN", {}, "Include hidden files")},
+                     QStringLiteral("Duplicates IN=/roms BY=contents")};
     c << CommandInfo{QStringLiteral("Go"), QStringLiteral("Read a folder, or move through history"),
                      {arg("PATH=", {}, "Folder, alias (/downloads) or server (sftp://...)"),
                       arg("UP", {}, "Parent folder"), arg("BACK", {}, "Back in history"),
@@ -109,6 +115,16 @@ QList<CommandInfo> buildCommands()
                       arg("RESTORE=", {QStringLiteral("ask")}, "Put back settings from a backup zip"),
                       arg("QUIET", {}, "Restore without asking first")},
                      QStringLiteral("Settings BACKUP=ask")};
+    c << CommandInfo{QStringLiteral("Sync"), QStringLiteral("Compare two folders and make them match"),
+                     {arg("LEFT=", {}, "One folder (the source when left out)"),
+                      arg("RIGHT=", {}, "The other (the destination when left out)"),
+                      arg("MODE=", {QStringLiteral("update"), QStringLiteral("mirror"), QStringLiteral("twoway")},
+                          "Update the right, mirror to it, or both ways"),
+                      arg("COMPARE=", {QStringLiteral("datesize"), QStringLiteral("date"), QStringLiteral("size"), QStringLiteral("contents")},
+                          "How files are compared"),
+                      arg("EXCLUDE=", {}, "Names to leave out, ; between them"),
+                      arg("RUN", {}, "Do it without showing the comparison")},
+                     QStringLiteral("Sync LEFT=/roms RIGHT=/sdcard/roms MODE=update")};
     c << CommandInfo{QStringLiteral("Toolbar"), QStringLiteral("Place, show or customize toolbars"),
                      {arg("NAME=", {}, "Which toolbar (buttons, drives, or one you made)"),
                       arg("PLACE=", {QStringLiteral("top"), QStringLiteral("bottom"), QStringLiteral("left"), QStringLiteral("right"), QStringLiteral("between")},
@@ -140,6 +156,8 @@ QList<CatalogButton> buildButtons()
         b("Clipboard", "Copy to Clipboard", "edit-copy", "Copy the selection to the clipboard", "Clipboard COPY"),
         b("Clipboard", "Paste", "edit-paste", "Paste into the source", "Clipboard PASTE"),
         b("Clipboard", "Paste as File", "edit-paste", "Paste a picture or text as a file you name", "Clipboard PASTE AS"),
+        b("Folder", "Synchronize", "folder-sync", "Compare the source and destination and make them match", "Sync"),
+        b("Folder", "Duplicates", "edit-copy", "Find duplicate files under the source folder", "Duplicates"),
         b("Folder", "Print Folder", "document-print", "Copy a listing of the folder to the clipboard", "Print FOLDER", "Print FOLDER AS=html TO=ask"),
         b("Folder", "Export CSV", "document-export", "Save a listing of the folder as CSV", "Print FOLDER AS=csv TO=ask"),
         b("Navigation", "Back", "go-previous", "Back", "Go BACK"),

@@ -6,6 +6,8 @@
 #include "ui/ButtonBar.h"
 #include "ui/AdvancedRenameDialog.h"
 #include "ui/ButtonEditor.h"
+#include "ui/DuplicatesDialog.h"
+#include "ui/SyncDialog.h"
 #include "ui/CommandConsole.h"
 #include "ui/CustomizeDialog.h"
 #include "core/CommandCatalog.h"
@@ -1010,6 +1012,94 @@ private Q_SLOTS:
         QCOMPARE(dlg.result(), int(QDialog::Accepted));
         QVERIFY(QFile::exists(root + QStringLiteral("/a/a 1 one.txt")));
         QCOMPARE(dlg.done().size(), 3);
+    }
+
+    void synchronizeDialog()
+    {
+        // b has keep.txt only; a has three files. Update the right.
+        SyncOptions o;
+        SyncDialog dlg(m_app->engine(), root + QStringLiteral("/a"), root + QStringLiteral("/b"), o, w);
+        dlg.startCompare();
+        QTRY_VERIFY(!dlg.isComparing());
+        QCOMPARE(dlg.entries().size(), 4);
+        QCOMPARE(dlg.tree()->topLevelItemCount(), 4);
+        QVERIFY(dlg.summary().contains(QStringLiteral("3 to copy")));
+        QVERIFY(dlg.syncButton()->isEnabled());
+        // keep.txt is only on the right: Update leaves it; turn it into a copy back.
+        int keep = -1;
+        for (int i = 0; i < dlg.entries().size(); ++i) {
+            if (dlg.entries().at(i).rel == QLatin1String("keep.txt"))
+                keep = i;
+        }
+        QVERIFY(keep >= 0);
+        QCOMPARE(dlg.entries().at(keep).action, SyncEntry::Action::None);
+        dlg.setAction(keep, SyncEntry::Action::CopyToRight); // not possible: it has no left side
+        QCOMPARE(dlg.entries().at(keep).action, SyncEntry::Action::None);
+        dlg.setAction(keep, SyncEntry::Action::CopyToLeft);
+        QVERIFY(dlg.synchronize() > 0);
+        m_app->jobs().waitForIdle(5000);
+        QVERIFY(QFile::exists(root + QStringLiteral("/b/one.txt")));
+        QVERIFY(QFile::exists(root + QStringLiteral("/a/keep.txt")));
+        // Compare again: everything matches.
+        dlg.startCompare();
+        QTRY_VERIFY(!dlg.isComparing());
+        QVERIFY(dlg.summary().startsWith(QStringLiteral("The folders match")));
+        QVERIFY(!dlg.syncButton()->isEnabled());
+        dlg.showSameBox()->setChecked(true);
+        QCOMPARE(dlg.tree()->topLevelItemCount(), 4);
+    }
+
+    void synchronizeCommand()
+    {
+        QVERIFY(runFailing(QStringLiteral("Sync MODE=sideways")) == false);
+        // Mirror from the source (a) to the destination (b) without a dialog.
+        touch(root + QStringLiteral("/b/extra.txt"));
+        QVERIFY(w->runCommand(QStringLiteral("Sync MODE=mirror RUN")));
+        m_app->jobs().waitForIdle(5000);
+        QVERIFY(QFile::exists(root + QStringLiteral("/b/two.txt")));
+        QVERIFY(!QFile::exists(root + QStringLiteral("/b/extra.txt"))); // to the trash
+        QVERIFY(!QFile::exists(root + QStringLiteral("/b/keep.txt")));
+    }
+
+    void duplicatesDialog()
+    {
+        const QByteArray data(3000, 'r');
+        auto put = [this, &data](const QString &rel) {
+            const QString p = root + QLatin1Char('/') + rel;
+            QDir().mkpath(QFileInfo(p).absolutePath());
+            QFile f(p);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(data);
+        };
+        put(QStringLiteral("a/game.d64"));
+        put(QStringLiteral("b/game copy.d64"));
+        put(QStringLiteral("b/old/game.d64"));
+        QFile old(root + QStringLiteral("/b/old/game.d64"));
+        QVERIFY(old.open(QIODevice::ReadWrite));
+        QVERIFY(old.setFileTime(QDateTime::currentDateTime().addDays(-100), QFileDevice::FileModificationTime));
+        old.close();
+        DuplicateOptions o;
+        o.minSize = 2048; // the one-byte test files are duplicates of each other too
+        DuplicatesDialog dlg(m_app->engine(), {root}, o, w);
+        dlg.startSearch();
+        QTRY_VERIFY(!dlg.isSearching());
+        QCOMPARE(dlg.groups().size(), 1);
+        QCOMPARE(dlg.groups().first().paths.size(), 3);
+        dlg.checkAllBut(DuplicatesDialog::Keep::Oldest);
+        QStringList checked = dlg.checkedPaths();
+        QCOMPARE(checked.size(), 2);
+        QVERIFY(!checked.contains(root + QStringLiteral("/b/old/game.d64")));
+        // Checking the last copy is refused.
+        QTreeWidgetItem *group = dlg.tree()->topLevelItem(0);
+        for (int i = 0; i < group->childCount(); ++i)
+            group->child(i)->setCheckState(0, Qt::Checked);
+        QCOMPARE(dlg.checkedPaths().size(), 2);
+        QCOMPARE(dlg.trashChecked(), 2);
+        m_app->jobs().waitForIdle(5000);
+        QVERIFY(QFile::exists(root + QStringLiteral("/b/old/game.d64")));
+        QVERIFY(!QFile::exists(root + QStringLiteral("/a/game.d64")));
+        QCOMPARE(dlg.groups().size(), 0); // one left: no longer a duplicate
+        QVERIFY(dlg.summary().contains(QStringLiteral("No duplicates")));
     }
 
     void sessionRoundTrip()

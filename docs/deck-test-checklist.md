@@ -51,6 +51,8 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Select a few files, Shift+F2: Advanced Rename shows the before and after; rename, then Edit > Undo Rename.
 - [ ] Window > Customize Toolbars: drag a button to another spot, double-click one to edit, close.
 - [ ] File > Settings > Back Up Settings: a zip lands where you choose.
+- [ ] Tools > Synchronize between a folder on internal storage and one on the SD card: the list makes sense; Synchronize; Compare again says they match.
+- [ ] Tools > Find Duplicates on a ROM folder: groups show; check copies, then Move Checked to Trash.
 
 ## Report back
 

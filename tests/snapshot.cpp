@@ -13,6 +13,8 @@
 #include "ui/FileDisplay.h"
 #include "ui/AdvancedRenameDialog.h"
 #include "ui/ButtonBar.h"
+#include "ui/DuplicatesDialog.h"
+#include "ui/SyncDialog.h"
 #include "ui/ButtonEditor.h"
 #include "ui/CommandConsole.h"
 #include "ui/CustomizeDialog.h"
@@ -311,6 +313,53 @@ int main(int argc, char *argv[])
         dlg.show();
         QTest::qWait(400);
         dlg.grab().save(out + QStringLiteral("/21-advanced-rename.png"));
+    }
+
+    // Synchronize the ROMs on internal storage with the SD card.
+    {
+        const QString internal = root + QStringLiteral("/Emulation/roms");
+        const QString sd = root + QStringLiteral("/media/Games/roms");
+        QDir(sd).removeRecursively();
+        writeFile(sd + QStringLiteral("/c64/Galaga.d64"), 174848);
+        writeFile(sd + QStringLiteral("/c64/Elite.d64"), 170000);
+        writeFile(sd + QStringLiteral("/c64/Paradroid.d64"), 174848);
+        writeFile(sd + QStringLiteral("/nes/Contra.nes"), 131088);
+        // Make Galaga the same age on both sides, Elite older on the card.
+        QFile g(sd + QStringLiteral("/c64/Galaga.d64"));
+        if (!g.open(QIODevice::ReadWrite))
+            qWarning("cannot open sample file");
+        g.setFileTime(QFileInfo(internal + QStringLiteral("/c64/Galaga.d64")).lastModified(), QFileDevice::FileModificationTime);
+        g.close();
+        QFile e(sd + QStringLiteral("/c64/Elite.d64"));
+        if (!e.open(QIODevice::ReadWrite))
+            qWarning("cannot open sample file");
+        e.setFileTime(QDateTime::currentDateTime().addDays(-30), QFileDevice::FileModificationTime);
+        e.close();
+        SyncOptions o;
+        o.mode = SyncOptions::Mode::TwoWay;
+        SyncDialog dlg(context.engine(), internal, sd, o, w);
+        dlg.show();
+        dlg.startCompare();
+        for (int i = 0; i < 50 && dlg.isComparing(); ++i)
+            QTest::qWait(100);
+        QTest::qWait(300);
+        dlg.grab().save(out + QStringLiteral("/22-synchronize.png"));
+    }
+    // Duplicates across the ROM folders.
+    {
+        writeFile(root + QStringLiteral("/Backup/roms-old/Galaga.d64"), 174848);
+        writeFile(root + QStringLiteral("/Backup/roms-old/Turrican II.adf"), 901120);
+        writeFile(root + QStringLiteral("/Downloads/galaga (1).d64"), 174848);
+        DuplicateOptions o;
+        o.minSize = 100 * 1024;
+        DuplicatesDialog dlg(context.engine(), {root + QStringLiteral("/Emulation"), root + QStringLiteral("/Backup"), root + QStringLiteral("/Downloads")}, o, w);
+        dlg.show();
+        dlg.startSearch();
+        for (int i = 0; i < 50 && dlg.isSearching(); ++i)
+            QTest::qWait(100);
+        dlg.checkAllBut(DuplicatesDialog::Keep::ShortestPath);
+        QTest::qWait(300);
+        dlg.grab().save(out + QStringLiteral("/23-duplicates.png"));
     }
 
 #ifdef LINOPUS_HAVE_KIO
