@@ -37,6 +37,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QSaveFile>
 #include <QSettings>
 #include <QSplitter>
 #include <QTimer>
@@ -229,6 +230,11 @@ void ListerWindow::fillViewMenus()
     for (const QString &name : Style::instance()->themeNames())
         themes << qMakePair(name, QStringLiteral("Set THEME=\"%1\"").arg(name));
     fill(m_themeMenu, themes, QStringLiteral("\"%1\"").arg(Style::instance()->theme().name));
+    fill(m_sizeMenu,
+         {{QStringLiteral("Normal"), QStringLiteral("Set SIZE=normal")},
+          {QStringLiteral("Large"), QStringLiteral("Set SIZE=large")},
+          {QStringLiteral("Larger"), QStringLiteral("Set SIZE=larger")}},
+         Style::sizeName(Style::instance()->sizeLevel()));
 }
 
 void ListerWindow::buildMenus()
@@ -257,6 +263,19 @@ void ListerWindow::buildMenus()
     file->addAction(nextTab);
     file->addAction(prevTab);
     file->addSeparator();
+    QMenu *print = file->addMenu(QIcon::fromTheme(QStringLiteral("document-print")), QStringLiteral("Print Folder"));
+    print->addAction(commandAction(QStringLiteral("Copy Listing to Clipboard"), QStringLiteral("Print FOLDER")));
+    print->addAction(commandAction(QStringLiteral("Save as Text..."), QStringLiteral("Print FOLDER AS=text TO=ask")));
+    print->addAction(commandAction(QStringLiteral("Save as CSV..."), QStringLiteral("Print FOLDER AS=csv TO=ask")));
+    print->addAction(commandAction(QStringLiteral("Save as HTML..."), QStringLiteral("Print FOLDER AS=html TO=ask")));
+    print->addSeparator();
+    print->addAction(commandAction(QStringLiteral("Selected Items to Clipboard"), QStringLiteral("Print FOLDER SELECTED")));
+    QMenu *settingsMenu = file->addMenu(QIcon::fromTheme(QStringLiteral("configure")), QStringLiteral("Settings"));
+    settingsMenu->addAction(commandAction(QStringLiteral("Back Up Settings..."), QStringLiteral("Settings BACKUP=ask"),
+                                          {}, QStringLiteral("document-save")));
+    settingsMenu->addAction(commandAction(QStringLiteral("Restore Settings..."), QStringLiteral("Settings RESTORE=ask"),
+                                          {}, QStringLiteral("document-open")));
+    file->addSeparator();
     QAction *closeLister = file->addAction(QStringLiteral("Close Lister"));
     closeLister->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+W")));
     connect(closeLister, &QAction::triggered, this, &QWidget::close);
@@ -268,6 +287,8 @@ void ListerWindow::buildMenus()
     edit->addAction(commandAction(QStringLiteral("Cut"), QStringLiteral("Clipboard CUT"), QKeySequence::Cut, QStringLiteral("edit-cut")));
     edit->addAction(commandAction(QStringLiteral("Copy"), QStringLiteral("Clipboard COPY"), QKeySequence::Copy, QStringLiteral("edit-copy")));
     edit->addAction(commandAction(QStringLiteral("Paste"), QStringLiteral("Clipboard PASTE"), QKeySequence::Paste, QStringLiteral("edit-paste")));
+    edit->addAction(commandAction(QStringLiteral("Paste as File..."), QStringLiteral("Clipboard PASTE AS"), {},
+                                  QStringLiteral("edit-paste")));
     edit->addSeparator();
     edit->addAction(commandAction(QStringLiteral("Copy to Destination"), QStringLiteral("Copy"), {}, QStringLiteral("edit-copy")));
     edit->addAction(commandAction(QStringLiteral("Copy As..."), QStringLiteral("Copy AS")));
@@ -314,6 +335,7 @@ void ListerWindow::buildMenus()
     format->addSeparator();
     format->addAction(m_actAutoFormat);
     m_themeMenu = view->addMenu(QIcon::fromTheme(QStringLiteral("color-management")), QStringLiteral("Theme"));
+    m_sizeMenu = view->addMenu(QIcon::fromTheme(QStringLiteral("zoom-in")), QStringLiteral("Text and Icon Size"));
     connect(view, &QMenu::aboutToShow, this, [this]() {
         syncViewActions();
         fillViewMenus();
@@ -1227,6 +1249,16 @@ bool ListerWindow::set(const ParsedCommand &cmd, QString *error)
             if (name.isEmpty() || !Style::instance()->setTheme(name))
                 return fail(QStringLiteral("There is no theme called %1. Themes: %2.").arg(raw, names.join(QStringLiteral(", "))));
             m_app.settings().setValue(QStringLiteral("Appearance/theme"), name);
+        } else if (key == QLatin1String("SIZE")) {
+            int level = Style::sizeFromName(value);
+            if (value == QLatin1String("bigger") || value == QLatin1String("next"))
+                level = qMin(2, Style::instance()->sizeLevel() + 1);
+            else if (value == QLatin1String("smaller"))
+                level = qMax(0, Style::instance()->sizeLevel() - 1);
+            if (level < 0)
+                return fail(QStringLiteral("SIZE takes normal, large, larger, bigger or smaller."));
+            Style::instance()->setSizeLevel(level);
+            m_app.settings().setValue(QStringLiteral("Appearance/size"), Style::sizeName(level));
         } else if (key == QLatin1String("GROUPBY")) {
             FileListModel::GroupBy g;
             if (!FileListModel::groupByFromName(value, g))
@@ -1701,4 +1733,101 @@ void ListerWindow::changeEvent(QEvent *event)
     if (event->type() == QEvent::ActivationChange && isActiveWindow())
         m_app.listerActivated(this);
     QMainWindow::changeEvent(event);
+}
+
+bool ListerWindow::printFolder(const ParsedCommand &cmd, QString *error)
+{
+    auto fail = [error](const QString &msg) {
+        if (error)
+            *error = msg;
+        return false;
+    };
+    FolderTab *t = sourceTab();
+    if (!t)
+        return fail(QStringLiteral("There is no folder to print."));
+    const QString as = cmd.value(QStringLiteral("AS")).toLower();
+    FolderTab::ExportFormat format = FolderTab::ExportFormat::Text;
+    QString ext = QStringLiteral("txt");
+    if (as == QLatin1String("csv")) {
+        format = FolderTab::ExportFormat::Csv;
+        ext = QStringLiteral("csv");
+    } else if (as == QLatin1String("html") || as == QLatin1String("htm")) {
+        format = FolderTab::ExportFormat::Html;
+        ext = QStringLiteral("html");
+    } else if (!as.isEmpty() && as != QLatin1String("text") && as != QLatin1String("txt")) {
+        return fail(QStringLiteral("AS takes text, csv or html."));
+    }
+    const QString text = t->exportListing(format, cmd.hasFlag(QStringLiteral("SELECTED")));
+    QString to = cmd.value(QStringLiteral("TO"));
+    if (to.isEmpty() || to.compare(QLatin1String("clipboard"), Qt::CaseInsensitive) == 0) {
+        auto *mime = new QMimeData;
+        mime->setText(text);
+        if (format == FolderTab::ExportFormat::Html)
+            mime->setHtml(text);
+        QGuiApplication::clipboard()->setMimeData(mime);
+        return true;
+    }
+    if (to.compare(QLatin1String("ask"), Qt::CaseInsensitive) == 0) {
+        const QString suggested = QDir(QDir::homePath()).filePath(Location::title(t->path()) + QLatin1Char('.') + ext);
+        to = QFileDialog::getSaveFileName(this, QStringLiteral("Save Folder Listing"), suggested);
+        if (to.isEmpty())
+            return fail(CommandEngine::kCancelled);
+    } else {
+        to = m_app.engine().resolvePath(to, t->path());
+    }
+    QSaveFile f(to);
+    if (!f.open(QIODevice::WriteOnly))
+        return fail(QStringLiteral("Could not write %1: %2").arg(to, f.errorString()));
+    f.write(text.toUtf8());
+    if (!f.commit())
+        return fail(QStringLiteral("Could not write %1: %2").arg(to, f.errorString()));
+    afterLocalChange({to});
+    return true;
+}
+
+bool ListerWindow::settings(const ParsedCommand &cmd, QString *error)
+{
+    auto fail = [error](const QString &msg) {
+        if (error)
+            *error = msg;
+        return false;
+    };
+    const QString zipFilter = QStringLiteral("Zip files (*.zip)");
+    if (cmd.hasArg(QStringLiteral("BACKUP"))) {
+        QString file = cmd.value(QStringLiteral("BACKUP"));
+        if (file.isEmpty() || file.compare(QLatin1String("ask"), Qt::CaseInsensitive) == 0) {
+            const QString suggested = QDir(QDir::homePath())
+                                          .filePath(QStringLiteral("Linopus settings %1.zip").arg(QDate::currentDate().toString(Qt::ISODate)));
+            file = QFileDialog::getSaveFileName(this, QStringLiteral("Back Up Settings"), suggested, zipFilter);
+            if (file.isEmpty())
+                return fail(CommandEngine::kCancelled);
+        } else {
+            file = m_app.engine().resolvePath(file, sourcePath());
+        }
+        QString err;
+        if (!m_app.backupSettings(file, &err))
+            return fail(QStringLiteral("The backup failed: %1").arg(err));
+        afterLocalChange({file});
+        return true;
+    }
+    if (cmd.hasArg(QStringLiteral("RESTORE"))) {
+        QString file = cmd.value(QStringLiteral("RESTORE"));
+        if (file.isEmpty() || file.compare(QLatin1String("ask"), Qt::CaseInsensitive) == 0) {
+            file = QFileDialog::getOpenFileName(this, QStringLiteral("Restore Settings"), QDir::homePath(), zipFilter);
+            if (file.isEmpty())
+                return fail(CommandEngine::kCancelled);
+        } else {
+            file = m_app.engine().resolvePath(file, sourcePath());
+        }
+        if (!cmd.hasFlag(QStringLiteral("QUIET"))
+            && !confirm(QStringLiteral("Restore Settings"),
+                        QStringLiteral("Replace your toolbars, aliases, themes, labels and folder formats with the ones in %1?")
+                            .arg(QFileInfo(file).fileName())))
+            return fail(CommandEngine::kCancelled);
+        QString err;
+        if (!m_app.restoreSettings(file, &err))
+            return fail(QStringLiteral("The restore failed: %1").arg(err));
+        return true;
+    }
+    return fail(QStringLiteral("Settings takes BACKUP= or RESTORE=."));
 }

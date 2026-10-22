@@ -6,6 +6,7 @@
 #include <QObject>
 
 class AliasManager;
+class QMimeData;
 class JobManager;
 
 // What a command can see and do in the lister that ran it. The lister window
@@ -31,6 +32,20 @@ public:
     virtual bool set(const ParsedCommand &cmd, QString *error) = 0;
     virtual bool select(const ParsedCommand &cmd, QString *error) = 0;
     virtual bool beginInlineRename() = 0;
+    virtual bool settings(const ParsedCommand &cmd, QString *error)
+    {
+        Q_UNUSED(cmd)
+        if (error)
+            *error = QStringLiteral("Settings are not available here.");
+        return false;
+    }
+    virtual bool printFolder(const ParsedCommand &cmd, QString *error)
+    {
+        Q_UNUSED(cmd)
+        if (error)
+            *error = QStringLiteral("This window has no folder listing to print.");
+        return false;
+    }
     virtual bool toolbar(const ParsedCommand &cmd, QString *error)
     {
         Q_UNUSED(cmd)
@@ -54,11 +69,13 @@ public:
 //   Delete [NORECYCLE] [QUIET] [FILE=...]
 //   Rename [FROM=... TO=...] (no arguments: rename the focused item in place)
 //   CreateFolder [NAME="a, b, c"] [IN=...]
-//   Clipboard COPY|CUT|PASTE
+//   Clipboard COPY|CUT|PASTE [AS]  (a picture or text pastes as a new file)
 //   Set DUAL=on|off|toggle|vertical|horizontal  SOURCE=toggle  DESTLOCK=on|off|toggle
 //       NAVLOCK=on|off|toggle
 //       VIEW=details|list|icons  HIDDEN=on|off|toggle
 //   Select ALL|NONE|INVERT|PATTERN=<wildcard>
+//   Settings BACKUP=<file|ask> | RESTORE=<file|ask> [QUIET]
+//   Print FOLDER [AS=text|csv|html] [TO=clipboard|ask|<file>] [SELECTED]
 //   Toolbar NAME=buttons|drives PLACE=top|bottom|left|right|between [NEWROW]
 //           STATE=on|off|toggle
 //
@@ -101,6 +118,7 @@ private:
     bool cmdRename(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool cmdCreateFolder(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool cmdClipboard(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
+    bool pasteAsFile(const QMimeData *mime, bool askName, CommandContext &ctx, QString *error);
 
     QStringList sourcesFor(const ParsedCommand &cmd, CommandContext &ctx, const QStringList &flags) const;
 

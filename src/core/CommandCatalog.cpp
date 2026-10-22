@@ -16,7 +16,8 @@ QList<CommandInfo> buildCommands()
     c << CommandInfo{QStringLiteral("Clipboard"), QStringLiteral("Cut, copy or paste files"),
                      {arg("COPY", {}, "Copy the selection to the clipboard"),
                       arg("CUT", {}, "Cut the selection (it moves on paste)"),
-                      arg("PASTE", {}, "Paste files into the source folder")},
+                      arg("PASTE", {}, "Paste files into the source folder; a picture or text becomes a new file"),
+                      arg("AS", {}, "With PASTE of a picture or text: ask for the file name")},
                      QStringLiteral("Clipboard PASTE")};
     const QList<ArgInfo> copyArgs = {
         arg("MOVE", {}, "Move instead of copy"),
@@ -47,6 +48,12 @@ QList<CommandInfo> buildCommands()
     QList<ArgInfo> moveArgs = copyArgs.mid(1);
     c << CommandInfo{QStringLiteral("Move"), QStringLiteral("Move the selection to the destination"), moveArgs,
                      QStringLiteral("Move TO=/sdcard")};
+    c << CommandInfo{QStringLiteral("Print"), QStringLiteral("A listing of the folder as text, CSV or HTML"),
+                     {arg("FOLDER", {}, "The source folder, as shown: columns, grouping, flat view"),
+                      arg("AS=", {QStringLiteral("text"), QStringLiteral("csv"), QStringLiteral("html")}, "Format (text when left out)"),
+                      arg("TO=", {QStringLiteral("clipboard"), QStringLiteral("ask")}, "Clipboard (the default), ask for a file, or a file path"),
+                      arg("SELECTED", {}, "Only the selected items")},
+                     QStringLiteral("Print FOLDER AS=csv TO=ask")};
     c << CommandInfo{QStringLiteral("Rename"), QStringLiteral("Rename in place, or from one name to another"),
                      {arg("FROM=", {}, "The item to rename"), arg("TO=", {}, "Its new name")},
                      QStringLiteral("Rename FROM=old.txt TO=new.txt")};
@@ -66,6 +73,8 @@ QList<CommandInfo> buildCommands()
          arg("VIEW=", {QStringLiteral("details"), QStringLiteral("list"), QStringLiteral("icons")}, "View mode"),
          arg("HIDDEN=", onOff(), "Show hidden files"),
          arg("THEME=", {QStringLiteral("next")}, "Theme by name, or the next one"),
+         arg("SIZE=", {QStringLiteral("normal"), QStringLiteral("large"), QStringLiteral("larger"), QStringLiteral("bigger"), QStringLiteral("smaller")},
+             "Text and icon size, for small screens"),
          arg("GROUPBY=", {QStringLiteral("none"), QStringLiteral("type"), QStringLiteral("name"), QStringLiteral("size"), QStringLiteral("modified"), QStringLiteral("extension"), QStringLiteral("folder")},
              "Group the list"),
          arg("GROUPCOLLAPSE=", {QStringLiteral("all"), QStringLiteral("none"), QStringLiteral("toggle")}, "Fold or open groups"),
@@ -82,6 +91,11 @@ QList<CommandInfo> buildCommands()
          arg("COLUMNSTOGGLE=", {QStringLiteral("created"), QStringLiteral("accessed"), QStringLiteral("extension"), QStringLiteral("permissions"), QStringLiteral("owner"), QStringLiteral("group")},
              "Show or hide a column")},
         QStringLiteral("Set DUAL=vertical VIEW=details")};
+    c << CommandInfo{QStringLiteral("Settings"), QStringLiteral("Back up or restore all of Linopus's settings"),
+                     {arg("BACKUP=", {QStringLiteral("ask")}, "Save every setting to one zip (ask: choose where)"),
+                      arg("RESTORE=", {QStringLiteral("ask")}, "Put back settings from a backup zip"),
+                      arg("QUIET", {}, "Restore without asking first")},
+                     QStringLiteral("Settings BACKUP=ask")};
     c << CommandInfo{QStringLiteral("Toolbar"), QStringLiteral("Place, show or customize toolbars"),
                      {arg("NAME=", {}, "Which toolbar (buttons, drives, or one you made)"),
                       arg("PLACE=", {QStringLiteral("top"), QStringLiteral("bottom"), QStringLiteral("left"), QStringLiteral("right"), QStringLiteral("between")},
@@ -110,6 +124,9 @@ QList<CatalogButton> buildButtons()
         b("Clipboard", "Cut", "edit-cut", "Cut the selection", "Clipboard CUT"),
         b("Clipboard", "Copy to Clipboard", "edit-copy", "Copy the selection to the clipboard", "Clipboard COPY"),
         b("Clipboard", "Paste", "edit-paste", "Paste into the source", "Clipboard PASTE"),
+        b("Clipboard", "Paste as File", "edit-paste", "Paste a picture or text as a file you name", "Clipboard PASTE AS"),
+        b("Folder", "Print Folder", "document-print", "Copy a listing of the folder to the clipboard", "Print FOLDER", "Print FOLDER AS=html TO=ask"),
+        b("Folder", "Export CSV", "document-export", "Save a listing of the folder as CSV", "Print FOLDER AS=csv TO=ask"),
         b("Navigation", "Back", "go-previous", "Back", "Go BACK"),
         b("Navigation", "Forward", "go-next", "Forward", "Go FORWARD"),
         b("Navigation", "Up", "go-up", "Parent folder", "Go UP"),

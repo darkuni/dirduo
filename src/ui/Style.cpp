@@ -359,3 +359,52 @@ void Style::apply()
     if (!want.isEmpty() && want != QIcon::themeName())
         QIcon::setThemeName(want);
 }
+
+double Style::scale() const
+{
+    static const double factors[] = {1.0, 1.15, 1.3};
+    return factors[qBound(0, m_sizeLevel, 2)];
+}
+
+QString Style::sizeName(int level)
+{
+    switch (level) {
+    case 1:
+        return QStringLiteral("large");
+    case 2:
+        return QStringLiteral("larger");
+    default:
+        return QStringLiteral("normal");
+    }
+}
+
+int Style::sizeFromName(const QString &name)
+{
+    const QString n = name.toLower();
+    if (n == QLatin1String("normal") || n == QLatin1String("default"))
+        return 0;
+    if (n == QLatin1String("large"))
+        return 1;
+    if (n == QLatin1String("larger") || n == QLatin1String("largest"))
+        return 2;
+    return -1;
+}
+
+void Style::setSizeLevel(int level)
+{
+    level = qBound(0, level, 2);
+    if (!qApp)
+        return;
+    if (!m_haveBaseFont) {
+        m_baseFont = QApplication::font();
+        m_haveBaseFont = true;
+    }
+    m_sizeLevel = level;
+    QFont f = m_baseFont;
+    if (f.pointSizeF() > 0)
+        f.setPointSizeF(m_baseFont.pointSizeF() * scale());
+    else
+        f.setPixelSize(int(m_baseFont.pixelSize() * scale() + 0.5));
+    QApplication::setFont(f);
+    Q_EMIT changed();
+}

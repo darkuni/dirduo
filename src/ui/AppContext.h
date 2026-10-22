@@ -36,6 +36,11 @@ public:
     CommandEngine &engine() { return *m_engine; }
     QSettings &settings() { return *m_settings; }
     ToolbarStore &toolbars() { return *m_toolbars; }
+
+    // Every file under ~/.config/linopus in one zip, and back. Restoring
+    // reloads aliases, toolbars, themes, labels and folder formats at once.
+    bool backupSettings(const QString &zipFile, QString *error);
+    bool restoreSettings(const QString &zipFile, QString *error);
     ProgressWindows &progress() { return *m_progress; }
 
     ListerWindow *newLister(const QString &startPath = {});

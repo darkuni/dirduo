@@ -8,6 +8,7 @@
 #include "ui/CommandConsole.h"
 #include "ui/CustomizeDialog.h"
 #include "core/CommandCatalog.h"
+#include "core/Zip.h"
 #include "ui/DrivesBar.h"
 #include "ui/ToolbarStrip.h"
 #include "ui/FileDisplay.h"
@@ -22,6 +23,9 @@
 #include <QApplication>
 #include <QDir>
 #include <QCheckBox>
+#include <QClipboard>
+#include <QImage>
+#include <QInputDialog>
 #include <QJsonDocument>
 #include <QKeySequenceEdit>
 #include <QListWidget>
@@ -89,6 +93,7 @@ private Q_SLOTS:
         QApplication::processEvents();
         m_app.reset();
         Style::instance()->setTheme(QStringLiteral("Follow Desktop"));
+        Style::instance()->setSizeLevel(0);
     }
 
     void inlineRenameTravels()
@@ -828,6 +833,111 @@ private Q_SLOTS:
         QTest::keyClick(c->input(), Qt::Key_Up);
         QCOMPARE(c->input()->text(), QStringLiteral("help Set"));
         c->close();
+    }
+
+    void pasteClipboardAsFile()
+    {
+        QImage img(40, 30, QImage::Format_RGB32);
+        img.fill(Qt::red);
+        QGuiApplication::clipboard()->setImage(img);
+        QVERIFY(w->runCommand(QStringLiteral("Clipboard PASTE")));
+        QStringList pngs = QDir(root + QStringLiteral("/a")).entryList({QStringLiteral("Pasted image *.png")});
+        QCOMPARE(pngs.size(), 1);
+        QImage back(root + QStringLiteral("/a/") + pngs.first());
+        QCOMPARE(back.size(), QSize(40, 30));
+        QCOMPARE(back.pixelColor(5, 5), QColor(Qt::red));
+        // Pasting again never overwrites.
+        QVERIFY(w->runCommand(QStringLiteral("Clipboard PASTE")));
+        QVERIFY(QDir(root + QStringLiteral("/a")).entryList({QStringLiteral("Pasted image *.png")}).size() >= 1);
+
+        QGuiApplication::clipboard()->setText(QStringLiteral("Deluxe Galaga high scores"));
+        // AS asks for the name.
+        QTimer::singleShot(100, []() {
+            if (auto *d = qobject_cast<QInputDialog *>(QApplication::activeModalWidget())) {
+                d->setTextValue(QStringLiteral("scores.txt"));
+                d->accept();
+            }
+        });
+        QVERIFY(w->runCommand(QStringLiteral("Clipboard PASTE AS")));
+        QFile f(root + QStringLiteral("/a/scores.txt"));
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QCOMPARE(f.readAll(), QByteArray("Deluxe Galaga high scores"));
+        QTRY_VERIFY(w->display(0)->currentTab()->selectedPaths().contains(root + QStringLiteral("/a/scores.txt")));
+    }
+
+    void printFolderListings()
+    {
+        QVERIFY(w->runCommand(QStringLiteral("Print FOLDER")));
+        const QString text = QGuiApplication::clipboard()->text();
+        QVERIFY(text.startsWith(root + QStringLiteral("/a\n")));
+        QVERIFY(text.contains(QStringLiteral("Name")) && text.contains(QStringLiteral("Modified")));
+        QVERIFY(text.contains(QStringLiteral("three.txt")));
+        QVERIFY(text.trimmed().endsWith(QStringLiteral("0 folders, 3 files")));
+
+        const QString csv = m_dir->filePath(QStringLiteral("list.csv"));
+        QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=type\nPrint FOLDER AS=csv TO=\"%1\"").arg(csv)));
+        QFile f(csv);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QStringList lines = QString::fromUtf8(f.readAll()).split(QStringLiteral("\r\n"), Qt::SkipEmptyParts);
+        QCOMPARE(lines.size(), 4);
+        QVERIFY(lines.first().startsWith(QStringLiteral("Group,Name,Size,Type,Modified")));
+
+        w->display(0)->currentTab()->selectPaths({root + QStringLiteral("/a/two.txt")});
+        QVERIFY(w->runCommand(QStringLiteral("Print FOLDER AS=html SELECTED")));
+        const QString html = QGuiApplication::clipboard()->text();
+        QVERIFY(html.contains(QStringLiteral("<table>")) && html.contains(QStringLiteral("two.txt")));
+        QVERIFY(!html.contains(QStringLiteral("one.txt")));
+        QVERIFY(html.contains(QStringLiteral("class=\"group\"")));
+        QVERIFY(!runFailing(QStringLiteral("Print FOLDER AS=pdf")));
+    }
+
+    void settingsBackupAndRestore()
+    {
+        ToolbarStore &store = m_app->toolbars();
+        QVERIFY(m_app->aliases().setUserAlias(QStringLiteral("roms"), root + QStringLiteral("/b")));
+        QVERIFY(m_app->aliases().save());
+        const QString id = store.create(QStringLiteral("Emulation"));
+        ButtonDef d;
+        d.label = QStringLiteral("ROMs");
+        d.left = QStringLiteral("Go /roms");
+        store.insertButton(id, 0, d);
+        QVERIFY(w->runCommand(QStringLiteral("Set THEME=Workbench")));
+        const QString zip = m_dir->filePath(QStringLiteral("backup.zip"));
+        QVERIFY(w->runCommand(QStringLiteral("Settings BACKUP=\"%1\"").arg(zip)));
+        QVERIFY(QFile::exists(zip));
+
+        // Change everything, then restore.
+        QVERIFY(m_app->aliases().removeUserAlias(QStringLiteral("roms")));
+        QVERIFY(m_app->aliases().save());
+        QVERIFY(store.remove(id));
+        QVERIFY(w->runCommand(QStringLiteral("Set THEME=\"Linopus Dark\"")));
+        QVERIFY(w->runCommand(QStringLiteral("Settings RESTORE=\"%1\" QUIET").arg(zip)));
+        QCOMPARE(m_app->aliases().aliasPath(QStringLiteral("roms")), root + QStringLiteral("/b"));
+        QVERIFY(store.has(id));
+        QCOMPARE(store.toolbar(id).buttons.first().label, QStringLiteral("ROMs"));
+        QVERIFY(w->buttonBar(id));
+        QCOMPARE(Style::instance()->theme().name, QStringLiteral("Workbench"));
+
+        // Not a backup: refused, nothing written.
+        const QString other = m_dir->filePath(QStringLiteral("other.zip"));
+        QVERIFY(Zip::write(other, {Zip::Entry{QStringLiteral("evil/../../x"), QByteArray("x")}}));
+        QVERIFY(!runFailing(QStringLiteral("Settings RESTORE=\"%1\" QUIET").arg(other)));
+    }
+
+    void textAndIconSize()
+    {
+        const qreal before = QApplication::font().pointSizeF();
+        FolderTab *t = w->display(0)->currentTab();
+        QVERIFY(w->runCommand(QStringLiteral("Set SIZE=larger")));
+        QVERIFY(QApplication::font().pointSizeF() > before * 1.25);
+        QCOMPARE(t->detailsView()->iconSize(), QSize(21, 21));
+        QCOMPARE(w->buttonBar(QStringLiteral("buttons"))->iconSize(), QSize(23, 23));
+        QCOMPARE(m_app->settings().value(QStringLiteral("Appearance/size")).toString(), QStringLiteral("larger"));
+        QVERIFY(w->runCommand(QStringLiteral("Set SIZE=smaller")));
+        QCOMPARE(Style::instance()->sizeLevel(), 1);
+        QVERIFY(w->runCommand(QStringLiteral("Set SIZE=normal")));
+        QCOMPARE(QApplication::font().pointSizeF(), before);
+        QVERIFY(!runFailing(QStringLiteral("Set SIZE=huge")));
     }
 
     void sessionRoundTrip()

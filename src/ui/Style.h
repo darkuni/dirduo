@@ -4,6 +4,7 @@
 #include "core/LabelRules.h"
 
 #include <QColor>
+#include <QFont>
 #include <QHash>
 #include <QObject>
 #include <QPalette>
@@ -69,6 +70,14 @@ public:
 
     QString themesDir() const;
 
+    // Text and icon size for small screens: 0 normal, 1 large, 2 larger.
+    int sizeLevel() const { return m_sizeLevel; }
+    void setSizeLevel(int level);
+    double scale() const;
+    int scaled(int px) const { return int(px * scale() + 0.5); }
+    static QString sizeName(int level);
+    static int sizeFromName(const QString &name); // -1 when unknown
+
 Q_SIGNALS:
     void changed();
 
@@ -78,4 +87,7 @@ private:
     LabelRules m_labels;
     QPalette m_systemPalette;
     bool m_haveSystemPalette = false;
+    int m_sizeLevel = 0;
+    QFont m_baseFont;
+    bool m_haveBaseFont = false;
 };

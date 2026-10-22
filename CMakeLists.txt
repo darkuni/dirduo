@@ -51,6 +51,7 @@ add_library(linopus_core STATIC
     src/core/JobManager.cpp
     src/core/CommandParser.cpp
     src/core/CommandEngine.cpp
+    src/core/Zip.cpp
     src/core/CommandCatalog.cpp
     src/core/Condition.cpp
     src/core/DriveList.cpp
@@ -63,6 +64,11 @@ add_library(linopus_core STATIC
 )
 target_include_directories(linopus_core PUBLIC src)
 target_link_libraries(linopus_core PUBLIC Qt6::Core Qt6::Gui Qt6::Concurrent)
+find_package(ZLIB QUIET)
+if(ZLIB_FOUND)
+    target_link_libraries(linopus_core PRIVATE ZLIB::ZLIB)
+    target_compile_definitions(linopus_core PRIVATE LINOPUS_HAVE_ZLIB)
+endif()
 
 option(LINOPUS_BUILD_UI "Build the application (off: core library and its tests only)" ON)
 

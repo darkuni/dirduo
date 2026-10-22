@@ -10,6 +10,7 @@
 #include "ui/FileSortProxy.h"
 #include "ui/GroupTreeView.h"
 #include "ui/RenameDelegate.h"
+#include "ui/Style.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -143,6 +144,16 @@ FolderTab::FolderTab(QWidget *parent)
     connect(m_proxy, &QAbstractItemModel::modelReset, this, &FolderTab::statusChanged);
 
     setViewMode(ViewMode::Details);
+    applySize();
+    connect(Style::instance(), &Style::changed, this, &FolderTab::applySize);
+}
+
+void FolderTab::applySize()
+{
+    const int px = Style::instance()->scaled(16);
+    m_details->setIconSize(QSize(px, px));
+    setViewMode(m_mode); // list and icon sizes
+    m_details->doItemsLayout();
 }
 
 void FolderTab::setupView(QAbstractItemView *v)
@@ -434,7 +445,7 @@ void FolderTab::setViewMode(ViewMode mode)
         m_list->setViewMode(QListView::ListMode);
         m_list->setFlow(QListView::TopToBottom);
         m_list->setWrapping(true);
-        m_list->setIconSize(QSize(16, 16));
+        m_list->setIconSize(QSize(Style::instance()->scaled(16), Style::instance()->scaled(16)));
         m_list->setGridSize(QSize());
         m_list->setSpacing(1);
         m_list->setWordWrap(false);
@@ -444,8 +455,8 @@ void FolderTab::setViewMode(ViewMode mode)
         m_list->setViewMode(QListView::IconMode);
         m_list->setFlow(QListView::LeftToRight);
         m_list->setWrapping(true);
-        m_list->setIconSize(QSize(48, 48));
-        m_list->setGridSize(QSize(104, 88));
+        m_list->setIconSize(QSize(Style::instance()->scaled(48), Style::instance()->scaled(48)));
+        m_list->setGridSize(QSize(Style::instance()->scaled(104), Style::instance()->scaled(88)));
         m_list->setSpacing(4);
         m_list->setWordWrap(true);
         m_list->setMovement(QListView::Static);
@@ -1035,4 +1046,135 @@ void FolderTab::fitNameColumn()
         h->setSectionResizeMode(FileListModel::NameColumn, QHeaderView::Interactive);
         h->resizeSection(FileListModel::NameColumn, minName);
     }
+}
+
+// ---- Print Folder ----------------------------------------------------------
+
+QString FolderTab::exportListing(ExportFormat format, bool selectedOnly) const
+{
+    QHeaderView *h = m_details->header();
+    QList<int> cols;
+    for (int v = 0; v < h->count(); ++v) {
+        const int c = h->logicalIndex(v);
+        if (!h->isSectionHidden(c))
+            cols << c;
+    }
+    const bool grouped = groupBy() != FileListModel::GroupBy::None;
+    QList<int> rows;
+    for (int r = 0; r < m_proxy->rowCount(); ++r) {
+        if (!selectedOnly || m_selection->isRowSelected(r, QModelIndex()))
+            rows << r;
+    }
+    auto cell = [this](int r, int c) { return m_proxy->index(r, c).data(Qt::DisplayRole).toString(); };
+    auto group = [this](int r) { return m_proxy->index(r, 0).data(FileListModel::GroupLabelRole).toString(); };
+    QStringList headers;
+    for (int c : cols)
+        headers << m_proxy->headerData(c, Qt::Horizontal, Qt::DisplayRole).toString();
+
+    int folders = 0;
+    int files = 0;
+    for (int r : rows)
+        (m_proxy->index(r, 0).data(FileListModel::IsDirRole).toBool() ? folders : files)++;
+    const QString summary = QStringLiteral("%1 %2, %3 %4")
+                                .arg(folders)
+                                .arg(folders == 1 ? QStringLiteral("folder") : QStringLiteral("folders"))
+                                .arg(files)
+                                .arg(files == 1 ? QStringLiteral("file") : QStringLiteral("files"));
+
+    if (format == ExportFormat::Csv) {
+        auto q = [](QString v) {
+            if (v.contains(QLatin1Char(',')) || v.contains(QLatin1Char('"')) || v.contains(QLatin1Char('\n'))) {
+                v.replace(QLatin1Char('"'), QStringLiteral("\"\""));
+                return QLatin1Char('"') + v + QLatin1Char('"');
+            }
+            return v;
+        };
+        QStringList lines;
+        QStringList head = headers;
+        if (grouped)
+            head.prepend(QStringLiteral("Group"));
+        for (QString &x : head)
+            x = q(x);
+        lines << head.join(QLatin1Char(','));
+        for (int r : rows) {
+            QStringList line;
+            if (grouped)
+                line << q(group(r));
+            for (int c : cols)
+                line << q(cell(r, c));
+            lines << line.join(QLatin1Char(','));
+        }
+        return lines.join(QStringLiteral("\r\n")) + QStringLiteral("\r\n");
+    }
+
+    if (format == ExportFormat::Html) {
+        auto e = [](const QString &v) { return v.toHtmlEscaped(); };
+        QString out = QStringLiteral(
+                          "<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>%1</title>\n<style>"
+                          "body{font-family:sans-serif;margin:24px;color:#222}h1{font-size:18px}"
+                          "table{border-collapse:collapse;font-size:13px}th,td{padding:3px 10px;text-align:left}"
+                          "thead th{border-bottom:2px solid #888}tbody tr:nth-child(even){background:#f3f4f6}"
+                          "th.group{background:#e3e8f0;padding-top:8px}p.sum{color:#666}"
+                          "</style></head><body>\n<h1>%1</h1>\n<table>\n<thead><tr>")
+                          .arg(e(m_path));
+        for (const QString &x : headers)
+            out += QStringLiteral("<th>%1</th>").arg(e(x));
+        out += QStringLiteral("</tr></thead>\n<tbody>\n");
+        QString lastGroup;
+        bool first = true;
+        for (int r : rows) {
+            if (grouped && (first || group(r) != lastGroup)) {
+                lastGroup = group(r);
+                out += QStringLiteral("<tr><th class=\"group\" colspan=\"%1\">%2</th></tr>\n").arg(cols.size()).arg(e(lastGroup));
+            }
+            first = false;
+            out += QStringLiteral("<tr>");
+            for (int c : cols)
+                out += QStringLiteral("<td>%1</td>").arg(e(cell(r, c)));
+            out += QStringLiteral("</tr>\n");
+        }
+        out += QStringLiteral("</tbody>\n</table>\n<p class=\"sum\">%1</p>\n</body></html>\n").arg(e(summary));
+        return out;
+    }
+
+    // Text: columns padded to their widest value.
+    QList<int> widths;
+    for (int i = 0; i < cols.size(); ++i) {
+        int w = int(headers.at(i).size());
+        for (int r : rows)
+            w = qMax(w, int(cell(r, cols.at(i)).size()));
+        widths << qMin(w, 60);
+    }
+    auto line = [&widths](const QStringList &values) {
+        QString l;
+        for (int i = 0; i < values.size(); ++i) {
+            QString v = values.at(i);
+            if (v.size() > widths.at(i))
+                v = v.left(widths.at(i) - 1) + QChar(0x2026);
+            l += i + 1 < values.size() ? v.leftJustified(widths.at(i) + 2) : v;
+        }
+        return l;
+    };
+    QStringList out{m_path, QString(), line(headers)};
+    int total = 0;
+    for (int w : widths)
+        total += w + 2;
+    out << QString(qMax(0, total - 2), QLatin1Char('-'));
+    QString lastGroup;
+    bool first = true;
+    for (int r : rows) {
+        if (grouped && (first || group(r) != lastGroup)) {
+            lastGroup = group(r);
+            if (!first)
+                out << QString();
+            out << QStringLiteral("[%1]").arg(lastGroup);
+        }
+        first = false;
+        QStringList values;
+        for (int c : cols)
+            values << cell(r, c);
+        out << line(values);
+    }
+    out << QString() << summary;
+    return out.join(QLatin1Char('\n')) + QLatin1Char('\n');
 }

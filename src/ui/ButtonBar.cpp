@@ -1,6 +1,7 @@
 #include "ui/ButtonBar.h"
 
 #include "ui/ButtonEditor.h"
+#include "ui/Style.h"
 
 #include <QApplication>
 #include <QDir>
@@ -362,6 +363,22 @@ void ToolbarStore::resetToDefault(const QString &id)
     Q_EMIT changed(id);
 }
 
+void ToolbarStore::reload()
+{
+    const QStringList before = m_bars.keys();
+    load();
+    for (const QString &id : before) {
+        if (!m_bars.contains(id))
+            Q_EMIT removed(id);
+    }
+    for (const QString &id : m_bars.keys()) {
+        if (before.contains(id))
+            Q_EMIT changed(id);
+        else
+            Q_EMIT added(id);
+    }
+}
+
 bool ToolbarStore::isCustomized(const QString &id) const
 {
     return QFileInfo::exists(fileFor(id))
@@ -606,7 +623,10 @@ ButtonBar::ButtonBar(ToolbarStore &store, const QString &id, QWidget *shortcutHo
 {
     setObjectName(QStringLiteral("toolbar-") + id);
     setMovable(true);
-    setIconSize(QSize(18, 18));
+    setIconSize(QSize(Style::instance()->scaled(18), Style::instance()->scaled(18)));
+    connect(Style::instance(), &Style::changed, this, [this]() {
+        setIconSize(QSize(Style::instance()->scaled(18), Style::instance()->scaled(18)));
+    });
     setAcceptDrops(true);
     connect(&m_store, &ToolbarStore::changed, this, [this](const QString &changedId) {
         if (changedId == m_id)

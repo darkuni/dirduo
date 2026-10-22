@@ -90,6 +90,8 @@ public:
     bool select(const ParsedCommand &cmd, QString *error) override;
     bool beginInlineRename() override;
     bool toolbar(const ParsedCommand &cmd, QString *error) override;
+    bool printFolder(const ParsedCommand &cmd, QString *error) override;
+    bool settings(const ParsedCommand &cmd, QString *error) override;
     void afterLocalChange(const QStringList &selectPaths) override;
 
 protected:
@@ -174,4 +176,5 @@ private:
     QMenu *m_flatMenu = nullptr;
     QMenu *m_groupMenu = nullptr;
     QMenu *m_themeMenu = nullptr;
+    QMenu *m_sizeMenu = nullptr;
 };

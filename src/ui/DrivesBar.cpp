@@ -2,6 +2,7 @@
 
 #include "core/FileOps.h"
 #include "ui/ButtonBar.h"
+#include "ui/Style.h"
 
 #include <QTimer>
 
@@ -30,7 +31,10 @@ DrivesBar::DrivesBar(QWidget *parent)
     : QToolBar(QStringLiteral("Drives"), parent)
 {
     setObjectName(QStringLiteral("toolbar-drives"));
-    setIconSize(QSize(18, 18));
+    setIconSize(QSize(Style::instance()->scaled(18), Style::instance()->scaled(18)));
+    connect(Style::instance(), &Style::changed, this, [this]() {
+        setIconSize(QSize(Style::instance()->scaled(18), Style::instance()->scaled(18)));
+    });
     m_poll.setInterval(2000);
     connect(&m_poll, &QTimer::timeout, this, &DrivesBar::rescan);
     rescan();

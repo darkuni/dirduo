@@ -69,6 +69,8 @@ public:
     bool remove(const QString &id);      // not the main toolbar
     void resetToDefault(const QString &id);
     bool isCustomized(const QString &id) const;
+    // Reads the files again (after a settings restore).
+    void reload();
 
     QString fileFor(const QString &id) const;
     static QList<ButtonDef> defaultButtons();

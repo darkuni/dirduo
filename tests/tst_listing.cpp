@@ -3,6 +3,10 @@
 #include "core/FileKind.h"
 #include "core/FolderSizes.h"
 #include "core/LabelRules.h"
+#include "core/Zip.h"
+
+#include <QProcess>
+#include <QStandardPaths>
 
 #include <QDir>
 #include <QFile>
@@ -114,6 +118,48 @@ private Q_SLOTS:
         QCOMPARE(DirLister::listRecursive(dir.path(), false, 1000, &truncated, &error).size(), 3);
         QCOMPARE(DirLister::listRecursive(dir.path(), true, 2, &truncated, &error).size(), 2);
         QVERIFY(truncated);
+    }
+
+    void zipRoundTrip()
+    {
+        QTemporaryDir dir;
+        const QString file = dir.filePath(QStringLiteral("t.zip"));
+        QByteArray big(100000, '\0');
+        for (int i = 0; i < big.size(); ++i)
+            big[i] = char(i * 7);
+        QList<Zip::Entry> in{{QStringLiteral("linopus/aliases.ini"), QByteArray("[Aliases]\nroms=/x\n")},
+                             {QStringLiteral("linopus/toolbars/emu.json"), big},
+                             {QStringLiteral("linopus/empty.txt"), QByteArray()}};
+        QVERIFY(Zip::write(file, in));
+        QList<Zip::Entry> out;
+        QString err;
+        QVERIFY2(Zip::read(file, out, &err), qPrintable(err));
+        QCOMPARE(out.size(), 3);
+        for (int i = 0; i < 3; ++i) {
+            QCOMPARE(out.at(i).name, in.at(i).name);
+            QCOMPARE(out.at(i).data, in.at(i).data);
+        }
+        QCOMPARE(Zip::crc32(QByteArray("123456789")), 0xCBF43926u); // the standard check value
+        // Garbage is refused.
+        QFile g(dir.filePath(QStringLiteral("bad.zip")));
+        QVERIFY(g.open(QIODevice::WriteOnly));
+        g.write("not a zip at all");
+        g.close();
+        QVERIFY(!Zip::read(g.fileName(), out, &err));
+
+        // A compressed zip from another tool, when python is around to make one.
+        const QString py = QStandardPaths::findExecutable(QStringLiteral("python3"));
+        if (py.isEmpty())
+            QSKIP("no python3 to make a compressed zip");
+        const QString deflated = dir.filePath(QStringLiteral("d.zip"));
+        QProcess p;
+        p.start(py, {QStringLiteral("-c"),
+                     QStringLiteral("import zipfile,sys\nz=zipfile.ZipFile(sys.argv[1],'w',zipfile.ZIP_DEFLATED)\n"
+                                    "z.writestr('linopus/labels.ini','x'*5000)\nz.close()"),
+                     deflated});
+        QVERIFY(p.waitForFinished(10000));
+        QVERIFY2(Zip::read(deflated, out, &err), qPrintable(err));
+        QCOMPARE(out.first().data, QByteArray(5000, 'x'));
     }
 };
 

@@ -112,6 +112,11 @@ public:
 
     void showHeaderMenu(const QPoint &globalPos);
 
+    // The listing as shown (visible columns in their order, grouping, flat
+    // view), for Print Folder.
+    enum class ExportFormat { Text, Csv, Html };
+    QString exportListing(ExportFormat format, bool selectedOnly) const;
+
     static QString viewModeName(ViewMode mode);
     static bool viewModeFromName(const QString &name, ViewMode &out);
 
@@ -142,6 +147,7 @@ private:
     void autoSwitchForContent();
     void updateLocationColumn();
     void fitNameColumn();
+    void applySize();
 
     QString m_path;
     QString m_error;

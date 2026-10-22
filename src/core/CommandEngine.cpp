@@ -7,6 +7,10 @@
 #include "core/RemoteBackend.h"
 
 #include <QClipboard>
+#include <QSaveFile>
+#include <QImage>
+#include <QDateTime>
+#include <QBuffer>
 #include <QDir>
 #include <QFileInfo>
 #include <QGuiApplication>
@@ -55,8 +59,9 @@ CommandEngine::CommandEngine(AliasManager &aliases, JobManager &jobs, QObject *p
 QStringList CommandEngine::commandNames()
 {
     return {QStringLiteral("Clipboard"), QStringLiteral("Copy"), QStringLiteral("CreateFolder"),
-            QStringLiteral("Delete"), QStringLiteral("Go"), QStringLiteral("Move"),
-            QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Set"), QStringLiteral("Toolbar")};
+            QStringLiteral("Delete"), QStringLiteral("Go"), QStringLiteral("Move"), QStringLiteral("Print"),
+            QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Set"), QStringLiteral("Settings"),
+            QStringLiteral("Toolbar")};
 }
 
 QString CommandEngine::resolvePath(const QString &input, const QString &base) const
@@ -164,6 +169,10 @@ bool CommandEngine::execute(const ParsedCommand &cmd, CommandContext &ctx, QStri
         return ctx.select(cmd, error);
     if (cmd.is(QStringLiteral("Toolbar")))
         return ctx.toolbar(cmd, error);
+    if (cmd.is(QStringLiteral("Print")))
+        return ctx.printFolder(cmd, error);
+    if (cmd.is(QStringLiteral("Settings")))
+        return ctx.settings(cmd, error);
     if (error)
         *error = QStringLiteral("Unknown command \"%1\".").arg(cmd.name);
     return false;
@@ -427,6 +436,80 @@ bool CommandEngine::cmdCreateFolder(const ParsedCommand &cmd, CommandContext &ct
     return true;
 }
 
+bool CommandEngine::pasteAsFile(const QMimeData *mime, bool askName, CommandContext &ctx, QString *error)
+{
+    // A picture or text on the clipboard becomes a file in the source, as in
+    // Opus: screenshots straight into a folder.
+    const bool image = mime->hasImage();
+    const QString stamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HHmmss"));
+    QString name = image ? QStringLiteral("Pasted image %1.png").arg(stamp) : QStringLiteral("Pasted text %1.txt").arg(stamp);
+    if (askName) {
+        if (!ctx.promptText(QStringLiteral("Paste as File"), QStringLiteral("File name:"), name)) {
+            if (error)
+                *error = kCancelled;
+            return false;
+        }
+        name = name.trimmed();
+        if (name.isEmpty() || name.contains(QLatin1Char('/'))) {
+            if (error)
+                *error = QStringLiteral("That is not a usable file name.");
+            return false;
+        }
+        if (image && QFileInfo(name).suffix().isEmpty())
+            name += QStringLiteral(".png");
+    }
+    QByteArray data;
+    QString format;
+    if (image) {
+        const QImage img = qvariant_cast<QImage>(mime->imageData());
+        format = QFileInfo(name).suffix().toUpper();
+        if (format == QLatin1String("JPEG"))
+            format = QStringLiteral("JPG");
+        if (format != QLatin1String("JPG") && format != QLatin1String("PNG") && format != QLatin1String("WEBP")
+            && format != QLatin1String("BMP"))
+            format = QStringLiteral("PNG");
+        QBuffer buf(&data);
+        buf.open(QIODevice::WriteOnly);
+        if (img.isNull() || !img.save(&buf, format.toLatin1().constData(), format == QLatin1String("JPG") ? 92 : -1)) {
+            if (error)
+                *error = QStringLiteral("The picture on the clipboard could not be saved.");
+            return false;
+        }
+    } else {
+        data = mime->text().toUtf8();
+    }
+
+    const QString dir = ctx.sourcePath();
+    if (Location::isLocal(dir)) {
+        // Never overwrite: "name (2).png" when the name is taken.
+        QString target = Location::join(dir, name);
+        const QFileInfo fi(name);
+        for (int n = 2; QFileInfo::exists(target); ++n)
+            target = Location::join(dir, QStringLiteral("%1 (%2).%3").arg(fi.completeBaseName()).arg(n).arg(fi.suffix()));
+        QSaveFile f(target);
+        if (!f.open(QIODevice::WriteOnly) || f.write(data) != data.size() || !f.commit()) {
+            if (error)
+                *error = QStringLiteral("Could not write %1: %2").arg(target, f.errorString());
+            return false;
+        }
+        ctx.afterLocalChange({target});
+        return true;
+    }
+    // A server: write it locally under its name, then upload it like any copy.
+    const QString tmpDir = QDir(QDir::tempPath()).filePath(QStringLiteral("linopus-paste-%1").arg(QDateTime::currentMSecsSinceEpoch()));
+    QDir().mkpath(tmpDir);
+    const QString tmp = QDir(tmpDir).filePath(name);
+    QFile f(tmp);
+    if (!f.open(QIODevice::WriteOnly) || f.write(data) != data.size()) {
+        if (error)
+            *error = QStringLiteral("Could not write a temporary file.");
+        return false;
+    }
+    f.close();
+    copyItems({tmp}, dir, true, CollisionAction::Rename);
+    return true;
+}
+
 bool CommandEngine::cmdClipboard(const ParsedCommand &cmd, CommandContext &ctx, QString *error)
 {
     QClipboard *clipboard = QGuiApplication::clipboard();
@@ -457,6 +540,8 @@ bool CommandEngine::cmdClipboard(const ParsedCommand &cmd, CommandContext &ctx, 
     }
     if (cmd.hasFlag(QStringLiteral("PASTE"))) {
         const QMimeData *mime = clipboard->mimeData();
+        if (mime && !mime->hasUrls() && (mime->hasImage() || mime->hasText()))
+            return pasteAsFile(mime, cmd.hasFlag(QStringLiteral("AS")), ctx, error);
         if (!mime || !mime->hasUrls()) {
             if (error)
                 *error = QStringLiteral("The clipboard holds no files.");

@@ -305,6 +305,9 @@ void FileDisplay::setRole(Role role)
 
 void FileDisplay::applyStyle()
 {
+    QFont small = font();
+    small.setPointSizeF(font().pointSizeF() * 0.92);
+    m_status->setFont(small);
     const Theme &theme = Style::instance()->theme();
     const QPalette pal = palette();
     auto textOn = [](const QColor &c) {
