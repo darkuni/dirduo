@@ -1,4 +1,7 @@
 #include "ui/FolderTree.h"
+#include "ui/Style.h"
+
+#include <QApplication>
 
 #include "core/AliasManager.h"
 #include "core/Location.h"
@@ -338,6 +341,9 @@ FolderTree::FolderTree(AliasManager *aliases, QWidget *parent)
     , m_aliases(aliases)
     , m_model(new FolderTreeModel(this))
 {
+    connect(Style::instance(), &Style::changed, this, [this]() {
+        setZoom(m_zoom); // a new text size under the zoom
+    });
     setModel(m_model);
     header()->hide();
     setUniformRowHeights(true);
@@ -452,4 +458,19 @@ void FolderTree::reveal()
     selectionModel()->setCurrentIndex(idx, QItemSelectionModel::ClearAndSelect);
     scrollTo(idx, QAbstractItemView::EnsureVisible);
     m_syncing = false;
+}
+
+void FolderTree::setZoom(int percent)
+{
+    m_zoom = percent;
+    QFont f = QApplication::font();
+    if (percent != 100) {
+        if (f.pointSizeF() > 0)
+            f.setPointSizeF(f.pointSizeF() * percent / 100.0);
+        else
+            f.setPixelSize(qMax(6, int(f.pixelSize() * percent / 100.0 + 0.5)));
+    }
+    setFont(f);
+    const int px = qMax(8, int(Style::instance()->scaled(16) * percent / 100.0 + 0.5));
+    setIconSize(QSize(px, px));
 }

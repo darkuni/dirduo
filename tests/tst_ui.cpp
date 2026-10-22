@@ -56,6 +56,7 @@
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QWheelEvent>
 #include <QSignalSpy>
 #include <QTimer>
 
@@ -1604,6 +1605,61 @@ private Q_SLOTS:
         QVERIFY(w->runCommand(QStringLiteral("Set VIEW=thumbnails")));
         QCOMPARE(t->viewMode(), FolderTab::ViewMode::Thumbnails);
         Paths::setCacheHomeOverride(QString());
+    }
+
+    void zoomPerLister()
+    {
+        FolderTab *t = w->display(0)->currentTab();
+        const qreal base = t->view()->font().pointSizeF();
+        QVERIFY(base > 0);
+        QCOMPARE(w->zoom(), 100);
+
+        // Shift+wheel over the list: one notch, one step.
+        QWidget *vp = t->view()->viewport();
+        const QPoint at = vp->rect().center();
+        QWheelEvent up(at, vp->mapToGlobal(at), QPoint(), QPoint(0, 120), Qt::NoButton, Qt::ShiftModifier, Qt::NoScrollPhase, false);
+        QApplication::sendEvent(vp, &up);
+        QCOMPARE(w->zoom(), 110);
+        QVERIFY(t->view()->font().pointSizeF() > base);
+        // Some systems turn Shift+wheel into a sideways scroll: still a zoom.
+        QWheelEvent side(at, vp->mapToGlobal(at), QPoint(), QPoint(120, 0), Qt::NoButton, Qt::ShiftModifier, Qt::NoScrollPhase, false);
+        QApplication::sendEvent(vp, &side);
+        QCOMPARE(w->zoom(), 125);
+        // A trackpad's small steps add up.
+        for (int i = 0; i < 4; ++i) {
+            QWheelEvent small(at, vp->mapToGlobal(at), QPoint(0, -10), QPoint(0, -30), Qt::NoButton, Qt::ShiftModifier, Qt::NoScrollPhase, false);
+            QApplication::sendEvent(vp, &small);
+        }
+        QCOMPARE(w->zoom(), 110);
+        // A plain wheel still scrolls.
+        QWheelEvent plain(at, vp->mapToGlobal(at), QPoint(), QPoint(0, 120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+        QApplication::sendEvent(vp, &plain);
+        QCOMPARE(w->zoom(), 110);
+
+        // Both displays, new tabs and the tree follow; other listers do not.
+        const int sizeWidth = t->detailsView()->header()->sectionSize(FileListModel::SizeColumn);
+        QVERIFY(w->runCommand(QStringLiteral("Set ZOOM=150")));
+        QCOMPARE(t->detailsView()->header()->sectionSize(FileListModel::SizeColumn), qRound(sizeWidth * 150.0 / 110));
+        QCOMPARE(w->display(1)->currentTab()->zoom(), 150);
+        FolderTab *fresh = w->display(0)->addTab(root + QStringLiteral("/b"));
+        QCOMPARE(fresh->zoom(), 150);
+        QVERIFY(w->runCommand(QStringLiteral("Set TREE=shared")));
+        QVERIFY(w->sharedTree()->font().pointSizeF() > base * 1.4);
+        QCOMPARE(t->zoomed(16), Style::instance()->scaled(24));
+        ListerWindow *other = m_app->newLister(root);
+        QCOMPARE(other->zoom(), 100);
+        other->close();
+
+        QVERIFY(w->runCommand(QStringLiteral("Set ZOOM=in")));
+        QCOMPARE(w->zoom(), 160);
+        QVERIFY(!runFailing(QStringLiteral("Set ZOOM=900")));
+        QVERIFY(w->runCommand(QStringLiteral("Set ZOOM=reset")));
+        QCOMPARE(w->zoom(), 100);
+        QCOMPARE(t->view()->font().pointSizeF(), base);
+        // At 100% the lists follow the app's text size again.
+        QVERIFY(w->runCommand(QStringLiteral("Set SIZE=larger")));
+        QVERIFY(t->view()->font().pointSizeF() > base);
+        QVERIFY(w->runCommand(QStringLiteral("Set SIZE=normal\nSet TREE=off")));
     }
 
 private:

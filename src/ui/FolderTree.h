@@ -81,6 +81,7 @@ public:
     void setPath(const QString &path);
     QString currentFolder() const;
     void setShowHidden(bool show);
+    void setZoom(int percent); // follows the lister's zoom
     FolderTreeModel *treeModel() const { return m_model; }
 
     // Rebuilds the top level from the drives now (mounts are also polled).
@@ -100,4 +101,5 @@ private:
     QTimer m_poll;
     QString m_path;
     bool m_syncing = false;
+    int m_zoom = 100;
 };

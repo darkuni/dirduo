@@ -53,6 +53,8 @@
 #include <QSettings>
 #include <QSplitter>
 #include <QTimer>
+#include <QCursor>
+#include <QToolTip>
 #include <QUrl>
 
 namespace {
@@ -111,6 +113,7 @@ ListerWindow::ListerWindow(AppContext &app, QWidget *parent)
             if (from == sourceDisplay())
                 updateViewer();
         });
+        connect(d, &FileDisplay::zoomRequested, this, [this](FileDisplay *, int steps) { zoomBy(steps, true); });
         connect(d, &FileDisplay::tabKeyPressed, this, [this](FileDisplay *from) {
             if (!m_dual)
                 return;
@@ -386,6 +389,18 @@ void ListerWindow::buildMenus()
     format->addAction(m_actAutoFormat);
     m_themeMenu = view->addMenu(QIcon::fromTheme(QStringLiteral("color-management")), QStringLiteral("Theme"));
     m_sizeMenu = view->addMenu(QIcon::fromTheme(QStringLiteral("zoom-in")), QStringLiteral("Text and Icon Size"));
+    {
+        // Ctrl+= and Ctrl+- as in browsers; Shift+wheel over a list does the same.
+        QAction *in = commandAction(QStringLiteral("Zoom In"), QStringLiteral("Set ZOOM=in"), QKeySequence(QStringLiteral("Ctrl+=")),
+                                    QStringLiteral("zoom-in"));
+        in->setShortcuts({QKeySequence(QStringLiteral("Ctrl+=")), QKeySequence(QStringLiteral("Ctrl++"))});
+        view->addAction(in);
+        view->addAction(commandAction(QStringLiteral("Zoom Out"), QStringLiteral("Set ZOOM=out"), QKeySequence(QStringLiteral("Ctrl+-")),
+                                      QStringLiteral("zoom-out")));
+        m_actZoomReset = commandAction(QStringLiteral("Reset Zoom (100%)"), QStringLiteral("Set ZOOM=reset"),
+                                       QKeySequence(QStringLiteral("Ctrl+0")), QStringLiteral("zoom-original"));
+        view->addAction(m_actZoomReset);
+    }
     connect(view, &QMenu::aboutToShow, this, [this]() {
         syncViewActions();
         fillViewMenus();
@@ -1024,6 +1039,7 @@ void ListerWindow::setTreeMode(TreeMode mode)
     if (mode == TreeMode::Shared && !m_sharedTree) {
         m_sharedTree = new FolderTree(&m_app.aliases(), m_outer);
         m_sharedTree->setShowHidden(sourceDisplay()->showHidden());
+        m_sharedTree->setZoom(m_zoom);
         m_outer->insertWidget(0, m_sharedTree);
         m_outer->setStretchFactor(0, 0);
         m_outer->setStretchFactor(1, 1);
@@ -1386,6 +1402,21 @@ bool ListerWindow::set(const ParsedCommand &cmd, QString *error)
                 return fail(QStringLiteral("SIZE takes normal, large, larger, bigger or smaller."));
             Style::instance()->setSizeLevel(level);
             m_app.settings().setValue(QStringLiteral("Appearance/size"), Style::sizeName(level));
+        } else if (key == QLatin1String("ZOOM")) {
+            QString v = value;
+            v.remove(QLatin1Char('%'));
+            bool isNumber = false;
+            const int percent = v.toInt(&isNumber);
+            if (v == QLatin1String("in") || v == QLatin1String("bigger"))
+                zoomBy(1);
+            else if (v == QLatin1String("out") || v == QLatin1String("smaller"))
+                zoomBy(-1);
+            else if (v == QLatin1String("reset") || v == QLatin1String("normal"))
+                setZoom(100);
+            else if (isNumber && percent >= 50 && percent <= 300)
+                setZoom(percent);
+            else
+                return fail(QStringLiteral("ZOOM takes in, out, reset or a percentage from 50 to 300."));
         } else if (key == QLatin1String("GROUPBY")) {
             FileListModel::GroupBy g;
             if (!FileListModel::groupByFromName(value, g))
@@ -1716,6 +1747,7 @@ void ListerWindow::saveListerState(QSettings &s) const
     s.setValue(QStringLiteral("lastTree"), int(m_lastTreeMode));
     s.setValue(QStringLiteral("outer"), m_outer->saveState());
     s.setValue(QStringLiteral("hidden"), m_displays[0]->showHidden());
+    s.setValue(QStringLiteral("zoom"), m_zoom);
     for (int i = 0; i < 2; ++i) {
         const FileDisplay *d = m_displays[i];
         QStringList paths;
@@ -1753,6 +1785,7 @@ void ListerWindow::saveListerState(QSettings &s) const
 bool ListerWindow::restoreListerState(QSettings &s)
 {
     const bool hidden = s.value(QStringLiteral("hidden"), false).toBool();
+    setZoom(s.value(QStringLiteral("zoom"), 100).toInt());
     for (int i = 0; i < 2; ++i) {
         const QString prefix = QStringLiteral("display%1/").arg(i);
         const QStringList paths = s.value(prefix + QStringLiteral("tabs")).toStringList();
@@ -2396,4 +2429,41 @@ bool ListerWindow::imageCommand(const ParsedCommand &cmd, QString *error)
     }
     dlg->show();
     return true;
+}
+
+// ---------------------------------------------------------------- zoom
+
+QList<int> ListerWindow::zoomLevels()
+{
+    return {50, 60, 70, 80, 90, 100, 110, 125, 140, 160, 180, 200, 225, 250, 300};
+}
+
+void ListerWindow::setZoom(int percent)
+{
+    percent = qBound(50, percent, 300);
+    m_zoom = percent;
+    for (FileDisplay *d : m_displays)
+        d->setZoom(percent);
+    if (m_sharedTree)
+        m_sharedTree->setZoom(percent);
+    if (m_actZoomReset)
+        m_actZoomReset->setText(QStringLiteral("Reset Zoom (%1%)").arg(percent));
+    scheduleButtonStates();
+}
+
+void ListerWindow::zoomBy(int steps, bool showLevel)
+{
+    const QList<int> levels = zoomLevels();
+    // The nearest level at or past the current zoom, then steps along.
+    int at = 0;
+    while (at < levels.size() - 1 && levels.at(at) < m_zoom)
+        ++at;
+    if (steps < 0 && levels.at(at) > m_zoom && at > 0)
+        --at; // between two levels: zooming out goes to the lower one first
+    if (levels.at(at) != m_zoom)
+        steps -= steps > 0 ? 1 : (steps < 0 ? -1 : 0);
+    at = qBound(0, int(at + steps), int(levels.size() - 1));
+    setZoom(levels.at(at));
+    if (showLevel)
+        QToolTip::showText(QCursor::pos(), QStringLiteral("%1%").arg(m_zoom), this, {}, 900);
 }

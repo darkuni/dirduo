@@ -136,6 +136,7 @@ void FileDisplay::setTreeVisible(bool visible)
     if (visible && !m_tree) {
         m_tree = new FolderTree(&m_aliases, m_body);
         m_tree->setShowHidden(m_showHidden);
+        m_tree->setZoom(m_zoom);
         m_body->insertWidget(0, m_tree);
         m_body->setStretchFactor(0, 0);
         m_body->setStretchFactor(1, 1);
@@ -199,6 +200,7 @@ FolderTab *FileDisplay::addTab(const QString &path, bool makeCurrent)
 {
     auto *t = new FolderTab(m_stack);
     t->setShowHidden(m_showHidden);
+    t->setZoom(m_zoom);
     m_stack->addWidget(t);
     const int insertAt = m_tabs->count() == 0 ? 0 : m_tabs->currentIndex() + 1;
     const int index = m_tabs->insertTab(insertAt, QString());
@@ -212,6 +214,15 @@ FolderTab *FileDisplay::addTab(const QString &path, bool makeCurrent)
     }
     updateHeader();
     return t;
+}
+
+void FileDisplay::setZoom(int percent)
+{
+    m_zoom = percent;
+    for (int i = 0; i < tabCount(); ++i)
+        tab(i)->setZoom(percent);
+    if (m_tree)
+        m_tree->setZoom(percent);
 }
 
 void FileDisplay::closeTab(int index)
@@ -270,6 +281,7 @@ void FileDisplay::wireTab(FolderTab *t)
         Q_EMIT contextMenuRequested(this, pos, onItem);
     });
     connect(t, &FolderTab::tabKeyPressed, this, [this](bool) { Q_EMIT tabKeyPressed(this); });
+    connect(t, &FolderTab::zoomRequested, this, [this](int steps) { Q_EMIT zoomRequested(this, steps); });
 }
 
 void FileDisplay::updateTabText(FolderTab *t)

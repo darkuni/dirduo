@@ -26,7 +26,11 @@
 #include <QFileInfo>
 #include <QHeaderView>
 #include <QKeyEvent>
+#include <QApplication>
 #include <QListView>
+#include <QNativeGestureEvent>
+#include <QGestureEvent>
+#include <QWheelEvent>
 #include <QMouseEvent>
 #include <QRegularExpression>
 #include <QStackedLayout>
@@ -152,12 +156,46 @@ FolderTab::FolderTab(QWidget *parent)
     connect(Style::instance(), &Style::changed, this, &FolderTab::applySize);
 }
 
+int FolderTab::zoomed(int px) const
+{
+    return qMax(1, int(Style::instance()->scaled(px) * m_zoom / 100.0 + 0.5));
+}
+
+void FolderTab::setZoom(int percent)
+{
+    percent = qBound(50, percent, 300);
+    if (percent == m_zoom)
+        return;
+    // Columns grow and shrink with the text, so zoomed names still fit; the
+    // list scrolls sideways when they no longer all do.
+    const double factor = double(percent) / m_zoom;
+    QHeaderView *h = m_details->header();
+    for (int c = 0; c < h->count(); ++c) {
+        if (h->sectionResizeMode(c) == QHeaderView::Interactive)
+            h->resizeSection(c, qMax(24, int(h->sectionSize(c) * factor + 0.5)));
+    }
+    m_zoom = percent;
+    applySize();
+}
+
 void FolderTab::applySize()
 {
-    const int px = Style::instance()->scaled(16);
+    // The app's text size, times this lister's zoom.
+    QFont f = QApplication::font();
+    if (m_zoom != 100) {
+        if (f.pointSizeF() > 0)
+            f.setPointSizeF(f.pointSizeF() * m_zoom / 100.0);
+        else
+            f.setPixelSize(qMax(6, int(f.pixelSize() * m_zoom / 100.0 + 0.5)));
+    }
+    for (QWidget *w : {static_cast<QWidget *>(m_details), static_cast<QWidget *>(m_list),
+                       static_cast<QWidget *>(m_details->header())})
+        w->setFont(f); // set again whenever the app's text size changes
+    const int px = zoomed(16);
     m_details->setIconSize(QSize(px, px));
     setViewMode(m_mode); // list and icon sizes
     m_details->doItemsLayout();
+    fitNameColumn();
 }
 
 void FolderTab::setupView(QAbstractItemView *v)
@@ -176,6 +214,7 @@ void FolderTab::setupView(QAbstractItemView *v)
     v->installEventFilter(this);
     v->viewport()->installEventFilter(this);
     v->viewport()->setMouseTracking(true); // folder sizes fill in on hover
+    v->viewport()->grabGesture(Qt::PinchGesture); // two fingers zoom on the Deck's screen
 
     // Double-click opens, whatever the desktop's single-click setting says.
     connect(v, &QAbstractItemView::doubleClicked, this, &FolderTab::activateIndex);
@@ -452,7 +491,7 @@ void FolderTab::setViewMode(ViewMode mode)
         m_list->setViewMode(QListView::ListMode);
         m_list->setFlow(QListView::TopToBottom);
         m_list->setWrapping(true);
-        m_list->setIconSize(QSize(Style::instance()->scaled(16), Style::instance()->scaled(16)));
+        m_list->setIconSize(QSize(zoomed(16), zoomed(16)));
         m_list->setGridSize(QSize());
         m_list->setSpacing(1);
         m_list->setWordWrap(false);
@@ -462,20 +501,20 @@ void FolderTab::setViewMode(ViewMode mode)
         m_list->setViewMode(QListView::IconMode);
         m_list->setFlow(QListView::LeftToRight);
         m_list->setWrapping(true);
-        m_list->setIconSize(QSize(Style::instance()->scaled(48), Style::instance()->scaled(48)));
-        m_list->setGridSize(QSize(Style::instance()->scaled(104), Style::instance()->scaled(88)));
+        m_list->setIconSize(QSize(zoomed(48), zoomed(48)));
+        m_list->setGridSize(QSize(zoomed(104), zoomed(88)));
         m_list->setSpacing(4);
         m_list->setWordWrap(true);
         m_list->setMovement(QListView::Static);
         m_stack->setCurrentWidget(m_list);
         break;
     case ViewMode::Thumbnails: {
-        const int px = Style::instance()->scaled(128);
+        const int px = zoomed(128);
         m_list->setViewMode(QListView::IconMode);
         m_list->setFlow(QListView::LeftToRight);
         m_list->setWrapping(true);
         m_list->setIconSize(QSize(px, px));
-        m_list->setGridSize(QSize(px + Style::instance()->scaled(24), px + fontMetrics().lineSpacing() * 2 + Style::instance()->scaled(12)));
+        m_list->setGridSize(QSize(px + zoomed(24), px + m_list->fontMetrics().lineSpacing() * 2 + zoomed(12)));
         m_list->setSpacing(4);
         m_list->setWordWrap(true);
         m_list->setMovement(QListView::Static);
@@ -599,6 +638,57 @@ bool FolderTab::eventFilter(QObject *watched, QEvent *event)
     case QEvent::MouseButtonPress:
         Q_EMIT activated();
         break;
+    case QEvent::Wheel: {
+        // Shift+wheel zooms, as in Opus. Some systems turn Shift+wheel into a
+        // sideways scroll, so either direction counts.
+        auto *we = static_cast<QWheelEvent *>(event);
+        if (!isViewport || !(we->modifiers() & Qt::ShiftModifier))
+            break;
+        const QPoint d = we->angleDelta();
+        m_wheelZoom += d.y() != 0 ? d.y() : d.x();
+        int steps = 0;
+        while (m_wheelZoom >= 120) {
+            ++steps;
+            m_wheelZoom -= 120;
+        }
+        while (m_wheelZoom <= -120) {
+            --steps;
+            m_wheelZoom += 120;
+        }
+        if (steps)
+            Q_EMIT zoomRequested(steps);
+        return true;
+    }
+    case QEvent::NativeGesture: {
+        // Pinch on a touchpad.
+        auto *ge = static_cast<QNativeGestureEvent *>(event);
+        if (ge->gestureType() != Qt::ZoomNativeGesture)
+            break;
+        m_pinchZoom *= 1.0 + ge->value();
+        if (m_pinchZoom > 1.15 || m_pinchZoom < 0.87) {
+            Q_EMIT zoomRequested(m_pinchZoom > 1 ? 1 : -1);
+            m_pinchZoom = 1.0;
+        }
+        return true;
+    }
+    case QEvent::Gesture: {
+        // Pinch on the touchscreen.
+        auto *ge = static_cast<QGestureEvent *>(event);
+        if (auto *pinch = static_cast<QPinchGesture *>(ge->gesture(Qt::PinchGesture))) {
+            if (pinch->changeFlags() & QPinchGesture::ScaleFactorChanged) {
+                m_pinchZoom *= pinch->scaleFactor();
+                if (m_pinchZoom > 1.2 || m_pinchZoom < 0.83) {
+                    Q_EMIT zoomRequested(m_pinchZoom > 1 ? 1 : -1);
+                    m_pinchZoom = 1.0;
+                }
+            }
+            if (pinch->state() == Qt::GestureFinished || pinch->state() == Qt::GestureCanceled)
+                m_pinchZoom = 1.0;
+            ge->accept(pinch);
+            return true;
+        }
+        break;
+    }
     case QEvent::Resize:
         if (watched == m_details->viewport())
             fitNameColumn();
@@ -1096,7 +1186,7 @@ void FolderTab::fitNameColumn()
     // The name column takes the room left over, but never less than enough to
     // read a name: on a narrow display the list scrolls sideways instead.
     QHeaderView *h = m_details->header();
-    const int minName = fontMetrics().averageCharWidth() * 18;
+    const int minName = m_details->fontMetrics().averageCharWidth() * 18;
     int others = 0;
     for (int c = 0; c < FileListModel::ColumnCount; ++c) {
         if (c != FileListModel::NameColumn && !h->isSectionHidden(c))

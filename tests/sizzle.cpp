@@ -715,6 +715,14 @@ int main(int argc, char *argv[])
     source(0);
     run(QStringLiteral("Set VIEW=details"));
 
+    // 14. Zoomed to 160% (Shift+wheel): readable from the couch.
+    run(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet DUAL=vertical\nSet TREE=off\nSet VIEW=details"));
+    go(r + QStringLiteral("/Emulation/roms/snes"), media + QStringLiteral("/Games/steamapps/common"));
+    run(QStringLiteral("Set ZOOM=160"));
+    left->selectPaths({r + QStringLiteral("/Emulation/roms/snes/Super Metroid.sfc")});
+    shot(w, QStringLiteral("14-dark-zoom-160"), 900);
+    run(QStringLiteral("Set ZOOM=reset"));
+
     // 12. One view, four themes.
     QStringList themeShots, themeNames;
     run(QStringLiteral("Set DUAL=vertical\nSet TREE=shared\nSet VIEW=details"));

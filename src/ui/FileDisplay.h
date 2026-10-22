@@ -51,6 +51,9 @@ public:
     // Applied to every tab in this display, and to tabs opened later.
     void setShowHidden(bool show);
     bool showHidden() const { return m_showHidden; }
+    // Every tab and the tree, in percent.
+    void setZoom(int percent);
+    int zoom() const { return m_zoom; }
 
 Q_SIGNALS:
     void activated(FileDisplay *display);
@@ -61,6 +64,7 @@ Q_SIGNALS:
     void openFileRequested(const QString &path);
     void contextMenuRequested(FileDisplay *display, const QPoint &globalPos, bool onItem);
     void tabKeyPressed(FileDisplay *display);
+    void zoomRequested(FileDisplay *display, int steps);
     // Selection, view or folder changed: buttons may need to update.
     void stateChanged(FileDisplay *display);
 
@@ -74,6 +78,7 @@ private:
     Role m_role = Role::None;
     bool m_destLocked = false;
     bool m_showBadge = true;
+    int m_zoom = 100;
     bool m_showHidden = false;
 
     QWidget *m_accent; // colored edge: source, dest or locked dest

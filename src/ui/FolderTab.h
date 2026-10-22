@@ -82,6 +82,12 @@ public:
     GroupTreeView *detailsView() const { return m_details; }
     FileListModel *fileModel() const { return m_model; }
 
+    // The lister's zoom, in percent of the normal text and icon size.
+    void setZoom(int percent);
+    int zoom() const { return m_zoom; }
+    // Size in pixels at this text size and zoom.
+    int zoomed(int px) const;
+
     // Filter bar
     void setFilterBarVisible(bool visible);
     bool filterBarVisible() const;
@@ -122,6 +128,8 @@ public:
     static bool viewModeFromName(const QString &name, ViewMode &out);
 
 Q_SIGNALS:
+    // Shift+wheel or a pinch over the list: steps in (+) or out (-).
+    void zoomRequested(int steps);
     void pathChanged(const QString &path);
     void viewStateChanged(); // grouping, filter, columns or modes changed
     void activated();                 // clicked or focused
@@ -172,6 +180,9 @@ private:
     bool m_formatActive = false;
     FolderFormat m_baseFormat;
     bool m_autoIcons = false;
+    int m_zoom = 100;
+    int m_wheelZoom = 0;     // wheel units towards the next step (trackpads send small ones)
+    qreal m_pinchZoom = 1.0; // pinch scale towards the next step
     ViewMode m_modeBeforeAuto = ViewMode::Details;
     FileListModel::GroupBy m_groupBeforeFlat = FileListModel::GroupBy::None;
     QListView *m_list;

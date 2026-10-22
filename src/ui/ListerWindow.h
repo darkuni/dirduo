@@ -63,6 +63,11 @@ public:
     ViewerPane *viewer() const { return m_viewer; }
 
     FileDisplay *sourceDisplay() const;
+    // This lister's zoom over the app's text size, in percent (Shift+wheel).
+    int zoom() const { return m_zoom; }
+    void setZoom(int percent);
+    void zoomBy(int steps, bool showLevel = false);
+    static QList<int> zoomLevels();
     FileDisplay *destDisplay() const; // null in single mode
     FileDisplay *display(int index) const { return m_displays[index]; }
     bool isDual() const { return m_dual; }
@@ -190,4 +195,6 @@ private:
     QMenu *m_groupMenu = nullptr;
     QMenu *m_themeMenu = nullptr;
     QMenu *m_sizeMenu = nullptr;
+    QAction *m_actZoomReset = nullptr;
+    int m_zoom = 100;
 };
