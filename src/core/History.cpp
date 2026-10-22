@@ -4,6 +4,7 @@
 #include "core/FileOps.h"
 #include "core/JobManager.h"
 #include "core/Location.h"
+#include "core/Metadata.h"
 #include "core/Paths.h"
 #include "core/RenameEngine.h"
 #include "core/Trash.h"
@@ -148,6 +149,7 @@ QString UndoHistory::kindName(UndoEntry::Kind kind)
     case UndoEntry::Kind::Restore: return QStringLiteral("Restore");
     case UndoEntry::Kind::NewItem: return QStringLiteral("New");
     case UndoEntry::Kind::Rename: return QStringLiteral("Rename");
+    case UndoEntry::Kind::Tags: return QStringLiteral("Tags");
     }
     return {};
 }
@@ -394,6 +396,32 @@ bool UndoHistory::undo(int id, QStringList *touched, QString *error)
         for (const JobSpec &spec : std::as_const(jobs))
             m_undoJobs << m_jobs.enqueue(spec);
         ok = !inverse.items.isEmpty() || !jobs.isEmpty();
+        break;
+    }
+    case UndoEntry::Kind::Tags: {
+        // Each file's fields back as they were; what they are now becomes the redo.
+        UndoEntry inverse;
+        inverse.kind = UndoEntry::Kind::Tags;
+        inverse.isUndo = true;
+        for (int i = 0; i < e.items.size() && i < e.before.size(); ++i) {
+            const QString &path = e.items.at(i).first;
+            const MediaEdit old = MediaEdit::fromMap(e.before.at(i));
+            const MediaEdit now = old.currentValues(Metadata::read(path));
+            QString why;
+            if (!Metadata::write(path, old, &why)) {
+                problems << QStringLiteral("%1: %2").arg(Location::fileName(path), why);
+                continue;
+            }
+            inverse.items << e.items.at(i);
+            inverse.before << now.toMap();
+            if (touched)
+                *touched << path;
+        }
+        if (!inverse.items.isEmpty()) {
+            inverse.title = QStringLiteral("Undo: %1").arg(e.title);
+            add(inverse);
+        }
+        ok = !inverse.items.isEmpty();
         break;
     }
     case UndoEntry::Kind::Rename: {

@@ -90,7 +90,7 @@ QStringList CommandEngine::commandNames()
     return {QStringLiteral("Clipboard"), QStringLiteral("Collection"), QStringLiteral("Copy"), QStringLiteral("CreateFolder"),
             QStringLiteral("Delete"), QStringLiteral("Duplicates"), QStringLiteral("Favorite"), QStringLiteral("Find"), QStringLiteral("Go"),
             QStringLiteral("Image"),
-            QStringLiteral("Layout"), QStringLiteral("Move"), QStringLiteral("Print"),
+            QStringLiteral("Layout"), QStringLiteral("Metadata"), QStringLiteral("Move"), QStringLiteral("Print"),
             QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Set"), QStringLiteral("Settings"),
             QStringLiteral("Sync"), QStringLiteral("Toolbar"), QStringLiteral("Undo")};
 }
@@ -208,6 +208,8 @@ bool CommandEngine::execute(const ParsedCommand &cmd, CommandContext &ctx, QStri
         return ctx.settings(cmd, error);
     if (cmd.is(QStringLiteral("Undo")))
         return cmdUndo(cmd, ctx, error);
+    if (cmd.is(QStringLiteral("Metadata")))
+        return cmdMetadata(cmd, ctx, error);
     if (cmd.is(QStringLiteral("Sync")) || cmd.is(QStringLiteral("Duplicates")) || cmd.is(QStringLiteral("Find"))
         || cmd.is(QStringLiteral("Favorite")) || cmd.is(QStringLiteral("Layout")) || cmd.is(QStringLiteral("Image")))
         return ctx.tool(cmd, error);
@@ -862,5 +864,174 @@ bool CommandEngine::cmdUndo(const ParsedCommand &cmd, CommandContext &ctx, QStri
     }
     if (!problems.isEmpty())
         ctx.showError(QStringLiteral("Undo"), problems); // done, with exceptions
+    return true;
+}
+
+int CommandEngine::applyTags(const QList<QPair<QString, MediaEdit>> &edits, const QString &title, QStringList *problems)
+{
+    UndoEntry undo;
+    undo.kind = UndoEntry::Kind::Tags;
+    undo.title = title;
+    int written = 0;
+    for (const auto &[path, e] : edits) {
+        if (e.isEmpty())
+            continue;
+        const MediaEdit before = e.currentValues(Metadata::read(path));
+        QString why;
+        if (!Metadata::write(path, e, &why)) {
+            if (problems)
+                *problems << QStringLiteral("%1: %2").arg(Location::fileName(path), why);
+            continue;
+        }
+        undo.items << qMakePair(path, path);
+        undo.before << before.toMap();
+        ++written;
+    }
+    m_history.add(undo); // also the file log (nothing when nothing was written)
+    return written;
+}
+
+bool CommandEngine::cmdMetadata(const ParsedCommand &cmd, CommandContext &ctx, QString *error)
+{
+    auto fail = [error](const QString &msg) {
+        if (error)
+            *error = msg;
+        return false;
+    };
+    if (cmd.hasArg(QStringLiteral("PANE")))
+        return ctx.tool(cmd, error); // the Metadata pane belongs to the lister
+
+    QStringList paths;
+    for (const QString &f : cmd.values(QStringLiteral("FILE")))
+        paths << resolvePath(f, ctx.sourcePath());
+    if (paths.isEmpty())
+        paths = ctx.selectedPaths();
+
+    if (cmd.hasFlag(QStringLiteral("COPY"))) {
+        const QString from = paths.isEmpty() ? ctx.focusedPath() : paths.first();
+        if (from.isEmpty() || Metadata::kindFor(from) == MediaInfo::Kind::None || !Location::isLocal(from))
+            return fail(QStringLiteral("Select a music file or a photo to copy its tags."));
+        m_copiedTags = Metadata::read(from);
+        return true;
+    }
+
+    QStringList targets;
+    QStringList skipped;
+    for (const QString &p : std::as_const(paths)) {
+        if (Location::isLocal(p) && Metadata::canWrite(p))
+            targets << p;
+        else
+            skipped << Location::fileName(p);
+    }
+    if (targets.isEmpty())
+        return fail(paths.isEmpty() ? QStringLiteral("Select music files or photos first.")
+                                    : QStringLiteral("Tags cannot be written to these files (MP3, FLAC, Ogg, M4A, WAV, JPEG, PNG, WebP and TIFF can)."));
+
+    QList<QPair<QString, MediaEdit>> edits;
+    QString title;
+    if (cmd.hasFlag(QStringLiteral("PASTE"))) {
+        if (!m_copiedTags)
+            return fail(QStringLiteral("Copy tags from a file first (Metadata COPY)."));
+        const MediaInfo &c = *m_copiedTags;
+        const bool all = cmd.hasFlag(QStringLiteral("ALL"));
+        MediaEdit e;
+        // The fields episodes or a shoot share; titles and track numbers only with ALL.
+        e.artist = c.artist;
+        e.albumArtist = c.albumArtist;
+        e.album = c.album;
+        e.genre = c.genre;
+        e.year = c.year;
+        e.comment = c.comment;
+        e.copyright = c.copyright;
+        if (all) {
+            e.title = c.title;
+            e.track = c.track;
+            e.disc = c.disc;
+            e.description = c.description;
+            e.taken = c.taken;
+        }
+        for (const QString &p : std::as_const(targets))
+            edits << qMakePair(p, e);
+        title = QStringLiteral("Paste tags onto %1").arg(targets.size() == 1 ? Location::fileName(targets.first())
+                                                                               : QStringLiteral("%1 files").arg(targets.size()));
+    } else {
+        MediaEdit e;
+        auto str = [&cmd](const char *key, std::optional<QString> &out) {
+            if (cmd.hasArg(QLatin1String(key)))
+                out = cmd.value(QLatin1String(key));
+        };
+        str("TITLE", e.title);
+        str("ARTIST", e.artist);
+        str("ALBUMARTIST", e.albumArtist);
+        str("ALBUM", e.album);
+        str("GENRE", e.genre);
+        str("COMMENT", e.comment);
+        str("DESCRIPTION", e.description);
+        str("COPYRIGHT", e.copyright);
+        auto num = [&cmd](const char *key, std::optional<int> &out) {
+            if (!cmd.hasArg(QLatin1String(key)))
+                return true;
+            const QString v = cmd.value(QLatin1String(key));
+            if (v.isEmpty()) {
+                out = 0;
+                return true;
+            }
+            bool ok = false;
+            out = v.toInt(&ok);
+            return ok && *out >= 0;
+        };
+        const bool autoTrack = cmd.value(QStringLiteral("TRACK")).compare(QLatin1String("auto"), Qt::CaseInsensitive) == 0;
+        if (!num("YEAR", e.year) || (!autoTrack && !num("TRACK", e.track)) || !num("DISC", e.disc))
+            return fail(QStringLiteral("YEAR, TRACK and DISC take a number (TRACK=auto numbers the files in list order)."));
+        if (cmd.hasArg(QStringLiteral("TAKEN"))) {
+            const QString v = cmd.value(QStringLiteral("TAKEN"));
+            QDateTime when;
+            for (const QString &fmt : {QStringLiteral("yyyy-MM-dd HH:mm:ss"), QStringLiteral("yyyy-MM-dd HH:mm"),
+                                       QStringLiteral("yyyy-MM-dd"), QStringLiteral("yyyy:MM:dd HH:mm:ss")}) {
+                when = QDateTime::fromString(v, fmt);
+                if (when.isValid())
+                    break;
+            }
+            if (!when.isValid() && !v.isEmpty())
+                return fail(QStringLiteral("TAKEN takes a date like 2026-10-21 18:15 (empty clears it)."));
+            e.taken = when;
+        }
+        qint64 shift = 0;
+        if (cmd.hasArg(QStringLiteral("SHIFT")) && !Metadata::parseShift(cmd.value(QStringLiteral("SHIFT")), &shift))
+            return fail(QStringLiteral("SHIFT takes +1h, -30m, +2d, +90s or -1:30."));
+        int number = cmd.hasArg(QStringLiteral("START")) ? cmd.value(QStringLiteral("START")).toInt() : 1;
+        for (const QString &p : std::as_const(targets)) {
+            MediaEdit one = e;
+            if (autoTrack)
+                one.track = number++;
+            if (shift != 0) {
+                // A camera's clock was off: move each photo's own date.
+                const QDateTime was = Metadata::read(p).taken;
+                if (!was.isValid()) {
+                    skipped << Location::fileName(p);
+                    continue;
+                }
+                one.taken = was.addSecs(shift);
+            }
+            if (!one.isEmpty())
+                edits << qMakePair(p, one);
+        }
+        if (edits.isEmpty())
+            return fail(QStringLiteral("Nothing to change: give fields like ARTIST= or ALBUM=, TRACK=auto, or SHIFT=."));
+        const QStringList fields = edits.first().second.fieldNames();
+        title = QStringLiteral("Set %1 on %2").arg(fields.join(QStringLiteral(", ")),
+                                                    edits.size() == 1 ? Location::fileName(edits.first().first)
+                                                                      : QStringLiteral("%1 files").arg(edits.size()));
+    }
+    QStringList problems;
+    const int written = applyTags(edits, title, &problems);
+    QStringList changed;
+    for (const auto &e : std::as_const(edits))
+        changed << e.first;
+    ctx.afterLocalChange(changed);
+    if (written == 0)
+        return fail(problems.isEmpty() ? QStringLiteral("Nothing was written.") : problems.join(QLatin1Char('\n')));
+    if (!problems.isEmpty())
+        ctx.showError(QStringLiteral("Metadata"), QStringLiteral("Written to %1; not to these:\n%2").arg(written).arg(problems.join(QLatin1Char('\n'))));
     return true;
 }

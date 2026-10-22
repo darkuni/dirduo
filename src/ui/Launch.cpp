@@ -4,6 +4,7 @@
 #include "core/Location.h"
 
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -109,9 +110,21 @@ bool sendToRunning(const Request &request, int timeoutMs)
     if (!socket.waitForBytesWritten(timeoutMs))
         return false;
     // Wait for "ok", so a copy that is shutting down is not trusted with it.
-    if (!socket.waitForReadyRead(timeoutMs))
-        return false;
-    return socket.readAll().startsWith("ok");
+    // The answer may come in pieces, or together with the hang-up.
+    QByteArray reply;
+    QElapsedTimer clock;
+    clock.start();
+    while (!reply.contains('\n') && clock.elapsed() < timeoutMs) {
+        if (socket.bytesAvailable() == 0) {
+            const bool more = socket.waitForReadyRead(int(qMax<qint64>(1, timeoutMs - clock.elapsed())));
+            reply += socket.readAll();
+            if (!more && socket.state() != QLocalSocket::ConnectedState)
+                break; // gone; whatever it said is in reply
+            continue;
+        }
+        reply += socket.readAll();
+    }
+    return reply.startsWith("ok");
 }
 
 } // namespace Launch
@@ -135,9 +148,9 @@ InstanceServer::InstanceServer(QObject *parent)
                     socket->disconnectFromServer();
                     return;
                 }
+                // The new launch hangs up once it has read this.
                 socket->write("ok\n");
                 socket->flush();
-                socket->disconnectFromServer();
                 Q_EMIT requested(Launch::Request::fromJson(doc.object()));
             });
         }

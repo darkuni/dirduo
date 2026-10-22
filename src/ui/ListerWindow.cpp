@@ -22,6 +22,7 @@
 #include "ui/FavoritesDialog.h"
 #include "ui/PreferencesDialog.h"
 #include "ui/ViewerPane.h"
+#include "ui/MetadataPane.h"
 #include "ui/SyncDialog.h"
 #include "ui/BreadcrumbBar.h"
 #include "ui/ButtonBar.h"
@@ -149,6 +150,20 @@ ListerWindow::ListerWindow(AppContext &app, QWidget *parent)
         if (on)
             updateViewer();
         scheduleButtonStates();
+    });
+    // The Metadata pane, also on the right (Alt+Enter, Metadata PANE=toggle).
+    m_metaPane = new MetadataPane(m_app.engine(), this);
+    addDockWidget(Qt::RightDockWidgetArea, m_metaPane);
+    m_metaPane->hide();
+    connect(m_metaPane, &QDockWidget::visibilityChanged, this, [this](bool on) {
+        if (on)
+            updateViewer();
+        scheduleButtonStates();
+    });
+    connect(m_metaPane, &MetadataPane::applied, this, [this](const QStringList &paths) {
+        if (FolderTab *t = sourceTab())
+            t->refresh();
+        Q_UNUSED(paths)
     });
 
     buildActions();
@@ -378,6 +393,16 @@ void ListerWindow::buildMenus()
     edit->addAction(commandAction(QStringLiteral("Select All"), QStringLiteral("Select ALL"), QKeySequence::SelectAll));
     edit->addAction(commandAction(QStringLiteral("Select None"), QStringLiteral("Select NONE"), QKeySequence(QStringLiteral("Ctrl+Shift+A"))));
     edit->addAction(commandAction(QStringLiteral("Invert Selection"), QStringLiteral("Select INVERT"), QKeySequence(QStringLiteral("Ctrl+I"))));
+    {
+        QMenu *tags = edit->addMenu(QIcon::fromTheme(QStringLiteral("document-properties")), QStringLiteral("Tags"));
+        tags->addAction(commandAction(QStringLiteral("Copy Tags"), QStringLiteral("Metadata COPY")));
+        tags->addAction(commandAction(QStringLiteral("Paste Tags (artist, album, genre, year)"), QStringLiteral("Metadata PASTE")));
+        tags->addAction(commandAction(QStringLiteral("Paste All Tags"), QStringLiteral("Metadata PASTE ALL")));
+        tags->addSeparator();
+        tags->addAction(commandAction(QStringLiteral("Number Tracks in List Order"), QStringLiteral("Metadata TRACK=auto")));
+        tags->addAction(commandAction(QStringLiteral("Photos Taken an Hour Later"), QStringLiteral("Metadata SHIFT=+1h")));
+        tags->addAction(commandAction(QStringLiteral("Photos Taken an Hour Earlier"), QStringLiteral("Metadata SHIFT=-1h")));
+    }
     edit->addAction(commandAction(QStringLiteral("Select..."), QStringLiteral("Select DIALOG"), QKeySequence(QStringLiteral("Ctrl+Shift+S")),
                                   QStringLiteral("edit-select")));
     {
@@ -409,6 +434,8 @@ void ListerWindow::buildMenus()
     m_groupMenu = view->addMenu(QStringLiteral("Group By"));
     view->addAction(commandAction(QStringLiteral("Viewer Pane"), QStringLiteral("Set VIEWER=toggle"), QKeySequence(Qt::Key_F3),
                                   QStringLiteral("view-preview")));
+    view->addAction(commandAction(QStringLiteral("Metadata Pane"), QStringLiteral("Metadata PANE=toggle"),
+                                  QKeySequence(QStringLiteral("Alt+Return")), QStringLiteral("document-properties")));
     QMenu *viewerPos = view->addMenu(QStringLiteral("Viewer Position"));
     viewerPos->addAction(commandAction(QStringLiteral("Right"), QStringLiteral("Set VIEWERPOS=right")));
     viewerPos->addAction(commandAction(QStringLiteral("Bottom"), QStringLiteral("Set VIEWERPOS=bottom")));
@@ -2268,6 +2295,22 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
     }
     if (cmd.is(QStringLiteral("Image")))
         return imageCommand(cmd, error);
+    if (cmd.is(QStringLiteral("Metadata"))) {
+        const QString v = cmd.value(QStringLiteral("PANE")).toLower();
+        bool on = m_metaPane->isHidden();
+        if (v == QLatin1String("on"))
+            on = true;
+        else if (v == QLatin1String("off"))
+            on = false;
+        else if (v != QLatin1String("toggle") && !v.isEmpty())
+            return fail(QStringLiteral("PANE takes on, off or toggle."));
+        m_metaPane->setVisible(on);
+        if (on) {
+            m_metaPane->raise();
+            updateViewer();
+        }
+        return true;
+    }
     if (cmd.is(QStringLiteral("Undo"))) {
         auto *dlg = new HistoryDialog(engine, cmd.hasFlag(QStringLiteral("LOG")) ? HistoryDialog::Page::Log : HistoryDialog::Page::Undo, this);
         dlg->setAttribute(Qt::WA_DeleteOnClose);
@@ -2448,9 +2491,15 @@ void ListerWindow::fillDynamicMenu(QMenu *menu, const QString &kind)
 
 void ListerWindow::updateViewer()
 {
+    FolderTab *t = sourceTab();
+    if (m_metaPane && m_metaPane->isVisible()) {
+        QStringList sel = t ? t->selectedPaths() : QStringList();
+        if (sel.isEmpty() && t && !t->focusedPath().isEmpty())
+            sel << t->focusedPath();
+        m_metaPane->setFiles(sel);
+    }
     if (!m_viewer || !m_viewer->isVisible())
         return;
-    FolderTab *t = sourceTab();
     m_viewer->showPath(t ? t->focusedPath() : QString());
 }
 

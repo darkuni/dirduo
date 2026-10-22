@@ -8,6 +8,7 @@
 #include <QPair>
 #include <QString>
 #include <QStringList>
+#include <QVariantMap>
 
 class JobManager;
 
@@ -42,7 +43,7 @@ constexpr int kKeep = 5000;
 // Copies come out by going to the trash, never deleted outright.
 struct UndoEntry
 {
-    enum class Kind { Copy, Move, Trash, Restore, NewItem, Rename };
+    enum class Kind { Copy, Move, Trash, Restore, NewItem, Rename, Tags };
     int id = 0;
     Kind kind = Kind::Copy;
     QDateTime when;
@@ -51,6 +52,7 @@ struct UndoEntry
     int replaced = 0;                      // copies that overwrote a file (kept on undo)
     QStringList replacedTargets;           // which ones
     bool isUndo = false;                   // made by undoing something
+    QList<QVariantMap> before;             // Tags: each item's fields as they were (MediaEdit::toMap)
 };
 
 class UndoHistory : public QObject

@@ -137,6 +137,7 @@ add_library(linopus_ui STATIC
     src/ui/HistoryDialog.cpp
     src/ui/SelectDialog.cpp
     src/ui/Launch.cpp
+    src/ui/MetadataPane.cpp
     src/ui/PreferencesDialog.cpp
     src/ui/ViewerPane.cpp
     src/ui/ListerWindow.cpp

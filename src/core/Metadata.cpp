@@ -66,6 +66,7 @@ QString MediaInfo::summary() const
     if (year > 0)
         add(QStringLiteral("Year"), QString::number(year));
     add(QStringLiteral("Genre"), genre);
+    add(QStringLiteral("Comment"), comment);
     add(QStringLiteral("Length"), durationText());
     if (bitrate > 0)
         add(QStringLiteral("Bitrate"), QStringLiteral("%1 kbit/s").arg(bitrate));
@@ -78,6 +79,8 @@ QString MediaInfo::summary() const
     add(QStringLiteral("Size"), dimensionsText());
     if (taken.isValid())
         add(QStringLiteral("Taken"), QLocale().toString(taken, QLocale::ShortFormat));
+    add(QStringLiteral("Description"), description);
+    add(QStringLiteral("Copyright"), copyright);
     add(QStringLiteral("Camera"), camera);
     add(QStringLiteral("Lens"), lens);
     QStringList exposureBits;
@@ -146,6 +149,7 @@ void readTagLib(const QString &path, MediaInfo &info)
         info.genre = qs(t->genre());
         info.year = int(t->year());
         info.track = int(t->track());
+        info.comment = qs(t->comment());
         const TagLib::PropertyMap props = f.file()->properties();
         auto first = [&props](const char *key) -> QString {
             const auto it = props.find(key);
@@ -202,6 +206,9 @@ void readExiv2(const QString &path, MediaInfo &info)
         else
             info.camera = QStringList{make, model}.join(QLatin1Char(' ')).trimmed();
         info.lens = str("Exif.Photo.LensModel");
+        info.description = str("Exif.Image.ImageDescription");
+        info.artist = str("Exif.Image.Artist");
+        info.copyright = str("Exif.Image.Copyright");
         QString when = str("Exif.Photo.DateTimeOriginal");
         if (when.isEmpty())
             when = str("Exif.Image.DateTime");
@@ -328,6 +335,281 @@ MediaInfo read(const QString &path)
     }
     }
     return info;
+}
+
+} // namespace Metadata
+
+// ---- Editing ---------------------------------------------------------------
+
+bool MediaEdit::isEmpty() const
+{
+    return !title && !artist && !albumArtist && !album && !genre && !comment && !year && !track && !disc && !taken
+        && !description && !copyright;
+}
+
+MediaEdit MediaEdit::currentValues(const MediaInfo &info) const
+{
+    MediaEdit e;
+    if (title) e.title = info.title;
+    if (artist) e.artist = info.artist;
+    if (albumArtist) e.albumArtist = info.albumArtist;
+    if (album) e.album = info.album;
+    if (genre) e.genre = info.genre;
+    if (comment) e.comment = info.comment;
+    if (year) e.year = info.year;
+    if (track) e.track = info.track;
+    if (disc) e.disc = info.disc;
+    if (taken) e.taken = info.taken;
+    if (description) e.description = info.description;
+    if (copyright) e.copyright = info.copyright;
+    return e;
+}
+
+QVariantMap MediaEdit::toMap() const
+{
+    QVariantMap m;
+    auto put = [&m](const char *k, const auto &v) {
+        if (v)
+            m.insert(QLatin1String(k), QVariant::fromValue(*v));
+    };
+    put("title", title);
+    put("artist", artist);
+    put("albumArtist", albumArtist);
+    put("album", album);
+    put("genre", genre);
+    put("comment", comment);
+    put("year", year);
+    put("track", track);
+    put("disc", disc);
+    put("taken", taken);
+    put("description", description);
+    put("copyright", copyright);
+    return m;
+}
+
+MediaEdit MediaEdit::fromMap(const QVariantMap &m)
+{
+    MediaEdit e;
+    auto str = [&m](const char *k, std::optional<QString> &out) {
+        if (m.contains(QLatin1String(k)))
+            out = m.value(QLatin1String(k)).toString();
+    };
+    auto num = [&m](const char *k, std::optional<int> &out) {
+        if (m.contains(QLatin1String(k)))
+            out = m.value(QLatin1String(k)).toInt();
+    };
+    str("title", e.title);
+    str("artist", e.artist);
+    str("albumArtist", e.albumArtist);
+    str("album", e.album);
+    str("genre", e.genre);
+    str("comment", e.comment);
+    num("year", e.year);
+    num("track", e.track);
+    num("disc", e.disc);
+    if (m.contains(QStringLiteral("taken")))
+        e.taken = m.value(QStringLiteral("taken")).toDateTime();
+    str("description", e.description);
+    str("copyright", e.copyright);
+    return e;
+}
+
+QStringList MediaEdit::fieldNames() const
+{
+    QStringList out;
+    if (title) out << QStringLiteral("title");
+    if (artist) out << QStringLiteral("artist");
+    if (albumArtist) out << QStringLiteral("album artist");
+    if (album) out << QStringLiteral("album");
+    if (genre) out << QStringLiteral("genre");
+    if (comment) out << QStringLiteral("comment");
+    if (year) out << QStringLiteral("year");
+    if (track) out << QStringLiteral("track");
+    if (disc) out << QStringLiteral("disc");
+    if (taken) out << QStringLiteral("date taken");
+    if (description) out << QStringLiteral("description");
+    if (copyright) out << QStringLiteral("copyright");
+    return out;
+}
+
+namespace Metadata {
+
+namespace {
+
+bool writableAudio(const QString &ext)
+{
+    static const QSet<QString> s = {QStringLiteral("mp3"), QStringLiteral("flac"), QStringLiteral("ogg"), QStringLiteral("oga"),
+                                    QStringLiteral("opus"), QStringLiteral("m4a"), QStringLiteral("m4b"), QStringLiteral("wav"),
+                                    QStringLiteral("aif"), QStringLiteral("aiff"), QStringLiteral("wma"), QStringLiteral("ape"),
+                                    QStringLiteral("wv"), QStringLiteral("mpc"), QStringLiteral("spx"), QStringLiteral("tta")};
+    return s.contains(ext);
+}
+
+bool writableImage(const QString &ext)
+{
+    static const QSet<QString> s = {QStringLiteral("jpg"), QStringLiteral("jpeg"), QStringLiteral("jpe"), QStringLiteral("png"),
+                                    QStringLiteral("webp"), QStringLiteral("tif"), QStringLiteral("tiff")};
+    return s.contains(ext);
+}
+
+#ifdef LINOPUS_HAVE_TAGLIB
+TagLib::String ts(const QString &s)
+{
+    return TagLib::String(s.toStdString(), TagLib::String::UTF8);
+}
+
+bool writeTagLib(const QString &path, const MediaEdit &e, QString *error)
+{
+    TagLib::FileRef f(QFile::encodeName(path).constData(), false);
+    if (f.isNull() || !f.tag()) {
+        if (error)
+            *error = QStringLiteral("cannot read its tags");
+        return false;
+    }
+    TagLib::Tag *t = f.tag();
+    if (e.title) t->setTitle(ts(*e.title));
+    if (e.artist) t->setArtist(ts(*e.artist));
+    if (e.album) t->setAlbum(ts(*e.album));
+    if (e.genre) t->setGenre(ts(*e.genre));
+    if (e.comment) t->setComment(ts(*e.comment));
+    if (e.year) t->setYear(uint(qMax(0, *e.year)));
+    if (e.track) t->setTrack(uint(qMax(0, *e.track)));
+    if (e.albumArtist || e.disc) {
+        TagLib::PropertyMap props = f.file()->properties();
+        auto setProp = [&props](const char *key, const QString &value) {
+            if (value.isEmpty())
+                props.erase(key);
+            else
+                props.replace(key, TagLib::StringList(ts(value)));
+        };
+        if (e.albumArtist)
+            setProp("ALBUMARTIST", *e.albumArtist);
+        if (e.disc)
+            setProp("DISCNUMBER", *e.disc > 0 ? QString::number(*e.disc) : QString());
+        f.file()->setProperties(props);
+    }
+    if (!f.save()) {
+        if (error)
+            *error = QStringLiteral("could not save (read-only, or a format that cannot take these tags)");
+        return false;
+    }
+    return true;
+}
+#endif
+
+#ifdef LINOPUS_HAVE_EXIV2
+bool writeExiv2(const QString &path, const MediaEdit &e, QString *error)
+{
+    try {
+        auto image = Exiv2::ImageFactory::open(std::string(QFile::encodeName(path).constData()));
+        if (!image.get()) {
+            if (error)
+                *error = QStringLiteral("not a picture Exiv2 can write");
+            return false;
+        }
+        image->readMetadata();
+        Exiv2::ExifData &exif = image->exifData();
+        auto set = [&exif](const char *key, const QString &value) {
+            const auto it = exif.findKey(Exiv2::ExifKey(key));
+            if (value.isEmpty()) {
+                if (it != exif.end())
+                    exif.erase(it);
+            } else {
+                exif[key] = value.toStdString();
+            }
+        };
+        if (e.taken) {
+            const QString v = e.taken->isValid() ? e.taken->toString(QStringLiteral("yyyy:MM:dd HH:mm:ss")) : QString();
+            set("Exif.Photo.DateTimeOriginal", v);
+            set("Exif.Photo.DateTimeDigitized", v);
+        }
+        if (e.description) set("Exif.Image.ImageDescription", *e.description);
+        if (e.artist) set("Exif.Image.Artist", *e.artist);
+        if (e.copyright) set("Exif.Image.Copyright", *e.copyright);
+        image->writeMetadata();
+        return true;
+    } catch (const std::exception &ex) {
+        if (error)
+            *error = QString::fromLocal8Bit(ex.what());
+        return false;
+    }
+}
+#endif
+
+} // namespace
+
+bool canWrite(const QString &path)
+{
+    const QString ext = FileKind::extensionOf(path);
+#ifdef LINOPUS_HAVE_TAGLIB
+    if (writableAudio(ext))
+        return true;
+#endif
+#ifdef LINOPUS_HAVE_EXIV2
+    if (writableImage(ext))
+        return true;
+#endif
+    Q_UNUSED(ext)
+    return false;
+}
+
+bool write(const QString &path, const MediaEdit &e, QString *error)
+{
+    const QString ext = FileKind::extensionOf(path);
+    if (!canWrite(path)) {
+        if (error)
+            *error = QStringLiteral("tags cannot be written to this kind of file");
+        return false;
+    }
+#ifdef LINOPUS_HAVE_TAGLIB
+    if (writableAudio(ext))
+        return writeTagLib(path, e, error);
+#endif
+#ifdef LINOPUS_HAVE_EXIV2
+    if (writableImage(ext))
+        return writeExiv2(path, e, error);
+#endif
+    Q_UNUSED(ext)
+    return false;
+}
+
+bool parseShift(const QString &raw, qint64 *seconds)
+{
+    QString t = raw.trimmed().toLower();
+    if (t.isEmpty())
+        return false;
+    int sign = 1;
+    if (t.startsWith(QLatin1Char('+'))) {
+        t.remove(0, 1);
+    } else if (t.startsWith(QLatin1Char('-'))) {
+        sign = -1;
+        t.remove(0, 1);
+    }
+    qint64 secs = 0;
+    bool ok = false;
+    if (t.contains(QLatin1Char(':'))) {
+        const QStringList parts = t.split(QLatin1Char(':'));
+        if (parts.size() != 2)
+            return false;
+        bool a = false, b = false;
+        secs = parts[0].toLongLong(&a) * 3600 + parts[1].toLongLong(&b) * 60;
+        ok = a && b;
+    } else {
+        const QChar unit = t.isEmpty() ? QChar() : t.back();
+        qint64 mult = 0;
+        if (unit == QLatin1Char('s')) mult = 1;
+        else if (unit == QLatin1Char('m')) mult = 60;
+        else if (unit == QLatin1Char('h')) mult = 3600;
+        else if (unit == QLatin1Char('d')) mult = 86400;
+        if (mult == 0)
+            return false;
+        secs = t.chopped(1).toLongLong(&ok) * mult;
+    }
+    if (!ok)
+        return false;
+    if (seconds)
+        *seconds = sign * secs;
+    return true;
 }
 
 } // namespace Metadata

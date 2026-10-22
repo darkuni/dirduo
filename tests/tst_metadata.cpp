@@ -231,6 +231,121 @@ private Q_SLOTS:
 #endif
     }
 
+    void writeMusic()
+    {
+#ifndef LINOPUS_HAVE_TAGLIB
+        QSKIP("Built without TagLib");
+#else
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("ep.wav"));
+        QVERIFY(writeWav(path, 1));
+        QVERIFY(Metadata::canWrite(path));
+        MediaEdit e;
+        e.title = QStringLiteral("Episode 101");
+        e.artist = QStringLiteral("Shane");
+        e.albumArtist = QStringLiteral("MonroeWorld");
+        e.album = QStringLiteral("Passenger Seat Radio");
+        e.genre = QStringLiteral("Podcast");
+        e.comment = QStringLiteral("Recorded in the car");
+        e.year = 2026;
+        e.track = 101;
+        e.disc = 2;
+        QString err;
+        QVERIFY2(Metadata::write(path, e, &err), qPrintable(err));
+        MediaInfo m = Metadata::read(path);
+        QCOMPARE(m.title, QStringLiteral("Episode 101"));
+        QCOMPARE(m.albumArtist, QStringLiteral("MonroeWorld"));
+        QCOMPARE(m.comment, QStringLiteral("Recorded in the car"));
+        QCOMPARE(m.track, 101);
+        QCOMPARE(m.disc, 2);
+        QCOMPARE(m.year, 2026);
+        // Only what is set changes; empty clears.
+        MediaEdit two;
+        two.album = QStringLiteral("PSR");
+        two.albumArtist = QString();
+        QVERIFY(Metadata::write(path, two, &err));
+        m = Metadata::read(path);
+        QCOMPARE(m.album, QStringLiteral("PSR"));
+        QCOMPARE(m.title, QStringLiteral("Episode 101"));
+        QVERIFY(m.albumArtist.isEmpty());
+        // Non-ASCII survives.
+        MediaEdit u;
+        u.artist = QStringLiteral("Jeroen Tél — 1988");
+        QVERIFY(Metadata::write(path, u, &err));
+        QCOMPARE(Metadata::read(path).artist, QStringLiteral("Jeroen Tél — 1988"));
+        // A SID is not writable; neither is a text file.
+        QVERIFY(!Metadata::canWrite(dir.filePath(QStringLiteral("x.sid"))));
+        QVERIFY(!Metadata::write(dir.filePath(QStringLiteral("x.txt")), e, &err));
+#endif
+    }
+
+    void writePhoto()
+    {
+#ifndef LINOPUS_HAVE_EXIV2
+        QSKIP("Built without Exiv2");
+#else
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("shot.jpg"));
+        QImage img(32, 24, QImage::Format_RGB32);
+        img.fill(Qt::blue);
+        QVERIFY(img.save(path, "JPEG"));
+        MediaEdit e;
+        e.taken = QDateTime(QDate(2026, 10, 21), QTime(18, 15));
+        e.description = QStringLiteral("VCF Southwest");
+        e.artist = QStringLiteral("Shane");
+        e.copyright = QStringLiteral("MonroeWorld LLC");
+        QString err;
+        QVERIFY2(Metadata::write(path, e, &err), qPrintable(err));
+        MediaInfo m = Metadata::read(path);
+        QCOMPARE(m.taken, QDateTime(QDate(2026, 10, 21), QTime(18, 15)));
+        QCOMPARE(m.description, QStringLiteral("VCF Southwest"));
+        QCOMPARE(m.artist, QStringLiteral("Shane"));
+        QCOMPARE(m.copyright, QStringLiteral("MonroeWorld LLC"));
+        QCOMPARE(QImage(path).size(), QSize(32, 24)); // still a picture
+        MediaEdit clear;
+        clear.taken = QDateTime();
+        clear.description = QString();
+        QVERIFY(Metadata::write(path, clear, &err));
+        m = Metadata::read(path);
+        QVERIFY(!m.taken.isValid());
+        QVERIFY(m.description.isEmpty());
+        QCOMPARE(m.copyright, QStringLiteral("MonroeWorld LLC"));
+#endif
+    }
+
+    void editHelpers()
+    {
+        qint64 s = 0;
+        QVERIFY(Metadata::parseShift(QStringLiteral("+1h"), &s));
+        QCOMPARE(s, 3600);
+        QVERIFY(Metadata::parseShift(QStringLiteral("-30m"), &s));
+        QCOMPARE(s, -1800);
+        QVERIFY(Metadata::parseShift(QStringLiteral("2d"), &s));
+        QCOMPARE(s, 172800);
+        QVERIFY(Metadata::parseShift(QStringLiteral("-1:30"), &s));
+        QCOMPARE(s, -5400);
+        QVERIFY(!Metadata::parseShift(QStringLiteral("soon"), &s));
+        QVERIFY(!Metadata::parseShift(QStringLiteral("+5x"), &s));
+        MediaEdit e;
+        QVERIFY(e.isEmpty());
+        e.album = QStringLiteral("A");
+        e.year = 1985;
+        e.taken = QDateTime(QDate(2020, 1, 2), QTime(3, 4));
+        const MediaEdit back = MediaEdit::fromMap(e.toMap());
+        QCOMPARE(*back.album, QStringLiteral("A"));
+        QCOMPARE(*back.year, 1985);
+        QCOMPARE(*back.taken, *e.taken);
+        QVERIFY(!back.title);
+        MediaInfo now;
+        now.album = QStringLiteral("Old");
+        now.year = 1984;
+        const MediaEdit cur = e.currentValues(now);
+        QCOMPARE(*cur.album, QStringLiteral("Old"));
+        QCOMPARE(*cur.year, 1984);
+        QVERIFY(!cur.artist);
+        QCOMPARE(e.fieldNames(), (QStringList{QStringLiteral("album"), QStringLiteral("year"), QStringLiteral("date taken")}));
+    }
+
     void cache()
     {
         QTemporaryDir dir;

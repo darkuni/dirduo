@@ -11,6 +11,8 @@
 #include "ui/HistoryDialog.h"
 #include "ui/SelectDialog.h"
 #include "ui/Launch.h"
+#include "ui/MetadataPane.h"
+#include "core/Metadata.h"
 #include <QtConcurrent>
 #include <QImageReader>
 #include "ui/FindDialog.h"
@@ -2039,6 +2041,98 @@ private Q_SLOTS:
         stale.close();
         QVERIFY(other.listen());
         qputenv("XDG_RUNTIME_DIR", oldRuntime);
+    }
+
+    void metadataEditing()
+    {
+        // Three podcast episodes as WAV files, and a photo.
+        const QString dir = root + QStringLiteral("/psr");
+        QDir().mkpath(dir);
+        auto wav = [](const QString &path) {
+            const quint32 rate = 8000, bytes = rate * 2;
+            QByteArray b("RIFF");
+            auto u32 = [&b](quint32 v) { for (int i = 0; i < 4; ++i) b.append(char((v >> (8 * i)) & 0xff)); };
+            auto u16 = [&b](quint16 v) { b.append(char(v & 0xff)); b.append(char(v >> 8)); };
+            u32(36 + bytes);
+            b.append("WAVEfmt ");
+            u32(16); u16(1); u16(1); u32(rate); u32(rate * 2); u16(2); u16(16);
+            b.append("data");
+            u32(bytes);
+            b.append(QByteArray(int(bytes), '\0'));
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(b);
+        };
+        for (int i = 1; i <= 3; ++i)
+            wav(dir + QStringLiteral("/PSR %1.wav").arg(100 + i));
+        QImage img(16, 16, QImage::Format_RGB32);
+        img.fill(Qt::red);
+        QVERIFY(img.save(dir + QStringLiteral("/car.jpg"), "JPEG"));
+        FolderTab *t = w->display(0)->currentTab();
+        t->navigate(dir);
+        waitListed(t, 4);
+        if (!Metadata::canWrite(dir + QStringLiteral("/PSR 101.wav")))
+            QSKIP("Built without TagLib");
+
+        // The command: fields on every selected file, tracks in list order.
+        t->selectPaths({dir + QStringLiteral("/PSR 101.wav"), dir + QStringLiteral("/PSR 102.wav"), dir + QStringLiteral("/PSR 103.wav")});
+        QVERIFY(w->runCommand(QStringLiteral("Metadata ALBUM=\"Passenger Seat Radio\" GENRE=Podcast YEAR=2026 TRACK=auto START=101")));
+        QCOMPARE(Metadata::read(dir + QStringLiteral("/PSR 103.wav")).track, 103);
+        QCOMPARE(Metadata::read(dir + QStringLiteral("/PSR 101.wav")).album, QStringLiteral("Passenger Seat Radio"));
+        QVERIFY(m_app->engine().history().latest()->title.startsWith(QStringLiteral("Set album, genre, year, track on 3 files")));
+        // Undo puts them back.
+        QVERIFY(w->runCommand(QStringLiteral("Undo")));
+        QVERIFY(Metadata::read(dir + QStringLiteral("/PSR 102.wav")).album.isEmpty());
+        QCOMPARE(Metadata::read(dir + QStringLiteral("/PSR 102.wav")).track, 0);
+        QVERIFY(w->runCommand(QStringLiteral("Undo"))); // and redo
+        QCOMPARE(Metadata::read(dir + QStringLiteral("/PSR 102.wav")).track, 102);
+
+        // Copy one episode's tags, paste onto a new one.
+        wav(dir + QStringLiteral("/PSR 104.wav"));
+        t->selectPaths({dir + QStringLiteral("/PSR 101.wav")});
+        QVERIFY(w->runCommand(QStringLiteral("Metadata COPY")));
+        QVERIFY(w->runCommand(QStringLiteral("Metadata PASTE FILE=\"%1\"").arg(dir + QStringLiteral("/PSR 104.wav"))));
+        const MediaInfo pasted = Metadata::read(dir + QStringLiteral("/PSR 104.wav"));
+        QCOMPARE(pasted.album, QStringLiteral("Passenger Seat Radio"));
+        QCOMPARE(pasted.track, 0); // not without ALL
+
+        // Nothing writable selected.
+        touch(dir + QStringLiteral("/notes.txt"));
+        QVERIFY(!runFailing(QStringLiteral("Metadata ALBUM=x FILE=\"%1\"").arg(dir + QStringLiteral("/notes.txt"))));
+        QVERIFY(!runFailing(QStringLiteral("Metadata YEAR=soon")));
+
+        // The pane: shared values show, differing ones say so; typing writes to all.
+        t->refresh();
+        waitListed(t, 6);
+        QVERIFY(w->runCommand(QStringLiteral("Metadata PANE=on")));
+        MetadataPane *pane = w->metadataPane();
+        QVERIFY(pane->isVisible());
+        t->selectPaths({dir + QStringLiteral("/PSR 101.wav"), dir + QStringLiteral("/PSR 102.wav")});
+        QTRY_COMPARE(pane->files().size(), 2);
+        pane->loadNow();
+        QCOMPARE(pane->field(MetadataPane::Album)->text(), QStringLiteral("Passenger Seat Radio"));
+        QVERIFY(pane->field(MetadataPane::Track)->text().isEmpty());
+        QCOMPARE(pane->field(MetadataPane::Track)->placeholderText(), QStringLiteral("(several values)"));
+        QVERIFY(pane->field(MetadataPane::Track)->isReadOnly()); // one number for two files makes no sense
+        QVERIFY(!pane->isFieldShown(MetadataPane::Taken));
+        QTest::keyClicks(pane->field(MetadataPane::Artist), QStringLiteral("Shane"));
+        QVERIFY(pane->hasChanges());
+        QCOMPARE(pane->apply(), 2);
+        QCOMPARE(Metadata::read(dir + QStringLiteral("/PSR 102.wav")).artist, QStringLiteral("Shane"));
+        QCOMPARE(Metadata::read(dir + QStringLiteral("/PSR 102.wav")).track, 102); // untouched fields stay
+        if (Metadata::canWrite(dir + QStringLiteral("/car.jpg"))) {
+            // A photo: its own fields; SHIFT moves the date taken.
+            t->selectPaths({dir + QStringLiteral("/car.jpg")});
+            QTRY_COMPARE(pane->files(), QStringList{dir + QStringLiteral("/car.jpg")});
+            pane->loadNow();
+            QVERIFY(pane->isFieldShown(MetadataPane::Taken));
+            QVERIFY(!pane->isFieldShown(MetadataPane::Album));
+            QTest::keyClicks(pane->field(MetadataPane::Taken), QStringLiteral("2026-10-21 18:15:00"));
+            QCOMPARE(pane->apply(), 1);
+            QVERIFY(w->runCommand(QStringLiteral("Metadata SHIFT=-1h")));
+            QCOMPARE(Metadata::read(dir + QStringLiteral("/car.jpg")).taken, QDateTime(QDate(2026, 10, 21), QTime(17, 15)));
+        }
+        QVERIFY(w->runCommand(QStringLiteral("Metadata PANE=off")));
     }
 
 private:

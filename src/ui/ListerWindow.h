@@ -196,5 +196,9 @@ private:
     QMenu *m_themeMenu = nullptr;
     QMenu *m_sizeMenu = nullptr;
     QAction *m_actZoomReset = nullptr;
+    class MetadataPane *m_metaPane = nullptr;
+public:
+    MetadataPane *metadataPane() const { return m_metaPane; }
+private:
     int m_zoom = 100;
 };

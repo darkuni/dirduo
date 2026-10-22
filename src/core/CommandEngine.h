@@ -3,6 +3,7 @@
 #include "core/CommandParser.h"
 #include "core/Job.h"
 #include "core/History.h"
+#include "core/Metadata.h"
 #include "core/RenameEngine.h"
 
 #include <QObject>
@@ -137,6 +138,12 @@ public:
     // Renames for undo: (new path, old path).
     void recordRename(const QList<QPair<QString, QString>> &done);
     bool canUndoRename() const { return m_history.latestRename() != nullptr; }
+    // Writes tags to each file (its own edit each), with undo and the file
+    // log; returns how many were written. problems lists the files that were not.
+    int applyTags(const QList<QPair<QString, MediaEdit>> &edits, const QString &title, QStringList *problems);
+    // Metadata COPY keeps these for PASTE.
+    bool hasCopiedTags() const { return m_copiedTags.has_value(); }
+
     // Everything that can be undone, and the file log.
     UndoHistory &history() { return m_history; }
 
@@ -153,6 +160,7 @@ private:
     bool cmdCollection(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool pasteAsFile(const QMimeData *mime, bool askName, CommandContext &ctx, QString *error);
     bool cmdUndo(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
+    bool cmdMetadata(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     void recordNew(const QStringList &paths, const QString &what);
 
     QStringList sourcesFor(const ParsedCommand &cmd, CommandContext &ctx, const QStringList &flags) const;
@@ -160,4 +168,5 @@ private:
     AliasManager &m_aliases;
     JobManager &m_jobs;
     UndoHistory m_history;
+    std::optional<MediaInfo> m_copiedTags;
 };
