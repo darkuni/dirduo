@@ -2,6 +2,7 @@
 
 #include "core/CommandParser.h"
 #include "core/Job.h"
+#include "core/History.h"
 #include "core/RenameEngine.h"
 
 #include <QObject>
@@ -133,9 +134,11 @@ public:
     AliasManager &aliases() { return m_aliases; }
     JobManager &jobs() { return m_jobs; }
 
-    // Batch renames, for Rename UNDO: (new path, old path).
+    // Renames for undo: (new path, old path).
     void recordRename(const QList<QPair<QString, QString>> &done);
-    bool canUndoRename() const { return !m_lastRename.isEmpty(); }
+    bool canUndoRename() const { return m_history.latestRename() != nullptr; }
+    // Everything that can be undone, and the file log.
+    UndoHistory &history() { return m_history; }
 
     // Set when the last run stopped because the user cancelled a prompt.
     static const QString kCancelled;
@@ -149,10 +152,12 @@ private:
     bool cmdClipboard(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool cmdCollection(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool pasteAsFile(const QMimeData *mime, bool askName, CommandContext &ctx, QString *error);
+    bool cmdUndo(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
+    void recordNew(const QStringList &paths, const QString &what);
 
     QStringList sourcesFor(const ParsedCommand &cmd, CommandContext &ctx, const QStringList &flags) const;
 
     AliasManager &m_aliases;
     JobManager &m_jobs;
-    QList<QPair<QString, QString>> m_lastRename;
+    UndoHistory m_history;
 };

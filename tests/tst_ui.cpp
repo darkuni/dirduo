@@ -8,6 +8,7 @@
 #include "ui/ButtonEditor.h"
 #include "ui/DuplicatesDialog.h"
 #include "ui/ImageConvertDialog.h"
+#include "ui/HistoryDialog.h"
 #include <QImageReader>
 #include "ui/FindDialog.h"
 #include "core/Collections.h"
@@ -1760,6 +1761,55 @@ private Q_SLOTS:
         t->navigate(root + QStringLiteral("/b"));
         waitListed(t, 1);
         QVERIFY(t->expandedFolders().isEmpty());
+    }
+
+    void undoAndFileLog()
+    {
+        FolderTab *t = w->display(0)->currentTab();
+        // Copy to the destination, then Ctrl+Z.
+        t->selectPaths({root + QStringLiteral("/a/one.txt")});
+        QVERIFY(w->runCommand(QStringLiteral("Copy")));
+        m_app->jobs().waitForIdle(5000);
+        QCoreApplication::processEvents();
+        QVERIFY(QFile::exists(root + QStringLiteral("/b/one.txt")));
+        QVERIFY(m_app->engine().history().latest());
+        QTest::keyClick(w, Qt::Key_Z, Qt::ControlModifier);
+        QTRY_VERIFY(!QFile::exists(root + QStringLiteral("/b/one.txt")));
+        QVERIFY(QFile::exists(root + QStringLiteral("/a/one.txt")));
+
+        // New folders come out again (to the trash).
+        QVERIFY(w->runCommand(QStringLiteral("CreateFolder NAME=\"Made, Also\"")));
+        QVERIFY(QFileInfo(root + QStringLiteral("/a/Made")).isDir());
+        QCOMPARE(m_app->engine().history().latest()->title, QStringLiteral("New folders (2)"));
+        QVERIFY(w->runCommand(QStringLiteral("Undo")));
+        QVERIFY(!QFileInfo::exists(root + QStringLiteral("/a/Made")));
+        QVERIFY(!QFileInfo::exists(root + QStringLiteral("/a/Also")));
+
+        // Inline renames are undoable too, from the Undo List.
+        QVERIFY(w->runCommand(QStringLiteral("Rename FROM=\"%1\" TO=uno.txt").arg(root + QStringLiteral("/a/one.txt"))));
+        QVERIFY(QFile::exists(root + QStringLiteral("/a/uno.txt")));
+        const int id = m_app->engine().history().latest()->id;
+        QVERIFY(w->runCommand(QStringLiteral("Undo ID=%1").arg(id)));
+        QVERIFY(QFile::exists(root + QStringLiteral("/a/one.txt")));
+        QVERIFY(!runFailing(QStringLiteral("Undo ID=424242")));
+
+        // The History window: the list, and the log with a filter.
+        QVERIFY(w->runCommand(QStringLiteral("Undo LOG FIND=one.txt")));
+        HistoryDialog *dlg = w->findChild<HistoryDialog *>();
+        QVERIFY(dlg);
+        QVERIFY(dlg->visibleLogRows() >= 3); // copy, its undo, the rename and its undo
+        dlg->setLogFilter(QStringLiteral("no-such-file"));
+        QCOMPARE(dlg->visibleLogRows(), 0);
+        QVERIFY(dlg->undoList()->count() >= 3);
+        // Undo from the window: the newest (the undone rename) comes back.
+        dlg->undoList()->item(0)->setSelected(true);
+        const auto buttons = dlg->findChildren<QPushButton *>();
+        for (QPushButton *b : buttons) {
+            if (b->text() == QStringLiteral("Undo Selected"))
+                b->click();
+        }
+        QTRY_VERIFY(QFile::exists(root + QStringLiteral("/a/uno.txt")));
+        dlg->close();
     }
 
 private:

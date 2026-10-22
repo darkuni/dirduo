@@ -193,6 +193,12 @@ QList<CommandInfo> buildCommands()
                       arg("STATE=", onOff(), "Show or hide it"),
                       arg("CUSTOMIZE", {}, "Enter customize mode")},
                      QStringLiteral("Toolbar NAME=drives PLACE=between")};
+    c << CommandInfo{QStringLiteral("Undo"), QStringLiteral("Undo a copy, move, new folder, trash or rename"),
+                     {arg("ID=", {}, "Which one (the History window shows them); the latest when left out"),
+                      arg("LIST", {}, "Show everything that can be undone"),
+                      arg("LOG", {}, "Show the file log"),
+                      arg("FIND=", {}, "With LOG: show only entries with this in their path")},
+                     QStringLiteral("Undo LOG FIND=Galaga")};
     return c;
 }
 
@@ -208,7 +214,9 @@ QList<CatalogButton> buildButtons()
         b("File operations", "Delete", "edit-delete", "Move the selection to the trash", "Delete", "Delete NORECYCLE"),
         b("File operations", "Rename", "edit-rename", "Rename in place", "Rename"),
         b("File operations", "Advanced Rename", "edit-rename", "Rename many items at once, with a preview", "Rename ADVANCED"),
-        b("File operations", "Undo Rename", "edit-undo", "Undo the last batch rename", "Rename UNDO"),
+        b("File operations", "Undo", "edit-undo", "Undo the last copy, move, new folder, trash or rename (right: the list)", "Undo", "Undo LIST"),
+        b("File operations", "Undo Rename", "edit-undo", "Undo the last rename", "Rename UNDO"),
+        b("File operations", "File Log", "view-history", "Every file operation on record", "Undo LOG"),
         b("File operations", "New Folder", "folder-new", "Create folders", "CreateFolder"),
         b("File operations", "Copy As", "edit-copy", "Copy with a new name", "Copy AS"),
         b("File operations", "Copy If Newer", "edit-copy", "Copy, replacing only older files", "Copy WHENEXISTS=newer"),

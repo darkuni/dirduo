@@ -25,6 +25,8 @@ public:
     QList<int> jobIds() const { return m_order; }
     bool hasJob(int id) const { return m_jobs.contains(id); }
     JobSnapshot snapshot(int id) const;
+    QList<JobOutcome> outcomes(int id) const;
+    const JobSpec *spec(int id) const;
     bool hasActiveJobs() const;
 
     void pause(int id);

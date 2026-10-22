@@ -210,6 +210,18 @@ bool Job::checkpoint()
     return !m_cancelled;
 }
 
+QList<JobOutcome> Job::outcomes() const
+{
+    QMutexLocker lock(&m_mutex);
+    return m_outcomes;
+}
+
+void Job::addOutcome(const QString &source, const QString &target, bool replaced)
+{
+    QMutexLocker lock(&m_mutex);
+    m_outcomes.append(JobOutcome{source, target, replaced});
+}
+
 void Job::addError(const QString &message)
 {
     QMutexLocker lock(&m_mutex);
@@ -409,12 +421,22 @@ void Job::runCopyMove()
         }
         if (::rename(enc(source).constData(), enc(target).constData()) != 0)
             addError(QStringLiteral("%1: %2").arg(name, errnoText()));
+        else
+            addOutcome(source, target);
         addDone(0, 1);
     }
 
     std::vector<QString> targetPath(entries.size());
     std::vector<char> skipped(entries.size(), 0);
     std::vector<char> incomplete(entries.size(), 0); // folder kept because something inside stayed
+    std::vector<char> created(entries.size(), 0);    // made by this job (not merged into)
+    // Undo works on the highest level this job made.
+    auto record = [&](size_t i, const QString &target, bool replaced) {
+        created[i] = 1;
+        const int p = entries[i].parent;
+        if (p < 0 || !created[static_cast<size_t>(p)])
+            addOutcome(entries[i].src, target, replaced);
+    };
     std::vector<std::pair<QString, QDateTime>> dirTimes;
 
     for (size_t i = 0; i < entries.size(); ++i) {
@@ -506,11 +528,15 @@ void Job::runCopyMove()
                 markIncomplete(e.parent);
                 continue;
             }
-            if (::mkdir(enc(target).constData(), mode) != 0 && errno != EEXIST) {
-                addError(QStringLiteral("%1: %2").arg(target, errnoText()));
-                skipped[i] = 1;
-                markIncomplete(e.parent);
-                continue;
+            if (::mkdir(enc(target).constData(), mode) != 0) {
+                if (errno != EEXIST) {
+                    addError(QStringLiteral("%1: %2").arg(target, errnoText()));
+                    skipped[i] = 1;
+                    markIncomplete(e.parent);
+                    continue;
+                }
+            } else {
+                record(i, target, false);
             }
             targetPath[i] = target;
             dirTimes.emplace_back(target, QFileInfo(e.src).lastModified());
@@ -541,6 +567,7 @@ void Job::runCopyMove()
             addDone(0, 1);
             continue;
         }
+        record(i, target, replacing);
         if (move && existsNoFollow(e.src) && ::unlink(enc(e.src).constData()) != 0) {
             addError(QStringLiteral("%1: copied, but the original could not be removed: %2").arg(e.src, errnoText()));
             markIncomplete(e.parent);
@@ -658,8 +685,11 @@ void Job::runTrash()
             return;
         setCurrent(source);
         QString error;
-        if (!Trash::moveToTrash(source, nullptr, &error))
+        QString trashed;
+        if (!Trash::moveToTrash(source, &trashed, &error))
             addError(QStringLiteral("%1: %2").arg(QFileInfo(source).fileName(), error));
+        else
+            addOutcome(QDir::cleanPath(source), trashed);
         addDone(0, 1);
     }
 }

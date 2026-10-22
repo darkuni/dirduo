@@ -56,6 +56,18 @@ struct JobSpec
     CollisionAction whenExists = CollisionAction::Ask;
 };
 
+// What a finished job did with one item, for undo and the file log. For
+// Copy and Move: the original and the new item, at the highest level the job
+// created (a file copied into a folder that was already there is listed on
+// its own, so undo never touches what was there before). For Trash: the
+// original and where it went in the trash.
+struct JobOutcome
+{
+    QString source;
+    QString target;
+    bool replaced = false; // it overwrote a file that was there
+};
+
 struct JobSnapshot
 {
     int id = 0;
@@ -110,6 +122,8 @@ public:
     virtual void cancel() = 0;
     virtual void setBypassQueue(bool on) = 0;
     virtual void provideDecision(const CollisionDecision &decision) = 0;
+    // What was done, item by item (local jobs; empty for remote ones).
+    virtual QList<JobOutcome> outcomes() const { return {}; }
 
     // Starts the job. notifier asks for collision decisions; done is called
     // once when the job has ended (possibly from another thread).
@@ -142,6 +156,7 @@ public:
     void cancel() override;
     void setBypassQueue(bool on) override;
     void provideDecision(const CollisionDecision &decision) override;
+    QList<JobOutcome> outcomes() const override;
     void start(const CollisionNotifier &notifier, const DoneCallback &done) override;
     void waitFinished() override;
 
@@ -200,6 +215,8 @@ private:
     int m_totalItems = 0;
     int m_doneItems = 0;
     QStringList m_errors;
+    QList<JobOutcome> m_outcomes;
+    void addOutcome(const QString &source, const QString &target, bool replaced = false);
 
     QElapsedTimer m_runClock;
     qint64 m_pausedMs = 0;

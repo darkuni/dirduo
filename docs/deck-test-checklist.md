@@ -47,6 +47,7 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 ## Newer things (quick)
 
 - [ ] View > Text and Icon Size > Larger: everything readable from arm's length; back to Normal.
+- [ ] Copy something to the SD card, then Ctrl+Z: the copy goes (to the SD card's trash). Trash a file, Ctrl+Z: it is back. Tools > File Log shows both.
 - [ ] In Details view, click the triangle beside a folder (or press Right): it opens in place under itself; Left closes it.
 - [ ] Hold Shift and scroll (mouse wheel, or the right trackpad) over a list: that lister zooms; a second lister stays as it is. Ctrl+0 resets. Try a two-finger pinch on the touchscreen too.
 - [ ] Take a screenshot with Spectacle and copy it to the clipboard, then Ctrl+V in a folder: a PNG appears.

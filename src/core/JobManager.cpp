@@ -114,6 +114,18 @@ JobSnapshot JobManager::snapshot(int id) const
     return it->job->snapshot();
 }
 
+QList<JobOutcome> JobManager::outcomes(int id) const
+{
+    const auto it = m_jobs.constFind(id);
+    return it == m_jobs.cend() ? QList<JobOutcome>() : it->job->outcomes();
+}
+
+const JobSpec *JobManager::spec(int id) const
+{
+    const auto it = m_jobs.constFind(id);
+    return it == m_jobs.cend() ? nullptr : &it->job->spec();
+}
+
 bool JobManager::hasActiveJobs() const
 {
     for (const auto &e : m_jobs) {

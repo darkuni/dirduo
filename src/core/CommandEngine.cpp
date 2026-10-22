@@ -54,14 +54,35 @@ CommandEngine::CommandEngine(AliasManager &aliases, JobManager &jobs, QObject *p
     : QObject(parent)
     , m_aliases(aliases)
     , m_jobs(jobs)
+    , m_history(jobs)
 {
 }
 
 void CommandEngine::recordRename(const QList<QPair<QString, QString>> &done)
 {
-    m_lastRename = done;
     for (const auto &d : done)
         Collections::instance()->renamed(d.second, d.first);
+    UndoEntry e;
+    e.kind = UndoEntry::Kind::Rename;
+    e.items = done;
+    if (done.size() == 1)
+        e.title = QStringLiteral("Rename %1 to %2").arg(Location::fileName(done.first().second), Location::fileName(done.first().first));
+    else
+        e.title = QStringLiteral("Rename %1 items").arg(done.size());
+    m_history.add(e);
+}
+
+void CommandEngine::recordNew(const QStringList &paths, const QString &what)
+{
+    UndoEntry e;
+    e.kind = UndoEntry::Kind::NewItem;
+    for (const QString &p : paths) {
+        if (Location::isLocal(p))
+            e.items << qMakePair(p, p);
+    }
+    e.title = paths.size() == 1 ? QStringLiteral("New %1 %2").arg(what, Location::fileName(paths.first()))
+                                : QStringLiteral("New %1s (%2)").arg(what).arg(paths.size());
+    m_history.add(e);
 }
 
 QStringList CommandEngine::commandNames()
@@ -71,7 +92,7 @@ QStringList CommandEngine::commandNames()
             QStringLiteral("Image"),
             QStringLiteral("Layout"), QStringLiteral("Move"), QStringLiteral("Print"),
             QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Set"), QStringLiteral("Settings"),
-            QStringLiteral("Sync"), QStringLiteral("Toolbar")};
+            QStringLiteral("Sync"), QStringLiteral("Toolbar"), QStringLiteral("Undo")};
 }
 
 QString CommandEngine::resolvePath(const QString &input, const QString &base) const
@@ -185,6 +206,8 @@ bool CommandEngine::execute(const ParsedCommand &cmd, CommandContext &ctx, QStri
         return ctx.printFolder(cmd, error);
     if (cmd.is(QStringLiteral("Settings")))
         return ctx.settings(cmd, error);
+    if (cmd.is(QStringLiteral("Undo")))
+        return cmdUndo(cmd, ctx, error);
     if (cmd.is(QStringLiteral("Sync")) || cmd.is(QStringLiteral("Duplicates")) || cmd.is(QStringLiteral("Find"))
         || cmd.is(QStringLiteral("Favorite")) || cmd.is(QStringLiteral("Layout")) || cmd.is(QStringLiteral("Image")))
         return ctx.tool(cmd, error);
@@ -398,17 +421,13 @@ bool CommandEngine::cmdRename(const ParsedCommand &cmd, CommandContext &ctx, QSt
         return false;
     };
     if (cmd.hasFlag(QStringLiteral("UNDO"))) {
-        if (m_lastRename.isEmpty())
+        const UndoEntry *last = m_history.latestRename();
+        if (!last)
             return fail(QStringLiteral("There is no rename to undo."));
-        QString err;
-        if (!RenameEngine::undo(m_lastRename, &err))
-            return fail(err);
         QStringList back;
-        for (const auto &d : std::as_const(m_lastRename)) {
-            back << d.second;
-            Collections::instance()->renamed(d.first, d.second);
-        }
-        m_lastRename.clear();
+        QString err;
+        if (!m_history.undo(last->id, &back, &err))
+            return fail(err);
         ctx.afterLocalChange(back);
         return true;
     }
@@ -470,9 +489,7 @@ bool CommandEngine::cmdRename(const ParsedCommand &cmd, CommandContext &ctx, QSt
         if (!RenameEngine::apply(items, &done, &err))
             return fail(err);
         if (!done.isEmpty())
-            m_lastRename = done;
-        for (const auto &d : std::as_const(done))
-            Collections::instance()->renamed(d.second, d.first);
+            recordRename(done);
         QStringList renamed;
         for (const auto &d : std::as_const(done))
             renamed << d.first;
@@ -516,6 +533,10 @@ bool CommandEngine::cmdRename(const ParsedCommand &cmd, CommandContext &ctx, QSt
             return false;
     } else if (!FileOps::renameEntry(from, to, &newPath, error)) {
         return false;
+    } else {
+        recordRename({qMakePair(newPath, from)}); // also tells collections
+        ctx.afterLocalChange({newPath});
+        return true;
     }
     Collections::instance()->renamed(from, newPath);
     ctx.afterLocalChange({newPath});
@@ -595,6 +616,8 @@ bool CommandEngine::cmdCreateFolder(const ParsedCommand &cmd, CommandContext &ct
         problems = issues.join(QLatin1Char('\n'));
     } else {
         created = FileOps::createFolders(parent, names, &problems);
+        if (!created.isEmpty())
+            recordNew(created, QStringLiteral("folder"));
     }
     if (!created.isEmpty())
         ctx.afterLocalChange(created);
@@ -667,6 +690,7 @@ bool CommandEngine::pasteAsFile(const QMimeData *mime, bool askName, CommandCont
                 *error = QStringLiteral("Could not write %1: %2").arg(target, f.errorString());
             return false;
         }
+        recordNew({target}, QStringLiteral("file"));
         ctx.afterLocalChange({target});
         return true;
     }
@@ -809,4 +833,34 @@ bool CommandEngine::cmdClipboard(const ParsedCommand &cmd, CommandContext &ctx, 
     if (error)
         *error = QStringLiteral("Clipboard takes COPY, CUT or PASTE.");
     return false;
+}
+
+bool CommandEngine::cmdUndo(const ParsedCommand &cmd, CommandContext &ctx, QString *error)
+{
+    if (cmd.hasFlag(QStringLiteral("LIST")) || cmd.hasFlag(QStringLiteral("LOG")))
+        return ctx.tool(cmd, error); // the History window
+    int id = 0;
+    if (cmd.hasArg(QStringLiteral("ID"))) {
+        id = cmd.value(QStringLiteral("ID")).toInt();
+    } else if (const UndoEntry *last = m_history.latest()) {
+        id = last->id;
+    }
+    if (id <= 0) {
+        if (error)
+            *error = QStringLiteral("There is nothing to undo.");
+        return false;
+    }
+    QStringList touched;
+    QString problems;
+    const bool ok = m_history.undo(id, &touched, &problems);
+    if (!touched.isEmpty())
+        ctx.afterLocalChange(touched);
+    if (!ok) {
+        if (error)
+            *error = problems.isEmpty() ? QStringLiteral("Nothing could be undone.") : problems;
+        return false;
+    }
+    if (!problems.isEmpty())
+        ctx.showError(QStringLiteral("Undo"), problems); // done, with exceptions
+    return true;
 }

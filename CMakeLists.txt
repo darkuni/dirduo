@@ -61,6 +61,7 @@ add_library(linopus_core STATIC
     src/core/ImageConvert.cpp
     src/core/Metadata.cpp
     src/core/Thumbnails.cpp
+    src/core/History.cpp
     src/core/Condition.cpp
     src/core/DriveList.cpp
     src/core/FileKind.cpp
@@ -132,6 +133,7 @@ add_library(linopus_ui STATIC
     src/ui/FindDialog.cpp
     src/ui/FavoritesDialog.cpp
     src/ui/ImageConvertDialog.cpp
+    src/ui/HistoryDialog.cpp
     src/ui/PreferencesDialog.cpp
     src/ui/ViewerPane.cpp
     src/ui/ListerWindow.cpp
@@ -162,7 +164,7 @@ endif()
 if(LINOPUS_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS Test)
     enable_testing()
-    foreach(t aliases commandparser fileops trash jobmanager commandengine drives location listing condition rename foldersync find imageconvert metadata thumbnails)
+    foreach(t aliases commandparser fileops trash jobmanager commandengine drives location listing condition rename foldersync find imageconvert metadata thumbnails history)
         add_executable(tst_${t} tests/tst_${t}.cpp)
         target_link_libraries(tst_${t} PRIVATE linopus_core Qt6::Test)
         add_test(NAME ${t} COMMAND tst_${t})

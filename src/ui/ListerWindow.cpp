@@ -10,6 +10,7 @@
 #include "ui/AppContext.h"
 #include "ui/DuplicatesDialog.h"
 #include "ui/FindDialog.h"
+#include "ui/HistoryDialog.h"
 #include "ui/ImageConvertDialog.h"
 #include "core/FileKind.h"
 #include "core/ImageConvert.h"
@@ -312,6 +313,28 @@ void ListerWindow::buildMenus()
     connect(quit, &QAction::triggered, this, [this]() { m_app.quitAll(); });
 
     QMenu *edit = menuBar()->addMenu(QStringLiteral("&Edit"));
+    {
+        // Undo anything: copies, moves, new folders, the trash, renames.
+        QAction *undo = commandAction(QStringLiteral("Undo"), QStringLiteral("Undo"), QKeySequence::Undo, QStringLiteral("edit-undo"));
+        edit->addAction(undo);
+        QMenu *recent = edit->addMenu(QIcon::fromTheme(QStringLiteral("edit-undo-history")), QStringLiteral("Undo List"));
+        connect(edit, &QMenu::aboutToShow, this, [this, undo, recent]() {
+            const UndoEntry *last = m_app.engine().history().latest();
+            undo->setEnabled(last != nullptr);
+            undo->setText(last ? QStringLiteral("Undo %1").arg(last->title) : QStringLiteral("Undo"));
+            recent->clear();
+            const QList<UndoEntry> entries = m_app.engine().history().entries();
+            for (int i = 0; i < entries.size() && i < 10; ++i) {
+                const int id = entries.at(i).id;
+                recent->addAction(entries.at(i).title, this, [this, id]() { runCommand(QStringLiteral("Undo ID=%1").arg(id)); });
+            }
+            if (entries.isEmpty())
+                recent->addAction(QStringLiteral("Nothing to undo yet"))->setEnabled(false);
+            recent->addSeparator();
+            recent->addAction(QStringLiteral("More..."), this, [this]() { runCommand(QStringLiteral("Undo LIST")); });
+        });
+        edit->addSeparator();
+    }
     edit->addAction(commandAction(QStringLiteral("Cut"), QStringLiteral("Clipboard CUT"), QKeySequence::Cut, QStringLiteral("edit-cut")));
     edit->addAction(commandAction(QStringLiteral("Copy"), QStringLiteral("Clipboard COPY"), QKeySequence::Copy, QStringLiteral("edit-copy")));
     edit->addAction(commandAction(QStringLiteral("Paste"), QStringLiteral("Clipboard PASTE"), QKeySequence::Paste, QStringLiteral("edit-paste")));
@@ -339,9 +362,6 @@ void ListerWindow::buildMenus()
     edit->addAction(commandAction(QStringLiteral("Rename"), QStringLiteral("Rename"), QKeySequence(Qt::Key_F2), QStringLiteral("edit-rename")));
     edit->addAction(commandAction(QStringLiteral("Advanced Rename..."), QStringLiteral("Rename ADVANCED"),
                                   QKeySequence(QStringLiteral("Shift+F2")), QStringLiteral("edit-rename")));
-    QAction *undoRename = commandAction(QStringLiteral("Undo Rename"), QStringLiteral("Rename UNDO"), {}, QStringLiteral("edit-undo"));
-    edit->addAction(undoRename);
-    connect(edit, &QMenu::aboutToShow, this, [this, undoRename]() { undoRename->setEnabled(m_app.engine().canUndoRename()); });
     edit->addAction(commandAction(QStringLiteral("New Folder..."), QStringLiteral("CreateFolder"),
                                   QKeySequence(QStringLiteral("Ctrl+Shift+N")), QStringLiteral("folder-new")));
     edit->addAction(commandAction(QStringLiteral("Move to Trash"), QStringLiteral("Delete"), QKeySequence::Delete, QStringLiteral("user-trash")));
@@ -449,6 +469,7 @@ void ListerWindow::buildMenus()
     tools->addAction(commandAction(QStringLiteral("Find Duplicates..."), QStringLiteral("Duplicates"), {}, QStringLiteral("edit-copy")));
     tools->addSeparator();
     tools->addAction(commandAction(QStringLiteral("Convert Images..."), QStringLiteral("Image"), {}, QStringLiteral("image-x-generic")));
+    tools->addAction(commandAction(QStringLiteral("File Log..."), QStringLiteral("Undo LOG"), {}, QStringLiteral("view-history")));
     tools->addAction(commandAction(QStringLiteral("Advanced Rename..."), QStringLiteral("Rename ADVANCED"), {}, QStringLiteral("edit-rename")));
 
     QMenu *window = menuBar()->addMenu(QStringLiteral("&Window"));
@@ -2152,6 +2173,15 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
     }
     if (cmd.is(QStringLiteral("Image")))
         return imageCommand(cmd, error);
+    if (cmd.is(QStringLiteral("Undo"))) {
+        auto *dlg = new HistoryDialog(engine, cmd.hasFlag(QStringLiteral("LOG")) ? HistoryDialog::Page::Log : HistoryDialog::Page::Undo, this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        if (cmd.hasArg(QStringLiteral("FIND")))
+            dlg->setLogFilter(cmd.value(QStringLiteral("FIND")));
+        connect(dlg, &HistoryDialog::undone, this, [this](const QStringList &paths) { afterLocalChange(paths); });
+        dlg->show();
+        return true;
+    }
     if (cmd.is(QStringLiteral("Layout"))) {
         if (cmd.hasArg(QStringLiteral("SAVE"))) {
             QString name = cmd.value(QStringLiteral("SAVE"));
