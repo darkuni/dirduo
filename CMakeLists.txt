@@ -14,6 +14,19 @@ set(LINOPUS_APP_ID "com.monroeworld.Linopus")
 
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Concurrent)
 
+# KIO adds servers (SFTP, FTP, SMB, WebDAV...) and archives as folders. Without
+# it Linopus still builds and handles local files.
+option(LINOPUS_WITH_KIO "Use KIO for remote locations and archives" ON)
+if(LINOPUS_WITH_KIO)
+    find_package(KF6KIO 6.0 QUIET)
+    find_package(KF6CoreAddons 6.0 QUIET)
+    if(NOT KF6KIO_FOUND OR NOT KF6CoreAddons_FOUND)
+        message(WARNING "KF6 KIO not found: building without remote locations and archives")
+        set(LINOPUS_WITH_KIO OFF)
+    endif()
+endif()
+message(STATUS "Linopus with KIO: ${LINOPUS_WITH_KIO}")
+
 option(LINOPUS_BUILD_TESTS "Build the unit tests" ON)
 
 add_compile_definitions(
@@ -23,7 +36,7 @@ add_compile_definitions(
 )
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    add_compile_options(-Wall -Wextra -Wno-unused-parameter)
+    add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
 endif()
 
 # Core: no widgets. Everything that runs without a window lives here.
@@ -39,6 +52,9 @@ add_library(linopus_core STATIC
     src/core/CommandParser.cpp
     src/core/CommandEngine.cpp
     src/core/DriveList.cpp
+    src/core/Location.cpp
+    src/core/RemoteBackend.cpp
+    src/core/RemoteBackend.h
 )
 target_include_directories(linopus_core PUBLIC src)
 target_link_libraries(linopus_core PUBLIC Qt6::Core Qt6::Gui Qt6::Concurrent)
@@ -64,6 +80,16 @@ add_library(linopus_ui STATIC
 )
 target_link_libraries(linopus_ui PUBLIC linopus_core Qt6::Widgets)
 
+if(LINOPUS_WITH_KIO)
+    add_library(linopus_kio STATIC
+        src/kio/KioBackend.cpp
+        src/kio/RemoteJob.cpp
+    )
+    target_link_libraries(linopus_kio PUBLIC linopus_core Qt6::Widgets KF6::KIOCore KF6::KIOGui KF6::KIOWidgets KF6::CoreAddons)
+    target_compile_definitions(linopus_kio PUBLIC LINOPUS_HAVE_KIO)
+    target_link_libraries(linopus_ui PUBLIC linopus_kio)
+endif()
+
 add_executable(linopus src/main.cpp)
 target_link_libraries(linopus PRIVATE linopus_ui)
 
@@ -77,7 +103,7 @@ endif()
 if(LINOPUS_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS Test)
     enable_testing()
-    foreach(t aliases commandparser fileops trash jobmanager commandengine drives)
+    foreach(t aliases commandparser fileops trash jobmanager commandengine drives location)
         add_executable(tst_${t} tests/tst_${t}.cpp)
         target_link_libraries(tst_${t} PRIVATE linopus_core Qt6::Test)
         add_test(NAME ${t} COMMAND tst_${t})
@@ -85,6 +111,12 @@ if(LINOPUS_BUILD_TESTS)
     endforeach()
 
     if(LINOPUS_BUILD_UI)
+        if(LINOPUS_WITH_KIO)
+            # Needs live servers: tests/remote/run-remote-tests.sh starts them.
+            add_executable(tst_remote tests/tst_remote.cpp)
+            target_link_libraries(tst_remote PRIVATE linopus_kio Qt6::Test)
+        endif()
+
         add_executable(tst_ui tests/tst_ui.cpp)
         target_link_libraries(tst_ui PRIVATE linopus_ui Qt6::Test)
         add_test(NAME ui COMMAND tst_ui)

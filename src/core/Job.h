@@ -13,6 +13,8 @@
 #include <functional>
 #include <vector>
 
+class QThread;
+
 enum class JobType { Copy, Move, Trash, Delete };
 
 enum class JobState {
@@ -87,33 +89,66 @@ struct JobSnapshot
 
 Q_DECLARE_METATYPE(CollisionRequest)
 
-// One file operation. Created and controlled from the GUI thread; run() executes
-// on a worker thread. Every public method is thread-safe.
-class Job
+// One file operation as the JobManager sees it. Local jobs run on their own
+// thread; remote jobs (KIO) run on the GUI thread's event loop.
+class JobBase
 {
 public:
     using CollisionNotifier = std::function<void(const CollisionRequest &)>;
+    using DoneCallback = std::function<void()>;
 
-    Job(int id, JobSpec spec, QString queueKey);
+    JobBase(int id, JobSpec spec, QString queueKey);
+    virtual ~JobBase();
 
     int id() const { return m_id; }
     const JobSpec &spec() const { return m_spec; }
     QString queueKey() const { return m_queueKey; }
 
-    JobSnapshot snapshot() const;
+    virtual JobSnapshot snapshot() const = 0;
+    virtual void pause() = 0;
+    virtual void resume() = 0;
+    virtual void cancel() = 0;
+    virtual void setBypassQueue(bool on) = 0;
+    virtual void provideDecision(const CollisionDecision &decision) = 0;
 
-    void pause();
-    void resume();
-    void cancel();
-    void setBypassQueue(bool on);
-    void provideDecision(const CollisionDecision &decision);
+    // Starts the job. notifier asks for collision decisions; done is called
+    // once when the job has ended (possibly from another thread).
+    virtual void start(const CollisionNotifier &notifier, const DoneCallback &done) = 0;
+    // Blocks until a started job's worker has fully stopped.
+    virtual void waitFinished() {}
+
+    static QString describe(const JobSpec &spec);
+    // Fills title, fromFolder and toFolder.
+    void fillCommon(JobSnapshot &s) const;
+
+protected:
+    const int m_id;
+    const JobSpec m_spec;
+    const QString m_queueKey;
+};
+
+// A job on local files. Created and controlled from the GUI thread; run()
+// executes on a worker thread. Every public method is thread-safe.
+class Job : public JobBase
+{
+public:
+    Job(int id, JobSpec spec, QString queueKey);
+    ~Job() override;
+
+    JobSnapshot snapshot() const override;
+
+    void pause() override;
+    void resume() override;
+    void cancel() override;
+    void setBypassQueue(bool on) override;
+    void provideDecision(const CollisionDecision &decision) override;
+    void start(const CollisionNotifier &notifier, const DoneCallback &done) override;
+    void waitFinished() override;
 
     // Runs the whole job on the calling thread. notifier is called (on this
     // thread) when a collision needs a decision; the job then blocks until
     // provideDecision() or cancel().
     void run(const CollisionNotifier &notifier);
-
-    static QString describe(const JobSpec &spec);
 
 private:
     struct Entry
@@ -141,10 +176,8 @@ private:
     bool copyFile(const QString &src, const QString &dst, QString *error);
     bool copySymlink(const QString &src, const QString &dst, QString *error);
 
-    const int m_id;
-    const JobSpec m_spec;
-    const QString m_queueKey;
     CollisionNotifier m_notifier;
+    QThread *m_thread = nullptr;
 
     mutable QMutex m_mutex;
     QWaitCondition m_wake;

@@ -9,7 +9,6 @@
 
 #include <memory>
 
-class QThread;
 
 // Owns every file operation. Jobs that write to the same device run one after
 // another in the order they were queued; jobs on different devices run side by
@@ -39,7 +38,8 @@ public:
     // for shutdown.
     bool waitForIdle(int msecs);
 
-    // "dev:<n>" for the device a job writes to.
+    // "dev:<n>" for the local device a job writes to, or "net:<server>" for a
+    // remote one.
     static QString queueKeyFor(const JobSpec &spec);
 
 Q_SIGNALS:
@@ -52,12 +52,11 @@ Q_SIGNALS:
 private:
     void schedule();
     void tick();
-    void onThreadFinished(int id);
+    void onJobDone(int id);
 
     struct Entry
     {
-        std::shared_ptr<Job> job;
-        QThread *thread = nullptr;
+        std::shared_ptr<JobBase> job;
         bool started = false;
         bool reportedDone = false;
     };

@@ -1,11 +1,13 @@
 #include "core/Job.h"
 
 #include "core/FileOps.h"
+#include "core/Location.h"
 #include "core/Trash.h"
 
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QThread>
 
 #include <cerrno>
 #include <cstdio>
@@ -45,30 +47,65 @@ QString itemsWord(int n)
     return n == 1 ? QStringLiteral("1 item") : QStringLiteral("%1 items").arg(n);
 }
 
-QString displayName(const QString &dir)
-{
-    const QString name = QFileInfo(dir).fileName();
-    return name.isEmpty() ? dir : name;
-}
-
 } // namespace
 
-Job::Job(int id, JobSpec spec, QString queueKey)
+JobBase::JobBase(int id, JobSpec spec, QString queueKey)
     : m_id(id)
     , m_spec(std::move(spec))
     , m_queueKey(std::move(queueKey))
 {
 }
 
-QString Job::describe(const JobSpec &spec)
+JobBase::~JobBase() = default;
+
+void JobBase::fillCommon(JobSnapshot &s) const
+{
+    s.id = m_id;
+    s.type = m_spec.type;
+    s.title = describe(m_spec);
+    s.queueKey = m_queueKey;
+    if (!m_spec.sources.isEmpty())
+        s.fromFolder = Location::display(Location::parent(m_spec.sources.first()));
+    s.toFolder = Location::display(m_spec.destDir);
+}
+
+Job::Job(int id, JobSpec spec, QString queueKey)
+    : JobBase(id, std::move(spec), std::move(queueKey))
+{
+}
+
+Job::~Job()
+{
+    waitFinished();
+}
+
+void Job::start(const CollisionNotifier &notifier, const DoneCallback &done)
+{
+    m_thread = QThread::create([this, notifier, done]() {
+        run(notifier);
+        done();
+    });
+    m_thread->start();
+}
+
+void Job::waitFinished()
+{
+    if (!m_thread)
+        return;
+    m_thread->wait();
+    delete m_thread;
+    m_thread = nullptr;
+}
+
+QString JobBase::describe(const JobSpec &spec)
 {
     const int n = static_cast<int>(spec.sources.size());
-    const QString what = n == 1 ? QStringLiteral("\"%1\"").arg(QFileInfo(spec.sources.first()).fileName()) : itemsWord(n);
+    const QString what = n == 1 ? QStringLiteral("\"%1\"").arg(Location::fileName(spec.sources.first())) : itemsWord(n);
     switch (spec.type) {
     case JobType::Copy:
-        return QStringLiteral("Copying %1 to %2").arg(what, displayName(spec.destDir));
+        return QStringLiteral("Copying %1 to %2").arg(what, Location::title(spec.destDir));
     case JobType::Move:
-        return QStringLiteral("Moving %1 to %2").arg(what, displayName(spec.destDir));
+        return QStringLiteral("Moving %1 to %2").arg(what, Location::title(spec.destDir));
     case JobType::Trash:
         return QStringLiteral("Moving %1 to the trash").arg(what);
     case JobType::Delete:
@@ -81,22 +118,16 @@ JobSnapshot Job::snapshot() const
 {
     QMutexLocker lock(&m_mutex);
     JobSnapshot s;
-    s.id = m_id;
-    s.type = m_spec.type;
+    fillCommon(s);
     s.state = m_state;
-    s.title = describe(m_spec);
     s.currentItem = m_current;
     s.currentSize = m_currentSize;
     s.currentDone = m_currentDone;
-    if (!m_spec.sources.isEmpty())
-        s.fromFolder = QFileInfo(m_spec.sources.first()).absolutePath();
-    s.toFolder = m_spec.destDir;
     s.totalBytes = m_totalBytes;
     s.doneBytes = m_doneBytes;
     s.totalItems = m_totalItems;
     s.doneItems = m_doneItems;
     s.errors = m_errors;
-    s.queueKey = m_queueKey;
     s.bypassQueue = m_bypassQueue;
     if (m_runClock.isValid()) {
         qint64 ms = m_runClock.elapsed() - m_pausedMs;

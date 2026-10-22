@@ -7,6 +7,9 @@
 #include "ui/CollisionDialog.h"
 #include "ui/ListerWindow.h"
 #include "ui/ProgressWindow.h"
+#ifdef LINOPUS_HAVE_KIO
+#include "kio/KioBackend.h"
+#endif
 
 #include <QApplication>
 #include <QDir>
@@ -103,6 +106,10 @@ void AppContext::listerActivated(ListerWindow *lister)
     m_listers.removeAll(QPointer<ListerWindow>(lister));
     m_listers.prepend(lister);
     m_progress->setAnchor(lister);
+#ifdef LINOPUS_HAVE_KIO
+    if (KioBackend *kio = KioBackend::kioInstance())
+        kio->setWindow(lister);
+#endif
 }
 
 void AppContext::listerClosing(ListerWindow *lister)

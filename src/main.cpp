@@ -1,4 +1,7 @@
 #include "core/AliasManager.h"
+#ifdef LINOPUS_HAVE_KIO
+#include "kio/KioBackend.h"
+#endif
 #include "ui/AppContext.h"
 #include "ui/ListerWindow.h"
 
@@ -25,6 +28,9 @@ int main(int argc, char *argv[])
     parser.addPositionalArgument(QStringLiteral("folder"), QStringLiteral("Open a new lister at this folder."));
     parser.process(app);
 
+#ifdef LINOPUS_HAVE_KIO
+    KioBackend kio; // servers and archives
+#endif
     AppContext context;
     const QStringList folders = parser.positionalArguments();
     if (!folders.isEmpty()) {

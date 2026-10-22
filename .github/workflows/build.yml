@@ -24,11 +24,36 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+  # KIO build: servers and archives, tested against a live FTP server and SSH
+  # server started inside the job.
+  test-kio:
+    name: Tests with KIO (Ubuntu 26.04)
+    runs-on: ubuntu-24.04
+    container:
+      image: ubuntu:26.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt, KIO and test servers
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkgconf qt6-base-dev qt6-base-dev-tools \
+            libkf6kio-dev extra-cmake-modules kio-extras kio6 \
+            python3 python3-pyftpdlib openssh-server openssh-client dbus dbus-daemon
+      - name: Configure
+        run: cmake -S . -B build -G Ninja
+      - name: Build
+        run: cmake --build build
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure
+      - name: Remote tests (FTP, SFTP, archives)
+        run: timeout 300 tests/remote/run-remote-tests.sh build
+
   # One Flatpak per architecture: x86_64 for the Steam Deck, aarch64 for the
   # Steam Frame. Both build natively on GitHub's own runners.
   flatpak:
     name: Flatpak (${{ matrix.variant.arch }})
-    needs: test
+    needs: [test, test-kio]
     strategy:
       fail-fast: false
       matrix:

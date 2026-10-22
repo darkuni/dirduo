@@ -37,6 +37,8 @@ public:
     QString title() const;
     QStringList selectedPaths() const;
     QString focusedPath() const;
+    // From the listing, so it also works for remote items.
+    bool isFolder(const QString &path) const;
     QString statusText() const;
     QString lastError() const { return m_error; }
 

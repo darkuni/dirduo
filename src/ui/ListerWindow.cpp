@@ -3,7 +3,9 @@
 #include "core/AliasManager.h"
 #include "core/FileOps.h"
 #include "core/JobManager.h"
+#include "core/Location.h"
 #include "core/Paths.h"
+#include "core/RemoteBackend.h"
 #include "ui/AppContext.h"
 #include "ui/BreadcrumbBar.h"
 #include "ui/ButtonBar.h"
@@ -572,6 +574,8 @@ void ListerWindow::mirrorNavigation(FileDisplay *from, const QString &oldPath, c
 {
     if (m_mirroring || !m_dual || oldPath == newPath)
         return;
+    if (Location::isRemote(oldPath) || Location::isRemote(newPath))
+        return; // mirrors local trees only for now
     FileDisplay *other = from == m_displays[0] ? m_displays[1] : m_displays[0];
     FolderTab *t = other->currentTab();
     if (!t)
@@ -590,7 +594,7 @@ void ListerWindow::mirrorNavigation(FileDisplay *from, const QString &oldPath, c
     } else {
         return; // a jump elsewhere is not mirrored
     }
-    if (!QFileInfo(target).isDir())
+    if (Location::isLocal(target) && !QFileInfo(target).isDir())
         return;
     m_mirroring = true;
     t->navigate(target);
@@ -875,8 +879,8 @@ void ListerWindow::onDropRequested(FileDisplay *d, const QList<QUrl> &urls, cons
 {
     QStringList sources;
     for (const QUrl &u : urls) {
-        if (u.isLocalFile())
-            sources << QDir::cleanPath(u.toLocalFile());
+        if (u.isValid() && !u.scheme().isEmpty())
+            sources << Location::fromUrl(u);
     }
     if (sources.isEmpty())
         return;
@@ -887,13 +891,15 @@ void ListerWindow::onDropRequested(FileDisplay *d, const QList<QUrl> &urls, cons
         move = false;
     else if (mods & Qt::ShiftModifier)
         move = true;
+    else if (Location::isRemote(sources.first()) || Location::isRemote(targetDir))
+        move = false; // to or from a server: copy, never move by surprise
     else
         move = FileOps::sameDevice(sources.first(), targetDir); // same drive moves, another drive copies
 
     // Dropping things back where they already are does nothing (Ctrl forces copies).
     bool allHere = true;
     for (const QString &s : std::as_const(sources))
-        allHere = allHere && QFileInfo(s).absolutePath() == QDir::cleanPath(targetDir);
+        allHere = allHere && Location::parent(s) == Location::clean(targetDir);
     if (allHere && !(mods & Qt::ControlModifier))
         return;
 
@@ -907,7 +913,10 @@ void ListerWindow::onContextMenu(FileDisplay *d, const QPoint &globalPos, bool o
     QMenu menu(this);
     FolderTab *t = d->currentTab();
     const QStringList sel = t ? t->selectedPaths() : QStringList();
-    const bool oneFolder = sel.size() == 1 && QFileInfo(sel.first()).isDir();
+    const bool oneFolder = sel.size() == 1 && t && t->isFolder(sel.first());
+    QString archiveInside;
+    if (sel.size() == 1 && !oneFolder && Location::isLocal(sel.first()) && RemoteBackend::instance())
+        archiveInside = RemoteBackend::instance()->archiveLocation(sel.first());
 
     if (onItem && !sel.isEmpty()) {
         if (oneFolder) {
@@ -919,6 +928,14 @@ void ListerWindow::onContextMenu(FileDisplay *d, const QPoint &globalPos, bool o
                 menu.addAction(QStringLiteral("Open in Destination"), this, [this, p]() {
                     runCommand(QStringLiteral("Go \"%1\" OPENINDEST").arg(p));
                 });
+        } else if (!archiveInside.isEmpty()) {
+            menu.addAction(QIcon::fromTheme(QStringLiteral("folder-open")), QStringLiteral("Open as Folder"), this,
+                           [t, archiveInside]() { t->navigate(archiveInside); });
+            menu.addAction(QIcon::fromTheme(QStringLiteral("tab-new")), QStringLiteral("Open as Folder in New Tab"), this,
+                           [d, archiveInside]() { d->addTab(archiveInside, false); });
+            const QString p = sel.first();
+            menu.addAction(QIcon::fromTheme(QStringLiteral("document-open")), QStringLiteral("Open in Application"), this,
+                           [this, p]() { openFile(p); });
         } else {
             menu.addAction(QIcon::fromTheme(QStringLiteral("document-open")), QStringLiteral("Open"), this, [this, sel]() {
                 for (const QString &p : sel)
@@ -953,6 +970,13 @@ void ListerWindow::onContextMenu(FileDisplay *d, const QPoint &globalPos, bool o
 
 void ListerWindow::openFile(const QString &path)
 {
+    if (Location::isRemote(path)) {
+        if (RemoteBackend *backend = RemoteBackend::instance())
+            backend->openFile(path);
+        else
+            showError(QStringLiteral("Open"), QStringLiteral("Remote files need the KIO build of Linopus."));
+        return;
+    }
     if (!QDesktopServices::openUrl(QUrl::fromLocalFile(path)))
         showError(QStringLiteral("Open"), QStringLiteral("No application is set up to open \"%1\".").arg(QFileInfo(path).fileName()));
 }
@@ -966,13 +990,13 @@ void ListerWindow::rebuildAliasMenu()
         const QString target = aliases.aliasPath(n);
         QAction *a = m_aliasMenu->addAction(QStringLiteral("/%1").arg(n));
         a->setToolTip(target);
-        a->setEnabled(QFileInfo(target).isDir());
+        a->setEnabled(Location::isRemote(target) || QFileInfo(target).isDir());
         connect(a, &QAction::triggered, this, [this, n]() { runCommand(QStringLiteral("Go /%1").arg(n)); });
     }
     m_aliasMenu->addSeparator();
     QAction *add = m_aliasMenu->addAction(QStringLiteral("Make Alias for This Folder..."));
     connect(add, &QAction::triggered, this, [this]() {
-        QString name = QFileInfo(sourcePath()).fileName().toLower().replace(QLatin1Char(' '), QLatin1Char('-'));
+        QString name = Location::title(sourcePath()).toLower().replace(QLatin1Char(' '), QLatin1Char('-'));
         if (!promptText(QStringLiteral("New Alias"), QStringLiteral("Alias name for %1:").arg(sourcePath()), name))
             return;
         QString error;
@@ -1037,7 +1061,7 @@ bool ListerWindow::restoreListerState(QSettings &s)
         for (int t = 0; t < paths.size(); ++t) {
             // A folder that is gone (card removed) falls back to its nearest parent.
             QString p = paths.at(t);
-            while (!p.isEmpty() && p != QLatin1String("/") && !QFileInfo(p).isDir())
+            while (Location::isLocal(p) && !p.isEmpty() && p != QLatin1String("/") && !QFileInfo(p).isDir())
                 p = QFileInfo(p).absolutePath();
             if (p.isEmpty())
                 p = QDir::homePath();

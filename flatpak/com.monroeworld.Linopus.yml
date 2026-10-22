@@ -6,6 +6,7 @@ command: linopus
 
 finish-args:
   - --share=ipc
+  - --share=network
   - --socket=wayland
   - --socket=fallback-x11
   - --device=dri
@@ -18,8 +19,50 @@ finish-args:
   # Button commands run real system tools through `flatpak-spawn --host`
   # (phase 3).
   - --talk-name=org.freedesktop.Flatpak
+  # Server passwords: KIO asks the desktop's password server and wallet.
+  - --talk-name=org.kde.kiod6
+  - --talk-name=org.kde.kpasswdserver6
+  - --talk-name=org.kde.kwalletd6
+  - --talk-name=org.kde.kwalletd5
+  - --talk-name=org.freedesktop.secrets
+  # SSH keys and known hosts for SFTP live in ~/.ssh (covered by host).
+
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /share/doc
+  - /share/man
+  - '*.a'
 
 modules:
+  # SFTP support for KIO.
+  - name: libssh
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DWITH_EXAMPLES=OFF
+      - -DUNIT_TESTING=OFF
+      - -DCLIENT_TESTING=OFF
+      - -DSERVER_TESTING=OFF
+      - -DWITH_GSSAPI=OFF
+    sources:
+      - type: git
+        url: https://git.libssh.org/projects/libssh.git
+        tag: libssh-0.11.3
+
+  # The KIO workers that are not part of the KDE runtime: sftp, fish,
+  # archive (zip, tar, 7z as folders) and more.
+  - name: kio-extras
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_TESTING=OFF
+    sources:
+      - type: git
+        url: https://invent.kde.org/network/kio-extras.git
+        tag: v25.08.3
+
   - name: linopus
     buildsystem: cmake-ninja
     config-opts:
@@ -31,5 +74,6 @@ modules:
         skip:
           - build
           - build-core
+          - build-kio
           - .flatpak-builder
           - flatpak-build

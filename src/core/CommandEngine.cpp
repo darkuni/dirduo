@@ -3,6 +3,8 @@
 #include "core/AliasManager.h"
 #include "core/FileOps.h"
 #include "core/JobManager.h"
+#include "core/Location.h"
+#include "core/RemoteBackend.h"
 
 #include <QClipboard>
 #include <QDir>
@@ -40,13 +42,6 @@ bool parseWhenExists(const QString &value, CollisionAction &out)
     return true;
 }
 
-QList<QUrl> toUrls(const QStringList &paths)
-{
-    QList<QUrl> urls;
-    for (const QString &p : paths)
-        urls << QUrl::fromLocalFile(p);
-    return urls;
-}
 
 } // namespace
 
@@ -69,9 +64,9 @@ QString CommandEngine::resolvePath(const QString &input, const QString &base) co
     const QString resolved = m_aliases.resolve(input);
     if (resolved.isEmpty())
         return resolved;
-    if (QDir::isAbsolutePath(resolved))
-        return QDir::cleanPath(resolved);
-    return QDir::cleanPath(QDir(base).filePath(resolved));
+    if (Location::isRemote(resolved) || QDir::isAbsolutePath(resolved))
+        return Location::clean(resolved);
+    return Location::join(base, resolved);
 }
 
 bool CommandEngine::run(const QString &script, CommandContext &ctx)
@@ -104,7 +99,7 @@ bool CommandEngine::run(const QString &script, CommandContext &ctx)
             out << ctx.selectedPaths();
         } else if (c == QLatin1String("file")) {
             for (const QString &p : ctx.selectedPaths())
-                out << QFileInfo(p).fileName();
+                out << Location::fileName(p);
         } else if (c == QLatin1String("focusedpath")) {
             const QString f = ctx.focusedPath();
             if (!f.isEmpty())
@@ -194,6 +189,11 @@ bool CommandEngine::cmdGo(const ParsedCommand &cmd, CommandContext &ctx, QString
     paths << cmd.positionalExcept(kGoFlags);
     if (!paths.isEmpty()) {
         const QString target = resolvePath(paths.first(), ctx.sourcePath());
+        if (Location::isRemote(target)) {
+            // Whether it exists is the server's to say; the display reports it.
+            resolved.args[QStringLiteral("PATH")] = QStringList{target};
+            return ctx.go(resolved, error);
+        }
         const QFileInfo fi(target);
         if (!fi.exists()) {
             if (error)
@@ -265,7 +265,7 @@ bool CommandEngine::cmdCopy(const ParsedCommand &cmd, CommandContext &ctx, bool 
             *error = kCancelled;
         return false;
     }
-    if (!QFileInfo(dest).isDir()) {
+    if (Location::isLocal(dest) && !QFileInfo(dest).isDir()) {
         if (error)
             *error = QStringLiteral("\"%1\" is not a folder.").arg(dest);
         return false;
@@ -281,7 +281,7 @@ bool CommandEngine::cmdCopy(const ParsedCommand &cmd, CommandContext &ctx, bool 
     QMap<QString, QString> newNames;
     if (cmd.hasFlag(QStringLiteral("AS"))) {
         for (const QString &src : sources) {
-            QString name = QFileInfo(src).fileName();
+            QString name = Location::fileName(src);
             const QString label = QStringLiteral("%1 \"%2\" as:").arg(move ? QStringLiteral("Move") : QStringLiteral("Copy"), name);
             if (!ctx.promptText(move ? QStringLiteral("Move As") : QStringLiteral("Copy As"), label, name)) {
                 if (error)
@@ -294,7 +294,7 @@ bool CommandEngine::cmdCopy(const ParsedCommand &cmd, CommandContext &ctx, bool 
                     *error = why;
                 return false;
             }
-            newNames.insert(QDir::cleanPath(src), name.trimmed());
+            newNames.insert(Location::clean(src), name.trimmed());
         }
     }
 
@@ -310,13 +310,19 @@ bool CommandEngine::cmdDelete(const ParsedCommand &cmd, CommandContext &ctx, QSt
             *error = kCancelled;
         return false;
     }
-    const bool permanent = cmd.hasFlag(QStringLiteral("NORECYCLE"));
+    bool anyRemote = false;
+    for (const QString &s : sources)
+        anyRemote = anyRemote || Location::isRemote(s);
+    // Servers and archives have no trash: deleting there is always permanent.
+    const bool permanent = cmd.hasFlag(QStringLiteral("NORECYCLE")) || anyRemote;
     if (permanent) {
         if (!cmd.hasFlag(QStringLiteral("QUIET"))) {
-            const QString what = sources.size() == 1 ? QStringLiteral("\"%1\"").arg(QFileInfo(sources.first()).fileName())
+            const QString what = sources.size() == 1 ? QStringLiteral("\"%1\"").arg(Location::fileName(sources.first()))
                                                       : QStringLiteral("these %1 items").arg(sources.size());
-            if (!ctx.confirm(QStringLiteral("Delete permanently"),
-                             QStringLiteral("Permanently delete %1? This cannot be undone.").arg(what))) {
+            const QString text = anyRemote && !cmd.hasFlag(QStringLiteral("NORECYCLE"))
+                ? QStringLiteral("Remote files cannot go to the trash. Permanently delete %1? This cannot be undone.").arg(what)
+                : QStringLiteral("Permanently delete %1? This cannot be undone.").arg(what);
+            if (!ctx.confirm(QStringLiteral("Delete permanently"), text)) {
                 if (error)
                     *error = kCancelled;
                 return false;
@@ -343,8 +349,25 @@ bool CommandEngine::cmdRename(const ParsedCommand &cmd, CommandContext &ctx, QSt
         return false;
     }
     QString newPath;
-    if (!FileOps::renameEntry(from, to, &newPath, error))
+    if (Location::isRemote(from)) {
+        QString why;
+        if (!FileOps::isValidFileName(to, &why)) {
+            if (error)
+                *error = why;
+            return false;
+        }
+        RemoteBackend *backend = RemoteBackend::instance();
+        if (!backend) {
+            if (error)
+                *error = QStringLiteral("Remote locations need the KIO build of Linopus.");
+            return false;
+        }
+        newPath = Location::join(Location::parent(from), to);
+        if (!backend->rename(from, newPath, error))
+            return false;
+    } else if (!FileOps::renameEntry(from, to, &newPath, error)) {
         return false;
+    }
     ctx.afterLocalChange({newPath});
     return true;
 }
@@ -367,7 +390,33 @@ bool CommandEngine::cmdCreateFolder(const ParsedCommand &cmd, CommandContext &ct
         names = value;
     }
     QString problems;
-    const QStringList created = FileOps::createFolders(parent, names, &problems);
+    QStringList created;
+    if (Location::isRemote(parent)) {
+        RemoteBackend *backend = RemoteBackend::instance();
+        QStringList issues;
+        for (QString name : names.split(QLatin1Char(','))) {
+            name = name.trimmed();
+            if (name.isEmpty())
+                continue;
+            QString why;
+            if (!FileOps::isValidFileName(name, &why)) {
+                issues << QStringLiteral("%1: %2").arg(name, why);
+                continue;
+            }
+            const QString full = Location::join(parent, name);
+            if (!backend) {
+                issues << QStringLiteral("Remote locations need the KIO build of Linopus.");
+                break;
+            }
+            if (backend->mkdir(full, &why))
+                created << full;
+            else
+                issues << QStringLiteral("%1: %2").arg(name, why);
+        }
+        problems = issues.join(QLatin1Char('\n'));
+    } else {
+        created = FileOps::createFolders(parent, names, &problems);
+    }
     if (!created.isEmpty())
         ctx.afterLocalChange(created);
     if (!problems.isEmpty()) {
@@ -395,7 +444,7 @@ bool CommandEngine::cmdClipboard(const ParsedCommand &cmd, CommandContext &ctx, 
             return false;
         }
         auto *mime = new QMimeData;
-        const QList<QUrl> urls = toUrls(paths);
+        const QList<QUrl> urls = Location::toUrls(paths);
         mime->setUrls(urls);
         // KDE and GNOME each mark a cut their own way; set both.
         mime->setData(QStringLiteral("application/x-kde-cutselection"), cut ? "1" : "0");
@@ -415,12 +464,12 @@ bool CommandEngine::cmdClipboard(const ParsedCommand &cmd, CommandContext &ctx, 
         }
         QStringList sources;
         for (const QUrl &u : mime->urls()) {
-            if (u.isLocalFile())
-                sources << u.toLocalFile();
+            if (u.isValid() && !u.scheme().isEmpty())
+                sources << Location::fromUrl(u);
         }
         if (sources.isEmpty()) {
             if (error)
-                *error = QStringLiteral("The clipboard holds no local files.");
+                *error = QStringLiteral("The clipboard holds no files.");
             return false;
         }
         bool isCut = mime->data(QStringLiteral("application/x-kde-cutselection")) == "1";

@@ -1,5 +1,6 @@
 #include "core/AliasManager.h"
 
+#include "core/Location.h"
 #include "core/Paths.h"
 
 #include <QDir>
@@ -131,8 +132,8 @@ void AliasManager::load()
     for (const QString &k : keys) {
         const QString name = k.toLower();
         const QString path = s.value(k).toString();
-        if (isValidName(name) && !isReservedName(name) && QDir::isAbsolutePath(path))
-            m_user.insert(name, QDir::cleanPath(path));
+        if (isValidName(name) && !isReservedName(name) && (QDir::isAbsolutePath(path) || Location::isRemote(path)))
+            m_user.insert(name, Location::clean(path));
     }
     s.endGroup();
 }
@@ -226,8 +227,8 @@ QString AliasManager::resolve(const QString &input) const
         if (!first.isEmpty() && !isReservedName(first)) {
             const QString target = aliasPath(first);
             if (!target.isEmpty()) {
-                const QString rest = slash == -1 ? QString() : s.mid(slash);
-                return QDir::cleanPath(target + rest);
+                const QString rest = slash == -1 ? QString() : s.mid(slash + 1);
+                return rest.isEmpty() ? Location::clean(target) : Location::join(target, rest);
             }
         }
         return QDir::cleanPath(s);
@@ -262,9 +263,9 @@ bool AliasManager::setUserAlias(const QString &name, const QString &path, QStrin
     if (isReservedName(name))
         return fail(QStringLiteral("\"/%1\" is a real folder in the root of the filesystem, so it cannot be an alias.").arg(name));
     const QString resolved = resolve(path);
-    if (!QDir::isAbsolutePath(resolved))
-        return fail(QStringLiteral("The alias target must be an absolute path."));
-    m_user.insert(name.toLower(), QDir::cleanPath(resolved));
+    if (!QDir::isAbsolutePath(resolved) && !Location::isRemote(resolved))
+        return fail(QStringLiteral("The alias target must be an absolute path or a server address."));
+    m_user.insert(name.toLower(), Location::clean(resolved));
     return true;
 }
 

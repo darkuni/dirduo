@@ -1,5 +1,8 @@
 #include "core/DirLister.h"
 
+#include "core/Location.h"
+#include "core/RemoteBackend.h"
+
 #include <QDir>
 #include <QDirIterator>
 #include <QFileInfo>
@@ -58,18 +61,56 @@ FileItemList DirLister::listNow(const QString &path, QString *error)
     return items;
 }
 
+bool DirLister::isBusy() const
+{
+    if (Location::isRemote(m_path))
+        return m_remote && m_remote->isBusy();
+    return m_busy;
+}
+
 void DirLister::open(const QString &path)
 {
-    m_path = QDir::cleanPath(path);
+    m_path = Location::clean(path);
     m_debounce.stop();
+    ++m_generation; // drop any local listing still in flight
+    if (Location::isRemote(m_path)) {
+        watch(); // stops watching the previous local folder
+        openRemote(false);
+        return;
+    }
     start(false);
     watch();
+}
+
+void DirLister::openRemote(bool isRefresh)
+{
+    RemoteBackend *backend = RemoteBackend::instance();
+    if (!backend) {
+        Q_EMIT failed(m_path, QStringLiteral("Remote folders need the KIO build of Linopus."));
+        return;
+    }
+    if (!m_remote) {
+        m_remote = backend->createLister(this);
+        connect(m_remote, &RemoteLister::listed, this, [this](const QString &loc, const FileItemList &items, bool refresh) {
+            if (loc == m_path)
+                Q_EMIT listed(loc, items, refresh);
+        });
+        connect(m_remote, &RemoteLister::failed, this, [this](const QString &loc, const QString &error) {
+            if (loc == m_path)
+                Q_EMIT failed(loc, error);
+        });
+    }
+    m_remote->open(m_path, isRefresh);
 }
 
 void DirLister::refresh()
 {
     if (m_path.isEmpty())
         return;
+    if (Location::isRemote(m_path)) {
+        openRemote(true);
+        return;
+    }
     if (m_busy) {
         m_refreshPending = true;
         return;
@@ -82,7 +123,7 @@ void DirLister::watch()
     const QStringList watched = m_watcher.directories();
     if (!watched.isEmpty())
         m_watcher.removePaths(watched);
-    if (QFileInfo(m_path).isDir())
+    if (Location::isLocal(m_path) && QFileInfo(m_path).isDir())
         m_watcher.addPath(m_path);
 }
 

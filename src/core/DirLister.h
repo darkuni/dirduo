@@ -6,9 +6,11 @@
 #include <QObject>
 #include <QTimer>
 
+class RemoteLister;
+
 // Lists one folder off the GUI thread and re-lists it when it changes on disk.
 // Results from an older request are dropped, so fast navigation never shows a
-// stale folder.
+// stale folder. Remote locations go to the RemoteBackend's lister.
 class DirLister : public QObject
 {
     Q_OBJECT
@@ -18,7 +20,7 @@ public:
     void open(const QString &path);
     void refresh();
     QString path() const { return m_path; }
-    bool isBusy() const { return m_busy; }
+    bool isBusy() const;
 
     // Synchronous listing, shared with tests.
     static FileItemList listNow(const QString &path, QString *error);
@@ -31,6 +33,7 @@ Q_SIGNALS:
 private:
     void start(bool isRefresh);
     void watch();
+    void openRemote(bool isRefresh);
 
     QString m_path;
     QFileSystemWatcher m_watcher;
@@ -38,4 +41,5 @@ private:
     quint64 m_generation = 0;
     bool m_busy = false;
     bool m_refreshPending = false;
+    RemoteLister *m_remote = nullptr;
 };

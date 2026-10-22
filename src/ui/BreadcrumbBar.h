@@ -43,7 +43,11 @@ private:
         QString path;
         QToolButton *button = nullptr;
         QToolButton *arrow = nullptr;
+        QString icon;
+        bool canList = true; // sibling dropdown (local folders only)
     };
+
+    void appendLocalCrumbs(const QString &path);
 
     void rebuild();
     void relayout();

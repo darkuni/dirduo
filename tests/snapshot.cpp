@@ -4,6 +4,7 @@
 
 #include "core/AliasManager.h"
 #include "core/JobManager.h"
+#include "core/Location.h"
 #include "core/Paths.h"
 #include "ui/AppContext.h"
 #include "ui/CollisionDialog.h"
@@ -13,11 +14,15 @@
 #include "ui/FolderTab.h"
 #include "ui/ListerWindow.h"
 #include "ui/ProgressWindow.h"
+#ifdef LINOPUS_HAVE_KIO
+#include "kio/KioBackend.h"
+#endif
 
 #include <QAbstractItemView>
 #include <QApplication>
 #include <QDir>
 #include <QFile>
+#include <QProcess>
 #include <QIcon>
 #include <QTemporaryDir>
 #include <QTest>
@@ -61,6 +66,9 @@ int main(int argc, char *argv[])
     QDir().mkpath(root + QStringLiteral("/Emulation/roms/c64"));
     QDir().mkpath(root + QStringLiteral("/Backup"));
 
+#ifdef LINOPUS_HAVE_KIO
+    KioBackend kio;
+#endif
     AppContext context;
     ListerWindow *w = context.newLister(root);
     w->resize(1280, 800); // Steam Deck screen
@@ -160,6 +168,45 @@ int main(int argc, char *argv[])
         context.jobs().cancel(id);
     context.jobs().waitForIdle(5000);
     QTest::qWait(200);
+
+#ifdef LINOPUS_HAVE_KIO
+    // Servers and archives, when run through tests/remote/run-remote-tests.sh.
+    const QString ftp = qEnvironmentVariable("LINOPUS_TEST_FTP");
+    const QString ftpDir = qEnvironmentVariable("LINOPUS_TEST_FTP_DIR");
+    if (!ftp.isEmpty()) {
+        writeFile(ftpDir + QStringLiteral("/pub/podcasts/Passenger Seat Radio 101.mp3"), 3 * 1024 * 1024);
+        writeFile(ftpDir + QStringLiteral("/pub/podcasts/Passenger Seat Radio 102.mp3"), 3 * 1024 * 1024);
+        writeFile(ftpDir + QStringLiteral("/pub/podcasts/cover.jpg"), 90000);
+        QDir().mkpath(ftpDir + QStringLiteral("/pub/podcasts/archive"));
+        w->runCommand(QStringLiteral("Set DUAL=vertical"));
+        w->display(1)->currentTab()->navigate(root + QStringLiteral("/Music"));
+        w->display(0)->currentTab()->navigate(ftp + QStringLiteral("/pub/podcasts"));
+        QTest::qWait(2500);
+        shot(w, out, QStringLiteral("10-ftp-server"));
+
+        QProcess py;
+        py.start(QStringLiteral("python3"), {QStringLiteral("-c"),
+                                             QStringLiteral("import zipfile,sys\n"
+                                                            "z=zipfile.ZipFile(sys.argv[1],'w')\n"
+                                                            "z.writestr('c64/Galaga.d64', b'g'*174848)\n"
+                                                            "z.writestr('c64/Elite.d64', b'e'*174848)\n"
+                                                            "z.writestr('amiga/Deluxe Galaga.adf', b'a'*901120)\n"
+                                                            "z.writestr('readme.txt', b'hello')\n"
+                                                            "z.close()"),
+                                             root + QStringLiteral("/Emulation/roms.zip")});
+        py.waitForFinished(10000);
+        w->display(0)->currentTab()->navigate(root + QStringLiteral("/Emulation"));
+        QTest::qWait(600);
+        w->display(0)->currentTab()->selectPaths({root + QStringLiteral("/Emulation/roms.zip")});
+        QTest::qWait(300);
+        // Double-click equivalent: open the archive as a folder.
+        QTest::keyClick(w->display(0)->currentTab()->view(), Qt::Key_Return);
+        QTest::qWait(1500);
+        w->display(0)->currentTab()->navigate(Location::join(w->display(0)->currentTab()->path(), QStringLiteral("c64")));
+        QTest::qWait(1500);
+        shot(w, out, QStringLiteral("11-inside-zip"));
+    }
+#endif
 
     w->close();
     return 0;

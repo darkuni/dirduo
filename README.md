@@ -24,7 +24,14 @@ Targets: SteamOS Desktop Mode on the Steam Deck (x86_64) and Steam Frame (aarch6
 - Toolbars go anywhere: top, bottom, left, right, or between the two displays (where Drives starts). Between the displays they run vertically when the displays are side by side and horizontally when stacked. Several toolbars stack as rows or columns. Right-click a toolbar's handle or empty space, or use Window > Toolbars, to move, stack, reorder or hide it. Placement is saved per lister
 - Session: listers, tabs, layout and views come back next launch
 
-FTP/SFTP and archives-as-folders arrive with the KIO backend (see "Phase 1 gaps" below).
+Servers and archives (KIO):
+
+- Type a server address in any address bar: `sftp://deck@nas/media`, `ftp://host/pub`, `smb://box/share`, `webdav://...`. Server folders behave like local ones: browse, tabs, Copy/Move between a server and a drive (either direction), Copy As, Delete, Rename, New Folder, drag and drop
+- Copies to and from servers run in their own progress windows with pause, cancel and speed, and use the same "already exists" dialog as local copies. Jobs to the same server queue behind each other
+- Archives open as folders: double-click (or Enter) on a zip, tar or 7z goes inside it; Up leaves it. Copy files straight out of them. Right-click > Open in Application still hands the archive to an archiver
+- Aliases can point at servers: an alias `nas` = `sftp://deck@nas/media` makes `/nas/Movies` work anywhere
+- Servers have no trash, so Delete on a server is permanent and says so before it happens
+- Passwords go through KDE's password prompt and wallet; SFTP also uses your `~/.ssh` keys
 
 ## Commands
 
@@ -152,13 +159,16 @@ flatpak install --user linopus-x86_64.flatpak
 
 ```sh
 ctest --test-dir build --output-on-failure
+tests/remote/run-remote-tests.sh build   # starts an FTP and SSH server on localhost, needs KIO
 QT_QPA_PLATFORM=offscreen ./build/linopus_snapshot /tmp/linopus-shots
 ```
 
 `linopus_snapshot` builds a sample folder tree, drives the lister through a few commands and saves a PNG at each step.
 
-## Phase 1 gaps
+## Known gaps
 
-- **FTP and SFTP**: the spec puts remote folders on KIO. The build machine for this first pass had no KDE Frameworks 6 packages, so phase 1 runs on a local filesystem layer. Remote access and archives-as-folders land next, on KIO, in the Flatpak build where KDE Frameworks 6 is part of the runtime.
+- **Local copies run on Linopus's own engine, remote ones on KIO.** Local copies have per-file progress and the folder-merge rules described above; remote copies follow KIO's rules (a folder copied onto an existing folder merges into it).
+- **SMB (Windows shares)** needs Samba's client library, which the Flatpak does not bundle yet.
+- **Navigation lock** only mirrors local folders.
 - **Error handling inside a job** skips and reports the item that failed (listed when the job finishes) rather than asking Retry/Skip/Abort per file.
 - **A single display uses the most recently used other lister as its destination**, as in Opus; with only one lister open, Copy asks for a folder.

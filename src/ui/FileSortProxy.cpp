@@ -18,7 +18,12 @@ void FileSortProxy::setShowHidden(bool show)
     if (m_showHidden == show)
         return;
     m_showHidden = show;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+    beginFilterChange();
+    endFilterChange(QSortFilterProxyModel::Direction::Rows);
+#else
     invalidateFilter();
+#endif
 }
 
 bool FileSortProxy::filterAcceptsRow(int sourceRow, const QModelIndex &) const

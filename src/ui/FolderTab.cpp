@@ -2,6 +2,8 @@
 
 #include "core/DirLister.h"
 #include "core/FileOps.h"
+#include "core/Location.h"
+#include "core/RemoteBackend.h"
 #include "ui/FileListModel.h"
 #include "ui/FileSortProxy.h"
 #include "ui/RenameDelegate.h"
@@ -129,17 +131,13 @@ void FolderTab::focusView()
 
 QString FolderTab::title() const
 {
-    if (m_path == QLatin1String("/"))
-        return QStringLiteral("/");
-    if (m_path == QDir::homePath())
-        return QStringLiteral("Home");
-    const QString name = QFileInfo(m_path).fileName();
+    const QString name = Location::title(m_path);
     return name.isEmpty() ? m_path : name;
 }
 
 void FolderTab::navigate(const QString &rawPath, bool addToHistory)
 {
-    const QString path = QDir::cleanPath(rawPath);
+    const QString path = Location::clean(rawPath);
     if (path == m_path) {
         refresh();
         return;
@@ -181,10 +179,10 @@ bool FolderTab::forward()
 
 bool FolderTab::up()
 {
-    if (m_path.isEmpty() || m_path == QLatin1String("/"))
+    if (m_path.isEmpty() || Location::isRoot(m_path))
         return false;
     const QString from = m_path;
-    const QString parent = QFileInfo(m_path).absolutePath();
+    const QString parent = Location::parent(m_path);
     navigate(parent);
     m_pendingSelection = {from}; // land on the folder we came out of
     return true;
@@ -217,7 +215,7 @@ void FolderTab::onFailed(const QString &path, const QString &error)
         return;
     // The folder vanished while open (deleted, card pulled): back out to the
     // nearest folder that still exists.
-    if (!QFileInfo::exists(path)) {
+    if (Location::isLocal(path) && !QFileInfo::exists(path)) {
         QString parent = path;
         while (parent != QLatin1String("/") && !QFileInfo(parent).isDir())
             parent = QFileInfo(parent).absolutePath();
@@ -303,7 +301,7 @@ void FolderTab::applyPendingSelection()
     QItemSelection selection;
     QModelIndex first;
     for (const QString &p : std::as_const(m_pendingSelection)) {
-        const int row = m_model->rowForPath(QDir::cleanPath(p));
+        const int row = m_model->rowForPath(Location::clean(p));
         if (row < 0)
             continue;
         const QModelIndex idx = m_proxy->mapFromSource(m_model->index(row, 0));
@@ -449,10 +447,30 @@ void FolderTab::activateIndex(const QModelIndex &proxyIndex)
     if (!proxyIndex.isValid())
         return;
     const QString path = proxyIndex.data(FileListModel::PathRole).toString();
-    if (proxyIndex.data(FileListModel::IsDirRole).toBool())
+    if (proxyIndex.data(FileListModel::IsDirRole).toBool()) {
         navigate(path);
-    else
-        Q_EMIT openFileRequested(path);
+        return;
+    }
+    // Archives open as folders, Opus style; "Open in Application" from the
+    // context menu still hands them to an archiver.
+    if (Location::isLocal(path)) {
+        if (RemoteBackend *backend = RemoteBackend::instance()) {
+            const QString inside = backend->archiveLocation(path);
+            if (!inside.isEmpty()) {
+                navigate(inside);
+                return;
+            }
+        }
+    }
+    Q_EMIT openFileRequested(path);
+}
+
+bool FolderTab::isFolder(const QString &path) const
+{
+    const int row = m_model->rowForPath(Location::clean(path));
+    if (row >= 0)
+        return m_model->item(row).isDir;
+    return Location::isLocal(path) && QFileInfo(path).isDir();
 }
 
 bool FolderTab::eventFilter(QObject *watched, QEvent *event)
@@ -506,7 +524,7 @@ bool FolderTab::eventFilter(QObject *watched, QEvent *event)
             } else {
                 // Several selected: open each file; folders need a double-click.
                 for (const QString &p : sel) {
-                    if (!QFileInfo(p).isDir())
+                    if (!isFolder(p))
                         Q_EMIT openFileRequested(p);
                 }
             }

@@ -1,6 +1,7 @@
 #include "ui/BreadcrumbBar.h"
 
 #include "core/AliasManager.h"
+#include "core/Location.h"
 
 #include <QAbstractItemView>
 #include <QCompleter>
@@ -16,6 +17,7 @@
 #include <QStyle>
 #include <QTimer>
 #include <QToolButton>
+#include <QUrl>
 
 namespace {
 constexpr int kMaxMenuEntries = 400;
@@ -99,7 +101,7 @@ bool BreadcrumbBar::isEditing() const
 
 void BreadcrumbBar::startEditing()
 {
-    m_edit->setText(m_path);
+    m_edit->setText(Location::display(m_path));
     m_stack->setCurrentWidget(m_edit);
     m_edit->setFocus(Qt::ShortcutFocusReason);
     m_edit->selectAll();
@@ -120,22 +122,42 @@ void BreadcrumbBar::rebuild()
     }
     m_crumbs.clear();
 
-    // Paths under the home folder start at "Home".
-    const QString home = QDir::homePath();
-    QString base;
-    QStringList parts;
-    if (m_path == home || m_path.startsWith(home + QLatin1Char('/'))) {
-        m_crumbs.append({QStringLiteral("Home"), home, nullptr, nullptr});
-        base = home;
-        parts = m_path.mid(home.size()).split(QLatin1Char('/'), Qt::SkipEmptyParts);
+    if (Location::isArchive(m_path) && !Location::archiveFile(m_path).isEmpty()) {
+        // roms.zip/c64: the folders leading to the archive, then inside it.
+        const QString file = Location::archiveFile(m_path);
+        appendLocalCrumbs(QFileInfo(file).absolutePath());
+        const QString scheme = QUrl(m_path).scheme();
+        QString inside = scheme + QLatin1Char(':') + file;
+        Crumb archive{QFileInfo(file).fileName(), inside};
+        archive.icon = QStringLiteral("application-zip");
+        archive.canList = false;
+        m_crumbs.append(archive);
+        const QString rest = QUrl(m_path).path().mid(file.size());
+        for (const QString &part : rest.split(QLatin1Char('/'), Qt::SkipEmptyParts)) {
+            inside = Location::join(inside, part);
+            Crumb c{part, inside};
+            c.canList = false;
+            m_crumbs.append(c);
+        }
+    } else if (Location::isRemote(m_path)) {
+        // sftp://deck@nas/media/Movies: server, then folders.
+        const QUrl url(m_path);
+        QUrl root = url;
+        root.setPath(QStringLiteral("/"));
+        const QString rootLoc = Location::clean(root.toString(QUrl::FullyEncoded));
+        Crumb server{url.host().isEmpty() ? url.scheme() + QLatin1Char(':') : url.host(), rootLoc};
+        server.icon = QStringLiteral("network-server");
+        server.canList = false;
+        m_crumbs.append(server);
+        QString at = rootLoc;
+        for (const QString &part : url.path().split(QLatin1Char('/'), Qt::SkipEmptyParts)) {
+            at = Location::join(at, part);
+            Crumb c{part, at};
+            c.canList = false;
+            m_crumbs.append(c);
+        }
     } else {
-        m_crumbs.append({QStringLiteral("/"), QStringLiteral("/"), nullptr, nullptr});
-        base = QString();
-        parts = m_path.split(QLatin1Char('/'), Qt::SkipEmptyParts);
-    }
-    for (const QString &part : std::as_const(parts)) {
-        base += QLatin1Char('/') + part;
-        m_crumbs.append({part, base, nullptr, nullptr});
+        appendLocalCrumbs(m_path);
     }
 
     int insertAt = 1; // after the overflow button
@@ -144,10 +166,10 @@ void BreadcrumbBar::rebuild()
         c.button = new QToolButton(m_crumbArea);
         c.button->setAutoRaise(true);
         c.button->setText(c.label);
-        c.button->setToolTip(c.path);
+        c.button->setToolTip(Location::display(c.path));
         c.button->setFocusPolicy(Qt::NoFocus);
-        if (i == 0 && c.label == QLatin1String("Home"))
-            c.button->setIcon(QIcon::fromTheme(QStringLiteral("user-home")));
+        if (!c.icon.isEmpty())
+            c.button->setIcon(QIcon::fromTheme(c.icon));
         if (i == m_crumbs.size() - 1) {
             QFont f = c.button->font();
             f.setBold(true);
@@ -174,6 +196,28 @@ void BreadcrumbBar::rebuild()
         m_crumbLayout->insertWidget(insertAt++, c.arrow);
     }
     relayout();
+}
+
+void BreadcrumbBar::appendLocalCrumbs(const QString &path)
+{
+    // Paths under the home folder start at "Home".
+    const QString home = QDir::homePath();
+    QString base;
+    QStringList parts;
+    if (path == home || path.startsWith(home + QLatin1Char('/'))) {
+        Crumb c{QStringLiteral("Home"), home};
+        c.icon = QStringLiteral("user-home");
+        m_crumbs.append(c);
+        base = home;
+        parts = path.mid(home.size()).split(QLatin1Char('/'), Qt::SkipEmptyParts);
+    } else {
+        m_crumbs.append({QStringLiteral("/"), QStringLiteral("/")});
+        parts = path.split(QLatin1Char('/'), Qt::SkipEmptyParts);
+    }
+    for (const QString &part : std::as_const(parts)) {
+        base += QLatin1Char('/') + part;
+        m_crumbs.append({part, base});
+    }
 }
 
 void BreadcrumbBar::fillChildMenu(QToolButton *arrow, const QString &dir)
@@ -225,6 +269,7 @@ void BreadcrumbBar::relayout()
         const bool visible = i >= firstVisible;
         m_crumbs[i].button->setVisible(visible);
         m_crumbs[i].arrow->setVisible(visible);
+        m_crumbs[i].arrow->setEnabled(m_crumbs[i].canList);
         if (!visible) {
             const QString target = m_crumbs[i].path;
             QAction *a = menu->addAction(m_crumbs[i].label);
