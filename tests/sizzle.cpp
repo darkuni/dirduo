@@ -21,6 +21,9 @@
 #include "ui/GroupTreeView.h"
 #include "ui/ImageConvertDialog.h"
 #include "ui/HistoryDialog.h"
+#include "ui/MetadataPane.h"
+#include "core/Metadata.h"
+#include <QLineEdit>
 #include "ui/SelectDialog.h"
 #include "ui/ListerWindow.h"
 #include "ui/Style.h"
@@ -776,6 +779,50 @@ int main(int argc, char *argv[])
         shotWithDialog(w, &dlg, QStringLiteral("18-workbench-undo-list"));
         dlg.showPage(HistoryDialog::Page::Log);
         shotWithDialog(w, &dlg, QStringLiteral("19-workbench-file-log"));
+    }
+
+    // 20. The Metadata pane over podcast episodes, Linopus Dark.
+    {
+        const QString pod = r + QStringLiteral("/Music/Podcasts");
+        QDir().mkpath(pod);
+        for (int i = 1; i <= 6; ++i) {
+            const QString f = pod + QStringLiteral("/PSR %1 - %2.wav").arg(100 + i).arg(
+                QStringList{QStringLiteral("Steam Machine BOM"), QStringLiteral("C64 Ultimate"), QStringLiteral("Forgotten Formats"),
+                            QStringLiteral("VCF Southwest"), QStringLiteral("Deck Docking"), QStringLiteral("Deluxe Galaga")}.at(i - 1));
+            QByteArray b("RIFF");
+            const quint32 rate = 8000, bytes = rate * 2 * 60 * i;
+            auto u32 = [&b](quint32 v) { for (int k = 0; k < 4; ++k) b.append(char((v >> (8 * k)) & 0xff)); };
+            auto u16 = [&b](quint16 v) { b.append(char(v & 0xff)); b.append(char(v >> 8)); };
+            u32(36 + bytes);
+            b.append("WAVEfmt ");
+            u32(16); u16(1); u16(1); u32(rate); u32(rate * 2); u16(2); u16(16);
+            b.append("data");
+            u32(bytes);
+            b.append(QByteArray(int(bytes), '\0'));
+            QFile out(f);
+            if (out.open(QIODevice::WriteOnly))
+                out.write(b);
+            out.close();
+            MediaEdit e;
+            e.title = QFileInfo(f).completeBaseName().mid(10);
+            e.artist = QStringLiteral("Shane");
+            e.album = QStringLiteral("Passenger Seat Radio");
+            e.genre = QStringLiteral("Podcast");
+            e.year = 2026;
+            e.track = 100 + i;
+            QString err;
+            Metadata::write(f, e, &err);
+        }
+        run(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet DUAL=off\nSet VIEW=details\nSet VIEWER=off"));
+        go(pod, QString());
+        run(QStringLiteral("Set COLUMNSTOGGLE=modified\nSet COLUMNSTOGGLE=title\nSet COLUMNSTOGGLE=track\nSet COLUMNSTOGGLE=length"));
+        run(QStringLiteral("Select PATTERN=*.wav"));
+        run(QStringLiteral("Metadata PANE=on"));
+        QTest::qWait(400);
+        w->metadataPane()->loadNow();
+        QTest::keyClicks(w->metadataPane()->field(MetadataPane::Comment), QStringLiteral("Recorded on the road"));
+        shot(w, QStringLiteral("20-dark-metadata-pane"), 900);
+        run(QStringLiteral("Metadata PANE=off\nSet COLUMNSTOGGLE=modified\nSet COLUMNSTOGGLE=title\nSet COLUMNSTOGGLE=track\nSet COLUMNSTOGGLE=length\nSet DUAL=vertical"));
     }
 
     // 12. One view, four themes.

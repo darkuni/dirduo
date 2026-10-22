@@ -107,6 +107,8 @@ MetadataPane::MetadataPane(CommandEngine &engine, QWidget *parent)
     buttons->addWidget(m_revert);
     buttons->addWidget(m_apply);
     layout->addLayout(buttons);
+    // Wide enough for an album name without scrolling the field.
+    body->setMinimumWidth(fontMetrics().averageCharWidth() * 40);
     setWidget(body);
 
     connect(m_apply, &QPushButton::clicked, this, &MetadataPane::apply);
