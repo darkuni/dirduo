@@ -54,6 +54,14 @@ Servers and archives (KIO):
 - Drop files on a button to run it on those files instead of the selection
 - Command console (Ctrl+Shift+P): type any command and run it in the lister; Tab completes, Up/Down for history, `help` and `help Set` explain
 
+## Also in
+
+- Advanced Rename (Shift+F2, or right-click Rename): wildcards, find and replace or regular expressions; numbering (`#`, `[##]`), dates (`[date]`, `[mdate]`), `[name]`, `[ext]`, `[parent]`; case changes (Title Case keeps Roman numerals: Turrican II); a live before and after preview that refuses clashes; presets; Edit > Undo Rename. Scriptable: `Rename OLDNAME=*.jpg NEWNAME="Holiday ###.*"`
+- Paste as file: with a picture or text on the clipboard, Paste makes a PNG or TXT in the source (Edit > Paste as File... to name it)
+- Print Folder (File > Print Folder): the listing as shown, as text, CSV or HTML, to the clipboard or a file
+- Settings backup (File > Settings): every setting in one zip, restored in one step on another machine
+- Text and icon size (View > Text and Icon Size): Large and Larger for the Deck's screen
+
 ## Commands
 
 Every button, menu item, hotkey, drop and inline rename runs one of these. Button functions can hold several lines; they run in order and stop at the first failure.
@@ -64,10 +72,12 @@ Every button, menu item, hotkey, drop and inline rename runs one of these. Butto
 | `Copy` | `MOVE`, `AS`, `FILE=...`, `TO=...`, `WHENEXISTS=ask\|replace\|newer\|skip\|rename` |
 | `Move` | same as `Copy MOVE` |
 | `Delete` | `NORECYCLE` (permanent, asks first), `QUIET`, `FILE=...` |
-| `Rename` | no arguments: rename in place; or `FROM=... TO=...` |
+| `Rename` | no arguments: rename in place; `FROM=... TO=...`; `ADVANCED`; `UNDO`; `OLDNAME=... NEWNAME=...` with `MODE=wildcard\|findreplace\|regexp`, `CASE=lower\|upper\|title\|sentence`, `EXTCASE=`, `IGNOREEXT`, `CASESENSITIVE`, `START=`, `STEP=`, `WIDTH=`, `TRIM`, `PRESET=` |
 | `CreateFolder` | `NAME="A, B, C"` makes all three; no name asks; `IN=...` |
-| `Clipboard` | `COPY`, `CUT`, `PASTE` |
-| `Set` | `DUAL=on\|off\|toggle\|vertical\|horizontal\|flip`, `SOURCE=toggle`, `DESTLOCK=`, `NAVLOCK=`, `VIEW=details\|list\|icons`, `HIDDEN=`, `THEME=<name>\|next`, `GROUPBY=none\|type\|name\|size\|modified\|extension\|folder`, `GROUPCOLLAPSE=all\|none\|toggle`, `FILTERBAR=`, `FILTER=<text>` (a leading `!` hides matches), `CHECKBOXES=`, `FOLDERSIZES=`, `FLATVIEW=off\|grouped\|mixed\|nofolders\|toggle`, `TREE=off\|shared\|separate\|toggle`, `FORMAT=save\|savesub\|clear\|savedefault\|cleardefault`, `AUTOFORMAT=`, `COLUMNSTOGGLE=<column>`. Switches take `on\|off\|toggle` |
+| `Clipboard` | `COPY`, `CUT`, `PASTE` (a picture or text pastes as a new file), `AS` |
+| `Print` | `FOLDER`, `AS=text\|csv\|html`, `TO=clipboard\|ask\|<file>`, `SELECTED` |
+| `Settings` | `BACKUP=<file>\|ask`, `RESTORE=<file>\|ask`, `QUIET` |
+| `Set` | `DUAL=on\|off\|toggle\|vertical\|horizontal\|flip`, `SOURCE=toggle`, `DESTLOCK=`, `NAVLOCK=`, `VIEW=details\|list\|icons`, `HIDDEN=`, `THEME=<name>\|next`, `SIZE=normal\|large\|larger\|bigger\|smaller`, `GROUPBY=none\|type\|name\|size\|modified\|extension\|folder`, `GROUPCOLLAPSE=all\|none\|toggle`, `FILTERBAR=`, `FILTER=<text>` (a leading `!` hides matches), `CHECKBOXES=`, `FOLDERSIZES=`, `FLATVIEW=off\|grouped\|mixed\|nofolders\|toggle`, `TREE=off\|shared\|separate\|toggle`, `FORMAT=save\|savesub\|clear\|savedefault\|cleardefault`, `AUTOFORMAT=`, `COLUMNSTOGGLE=<column>`. Switches take `on\|off\|toggle` |
 | `Select` | `ALL`, `NONE`, `INVERT`, `PATTERN=*.mp3` |
 | `Toolbar` | `NAME=buttons\|drives\|<yours>`, `PLACE=top\|bottom\|left\|right\|between`, `NEWROW`, `STATE=on\|off\|toggle`, `CUSTOMIZE` |
 
@@ -105,6 +115,7 @@ pods=/downloads/podcasts
 | Alt+Left / Alt+Right | Back / Forward |
 | Ctrl+L, Alt+D | Type a location |
 | F2 | Rename in place |
+| Shift+F2 | Advanced Rename |
 | Del / Shift+Del | Trash / delete permanently |
 | Ctrl+X / C / V | Cut / copy / paste files |
 | Ctrl+Shift+N | New folder(s) |
@@ -152,6 +163,7 @@ Each toolbar is `~/.config/linopus/toolbars/<id>.json`. Customize mode writes th
 - `~/.config/linopus/themes/`: your themes
 - `~/.config/linopus/labels.ini`: wildcard labels
 - `~/.config/linopus/formats.ini`: folder formats
+- `~/.config/linopus/rename.ini`: Advanced Rename presets
 
 Inside the Flatpak these are still the real `~/.config/linopus`, so the configuration copies straight to another machine.
 

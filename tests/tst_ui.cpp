@@ -4,6 +4,7 @@
 #include "ui/AppContext.h"
 #include "ui/BreadcrumbBar.h"
 #include "ui/ButtonBar.h"
+#include "ui/AdvancedRenameDialog.h"
 #include "ui/ButtonEditor.h"
 #include "ui/CommandConsole.h"
 #include "ui/CustomizeDialog.h"
@@ -23,6 +24,9 @@
 #include <QApplication>
 #include <QDir>
 #include <QCheckBox>
+#include <QComboBox>
+#include <QPushButton>
+#include <QTreeWidget>
 #include <QClipboard>
 #include <QImage>
 #include <QInputDialog>
@@ -938,6 +942,74 @@ private Q_SLOTS:
         QVERIFY(w->runCommand(QStringLiteral("Set SIZE=normal")));
         QCOMPARE(QApplication::font().pointSizeF(), before);
         QVERIFY(!runFailing(QStringLiteral("Set SIZE=huge")));
+    }
+
+    void advancedRenameScriptedAndUndo()
+    {
+        FolderTab *t = w->display(0)->currentTab();
+        t->selectAll();
+        QVERIFY(w->runCommand(QStringLiteral("Rename OLDNAME=*.txt NEWNAME=\"Note [##].txt\"")));
+        QTRY_VERIFY(QFile::exists(root + QStringLiteral("/a/Note 01.txt")));
+        QVERIFY(QFile::exists(root + QStringLiteral("/a/Note 03.txt")));
+        QVERIFY(!QFile::exists(root + QStringLiteral("/a/one.txt")));
+        // The renamed items stay selected.
+        QTRY_COMPARE(t->selectedPaths().size(), 3);
+        QVERIFY(w->runCommand(QStringLiteral("Rename UNDO")));
+        QVERIFY(QFile::exists(root + QStringLiteral("/a/one.txt")));
+        QVERIFY(!QFile::exists(root + QStringLiteral("/a/Note 01.txt")));
+        QVERIFY(!runFailing(QStringLiteral("Rename UNDO"))); // only once
+
+        // A clash renames nothing and says why.
+        t->selectAll();
+        QString err;
+        QVERIFY(!w->runCommandReporting(QStringLiteral("Rename OLDNAME=*.txt NEWNAME=same.txt"), &err));
+        QVERIFY(err.contains(QStringLiteral("Another item gets this name")));
+        QVERIFY(QFile::exists(root + QStringLiteral("/a/one.txt")));
+        // A preset.
+        RenameOptions up;
+        up.nameCase = RenameOptions::Case::Upper;
+        QVERIFY(RenamePresets::save(QStringLiteral("Shout"), up));
+        t->selectPaths({root + QStringLiteral("/a/two.txt")});
+        QTRY_COMPARE(t->selectedPaths().size(), 1);
+        QVERIFY(w->runCommand(QStringLiteral("Rename PRESET=Shout")));
+        QVERIFY(QFile::exists(root + QStringLiteral("/a/TWO.txt")));
+    }
+
+    void advancedRenameDialog()
+    {
+        const QStringList paths{root + QStringLiteral("/a/one.txt"), root + QStringLiteral("/a/three.txt"), root + QStringLiteral("/a/two.txt")};
+        RenameOptions o;
+        AdvancedRenameDialog dlg(paths, o, w);
+        // Nothing to change yet.
+        QVERIFY(!dlg.renameButton()->isEnabled());
+        dlg.oldEdit()->setText(QStringLiteral("t*.txt"));
+        dlg.newEdit()->setText(QStringLiteral("Disk ?*.d64"));
+        dlg.refreshNow();
+        QCOMPARE(dlg.previewTree()->topLevelItemCount(), 3);
+        QCOMPARE(dlg.previewTree()->topLevelItem(0)->text(1), QStringLiteral("one.txt")); // no match
+        QCOMPARE(dlg.previewTree()->topLevelItem(1)->text(1), QStringLiteral("Disk hree.d64"));
+        QVERIFY(dlg.renameButton()->isEnabled());
+        // Switch to find and replace with a clash: Rename greys out.
+        dlg.modeBox()->setCurrentIndex(1);
+        dlg.oldEdit()->setText(QStringLiteral("o"));
+        dlg.newEdit()->setText(QStringLiteral("x"));
+        dlg.refreshNow();
+        QCOMPARE(dlg.previewTree()->topLevelItem(0)->text(1), QStringLiteral("xne.txt"));
+        dlg.modeBox()->setCurrentIndex(2);
+        dlg.oldEdit()->setText(QStringLiteral(".*"));
+        dlg.newEdit()->setText(QStringLiteral("all"));
+        dlg.refreshNow();
+        QVERIFY(!dlg.renameButton()->isEnabled());
+        // A real rename through the dialog.
+        dlg.modeBox()->setCurrentIndex(0);
+        dlg.oldEdit()->setText(QStringLiteral("*.*"));
+        dlg.newEdit()->setText(QStringLiteral("[parent] [#] *.*"));
+        dlg.refreshNow();
+        QCOMPARE(dlg.previewTree()->topLevelItem(2)->text(1), QStringLiteral("a 3 two.txt"));
+        dlg.accept();
+        QCOMPARE(dlg.result(), int(QDialog::Accepted));
+        QVERIFY(QFile::exists(root + QStringLiteral("/a/a 1 one.txt")));
+        QCOMPARE(dlg.done().size(), 3);
     }
 
     void sessionRoundTrip()

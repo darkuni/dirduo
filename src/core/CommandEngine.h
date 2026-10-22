@@ -2,6 +2,7 @@
 
 #include "core/CommandParser.h"
 #include "core/Job.h"
+#include "core/RenameEngine.h"
 
 #include <QObject>
 
@@ -32,6 +33,15 @@ public:
     virtual bool set(const ParsedCommand &cmd, QString *error) = 0;
     virtual bool select(const ParsedCommand &cmd, QString *error) = 0;
     virtual bool beginInlineRename() = 0;
+    // The Advanced Rename dialog over these items; options start from initial.
+    virtual bool advancedRename(const QStringList &paths, const RenameOptions &initial, QString *error)
+    {
+        Q_UNUSED(paths)
+        Q_UNUSED(initial)
+        if (error)
+            *error = QStringLiteral("Advanced Rename needs a lister window.");
+        return false;
+    }
     virtual bool settings(const ParsedCommand &cmd, QString *error)
     {
         Q_UNUSED(cmd)
@@ -68,6 +78,9 @@ public:
 //   Move ...                 (same as Copy MOVE)
 //   Delete [NORECYCLE] [QUIET] [FILE=...]
 //   Rename [FROM=... TO=...] (no arguments: rename the focused item in place)
+//   Rename ADVANCED | UNDO | OLDNAME=... NEWNAME=... [MODE=wildcard|findreplace|regexp]
+//          [CASE=lower|upper|title|sentence] [EXTCASE=lower|upper] [IGNOREEXT]
+//          [CASESENSITIVE] [START=n] [STEP=n] [WIDTH=n] [TRIM] [PRESET=name] [FILE=...]
 //   CreateFolder [NAME="a, b, c"] [IN=...]
 //   Clipboard COPY|CUT|PASTE [AS]  (a picture or text pastes as a new file)
 //   Set DUAL=on|off|toggle|vertical|horizontal  SOURCE=toggle  DESTLOCK=on|off|toggle
@@ -108,6 +121,10 @@ public:
     AliasManager &aliases() { return m_aliases; }
     JobManager &jobs() { return m_jobs; }
 
+    // Batch renames, for Rename UNDO: (new path, old path).
+    void recordRename(const QList<QPair<QString, QString>> &done) { m_lastRename = done; }
+    bool canUndoRename() const { return !m_lastRename.isEmpty(); }
+
     // Set when the last run stopped because the user cancelled a prompt.
     static const QString kCancelled;
 
@@ -124,4 +141,5 @@ private:
 
     AliasManager &m_aliases;
     JobManager &m_jobs;
+    QList<QPair<QString, QString>> m_lastRename;
 };

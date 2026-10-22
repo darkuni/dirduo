@@ -11,6 +11,7 @@
 #include "ui/DrivesBar.h"
 #include "ui/ToolbarStrip.h"
 #include "ui/FileDisplay.h"
+#include "ui/AdvancedRenameDialog.h"
 #include "ui/ButtonBar.h"
 #include "ui/ButtonEditor.h"
 #include "ui/CommandConsole.h"
@@ -291,6 +292,26 @@ int main(int argc, char *argv[])
         c->close();
     }
     w->runCommand(QStringLiteral("Set VIEW=details"));
+
+    // Advanced Rename over the Amiga disk images and the Music folder.
+    {
+        writeFile(root + QStringLiteral("/Emulation/roms/amiga/turrican_ii_disk1.ADF"), 901120);
+        writeFile(root + QStringLiteral("/Emulation/roms/amiga/turrican_ii_disk2.ADF"), 901120);
+        writeFile(root + QStringLiteral("/Emulation/roms/amiga/Turrican II disk 1.adf"), 901120);
+        QStringList paths;
+        for (const QString &n : QDir(root + QStringLiteral("/Emulation/roms/amiga")).entryList(QDir::Files, QDir::Name))
+            paths << root + QStringLiteral("/Emulation/roms/amiga/") + n;
+        RenameOptions o;
+        o.mode = RenameOptions::Mode::FindReplace;
+        o.oldPattern = QStringLiteral("_");
+        o.newPattern = QStringLiteral(" ");
+        o.nameCase = RenameOptions::Case::Title;
+        o.extCase = RenameOptions::ExtCase::Lower;
+        AdvancedRenameDialog dlg(paths, o, w);
+        dlg.show();
+        QTest::qWait(400);
+        dlg.grab().save(out + QStringLiteral("/21-advanced-rename.png"));
+    }
 
 #ifdef LINOPUS_HAVE_KIO
     // Servers and archives, when run through tests/remote/run-remote-tests.sh.

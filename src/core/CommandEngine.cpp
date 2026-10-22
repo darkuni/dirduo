@@ -346,6 +346,89 @@ bool CommandEngine::cmdDelete(const ParsedCommand &cmd, CommandContext &ctx, QSt
 
 bool CommandEngine::cmdRename(const ParsedCommand &cmd, CommandContext &ctx, QString *error)
 {
+    auto fail = [error](const QString &msg) {
+        if (error)
+            *error = msg;
+        return false;
+    };
+    if (cmd.hasFlag(QStringLiteral("UNDO"))) {
+        if (m_lastRename.isEmpty())
+            return fail(QStringLiteral("There is no rename to undo."));
+        QString err;
+        if (!RenameEngine::undo(m_lastRename, &err))
+            return fail(err);
+        QStringList back;
+        for (const auto &d : std::as_const(m_lastRename))
+            back << d.second;
+        m_lastRename.clear();
+        ctx.afterLocalChange(back);
+        return true;
+    }
+    const bool advanced = cmd.hasFlag(QStringLiteral("ADVANCED"));
+    const bool scripted = cmd.hasArg(QStringLiteral("OLDNAME")) || cmd.hasArg(QStringLiteral("NEWNAME"))
+        || cmd.hasArg(QStringLiteral("PRESET"));
+    if (advanced || scripted) {
+        RenameOptions o;
+        if (cmd.hasArg(QStringLiteral("PRESET"))
+            && !RenamePresets::load(cmd.value(QStringLiteral("PRESET")), o))
+            return fail(QStringLiteral("There is no rename preset called \"%1\".").arg(cmd.value(QStringLiteral("PRESET"))));
+        if (cmd.hasArg(QStringLiteral("MODE")) && !RenameOptions::modeFromName(cmd.value(QStringLiteral("MODE")), o.mode))
+            return fail(QStringLiteral("MODE takes wildcard, findreplace or regexp."));
+        if (cmd.hasArg(QStringLiteral("OLDNAME")))
+            o.oldPattern = cmd.value(QStringLiteral("OLDNAME"));
+        if (cmd.hasArg(QStringLiteral("NEWNAME")))
+            o.newPattern = cmd.value(QStringLiteral("NEWNAME"));
+        if (cmd.hasArg(QStringLiteral("CASE")) && !RenameOptions::caseFromName(cmd.value(QStringLiteral("CASE")), o.nameCase))
+            return fail(QStringLiteral("CASE takes lower, upper, title or sentence."));
+        if (cmd.hasArg(QStringLiteral("EXTCASE"))) {
+            const QString e = cmd.value(QStringLiteral("EXTCASE")).toLower();
+            o.extCase = e == QLatin1String("lower") ? RenameOptions::ExtCase::Lower
+                : e == QLatin1String("upper")       ? RenameOptions::ExtCase::Upper
+                                                    : RenameOptions::ExtCase::Keep;
+        }
+        if (cmd.hasFlag(QStringLiteral("IGNOREEXT")))
+            o.ignoreExtension = true;
+        if (cmd.hasFlag(QStringLiteral("CASESENSITIVE")))
+            o.caseSensitive = true;
+        if (cmd.hasFlag(QStringLiteral("TRIM")))
+            o.trimSpaces = true;
+        if (cmd.hasArg(QStringLiteral("START")))
+            o.counterStart = cmd.value(QStringLiteral("START")).toInt();
+        if (cmd.hasArg(QStringLiteral("STEP")))
+            o.counterStep = cmd.value(QStringLiteral("STEP")).toInt();
+        if (cmd.hasArg(QStringLiteral("WIDTH")))
+            o.counterWidth = cmd.value(QStringLiteral("WIDTH")).toInt();
+
+        QStringList paths;
+        for (const QString &f : cmd.values(QStringLiteral("FILE")))
+            paths << resolvePath(f, ctx.sourcePath());
+        if (paths.isEmpty())
+            paths = ctx.selectedPaths();
+        if (paths.isEmpty())
+            return fail(QStringLiteral("Select what to rename first."));
+        if (advanced)
+            return ctx.advancedRename(paths, o, error);
+        const QList<RenameItem> items = RenameEngine::preview(paths, o);
+        if (RenameEngine::hasConflicts(items)) {
+            QStringList lines;
+            for (const RenameItem &it : items) {
+                if (it.status == RenameItem::Status::Conflict || it.status == RenameItem::Status::Invalid)
+                    lines << QStringLiteral("%1 -> %2: %3").arg(it.oldName, it.newName, it.note);
+            }
+            return fail(QStringLiteral("Nothing was renamed:\n") + lines.mid(0, 10).join(QLatin1Char('\n')));
+        }
+        QList<QPair<QString, QString>> done;
+        QString err;
+        if (!RenameEngine::apply(items, &done, &err))
+            return fail(err);
+        if (!done.isEmpty())
+            m_lastRename = done;
+        QStringList renamed;
+        for (const auto &d : std::as_const(done))
+            renamed << d.first;
+        ctx.afterLocalChange(renamed);
+        return true;
+    }
     if (!cmd.hasArg(QStringLiteral("FROM")) && !cmd.hasArg(QStringLiteral("TO")))
         return ctx.beginInlineRename();
 

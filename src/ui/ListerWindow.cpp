@@ -6,6 +6,7 @@
 #include "core/Location.h"
 #include "core/Paths.h"
 #include "core/RemoteBackend.h"
+#include "ui/AdvancedRenameDialog.h"
 #include "ui/AppContext.h"
 #include "ui/BreadcrumbBar.h"
 #include "ui/ButtonBar.h"
@@ -296,6 +297,11 @@ void ListerWindow::buildMenus()
     edit->addAction(commandAction(QStringLiteral("Move As..."), QStringLiteral("Copy MOVE AS")));
     edit->addSeparator();
     edit->addAction(commandAction(QStringLiteral("Rename"), QStringLiteral("Rename"), QKeySequence(Qt::Key_F2), QStringLiteral("edit-rename")));
+    edit->addAction(commandAction(QStringLiteral("Advanced Rename..."), QStringLiteral("Rename ADVANCED"),
+                                  QKeySequence(QStringLiteral("Shift+F2")), QStringLiteral("edit-rename")));
+    QAction *undoRename = commandAction(QStringLiteral("Undo Rename"), QStringLiteral("Rename UNDO"), {}, QStringLiteral("edit-undo"));
+    edit->addAction(undoRename);
+    connect(edit, &QMenu::aboutToShow, this, [this, undoRename]() { undoRename->setEnabled(m_app.engine().canUndoRename()); });
     edit->addAction(commandAction(QStringLiteral("New Folder..."), QStringLiteral("CreateFolder"),
                                   QKeySequence(QStringLiteral("Ctrl+Shift+N")), QStringLiteral("folder-new")));
     edit->addAction(commandAction(QStringLiteral("Move to Trash"), QStringLiteral("Delete"), QKeySequence::Delete, QStringLiteral("user-trash")));
@@ -1830,4 +1836,28 @@ bool ListerWindow::settings(const ParsedCommand &cmd, QString *error)
         return true;
     }
     return fail(QStringLiteral("Settings takes BACKUP= or RESTORE=."));
+}
+
+bool ListerWindow::advancedRename(const QStringList &paths, const RenameOptions &initial, QString *error)
+{
+    for (const QString &p : paths) {
+        if (!Location::isLocal(p)) {
+            if (error)
+                *error = QStringLiteral("Advanced Rename works in local folders for now.");
+            return false;
+        }
+    }
+    AdvancedRenameDialog dlg(paths, initial, this);
+    if (dlg.exec() != QDialog::Accepted) {
+        if (error)
+            *error = CommandEngine::kCancelled;
+        return false;
+    }
+    if (!dlg.done().isEmpty())
+        m_app.engine().recordRename(dlg.done());
+    QStringList renamed;
+    for (const auto &d : dlg.done())
+        renamed << d.first;
+    afterLocalChange(renamed);
+    return true;
 }
