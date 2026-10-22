@@ -12,6 +12,8 @@
 #include "ui/ToolbarStrip.h"
 #include "ui/FileDisplay.h"
 #include "ui/FolderTab.h"
+#include "ui/FolderTree.h"
+#include "ui/GroupTreeView.h"
 #include "ui/ListerWindow.h"
 #include "ui/ProgressWindow.h"
 #include "ui/Style.h"
@@ -194,6 +196,7 @@ int main(int argc, char *argv[])
     Style::instance()->setLabels({star, old});
 
     w->runCommand(QStringLiteral("Toolbar NAME=buttons PLACE=top\nSet DUAL=vertical\nSet HIDDEN=off\nSet THEME=\"Linopus Light\"\nSet TREE=shared"));
+    w->sharedTree()->setDrivesForTesting(drives);
     w->display(0)->currentTab()->navigate(root);
     w->display(1)->currentTab()->navigate(root + QStringLiteral("/Music"));
     QTest::qWait(400);
@@ -210,6 +213,8 @@ int main(int argc, char *argv[])
     w->runCommand(QStringLiteral("Set FILTERBAR=off\nSet FLATVIEW=off"));
 
     w->runCommand(QStringLiteral("Set THEME=Workbench\nSet TREE=separate"));
+    for (int i = 0; i < 2; ++i)
+        w->display(i)->tree()->setDrivesForTesting(drives);
     w->display(0)->currentTab()->navigate(root + QStringLiteral("/Emulation/roms/amiga"));
     w->display(1)->currentTab()->navigate(root + QStringLiteral("/Documents"));
     QTest::qWait(500);
@@ -221,7 +226,21 @@ int main(int argc, char *argv[])
     w->display(0)->currentTab()->navigate(root + QStringLiteral("/Pictures"));
     QTest::qWait(800);
     shot(w, out, QStringLiteral("16-dark-pictures-auto-icons"));
-    w->runCommand(QStringLiteral("Set THEME=\"Linopus Light\""));
+    // Grouped by type, all folded but the first group.
+    w->runCommand(QStringLiteral("Set THEME=\"Linopus Light\"\nSet TREE=shared"));
+    w->sharedTree()->setDrivesForTesting(drives);
+    w->display(0)->currentTab()->navigate(root);
+    QTest::qWait(300);
+    w->runCommand(QStringLiteral("Set FLATVIEW=nofolders\nSet GROUPBY=type"));
+    QTest::qWait(1200);
+    {
+        FolderTab *t = w->display(0)->currentTab();
+        t->collapseAllGroups();
+        t->detailsView()->toggleGroup(t->detailsView()->model()->index(0, 0));
+    }
+    QTest::qWait(300);
+    shot(w, out, QStringLiteral("17-light-groups-folded"));
+    w->runCommand(QStringLiteral("Set GROUPBY=none\nSet FLATVIEW=off\nSet TREE=off"));
 
 #ifdef LINOPUS_HAVE_KIO
     // Servers and archives, when run through tests/remote/run-remote-tests.sh.

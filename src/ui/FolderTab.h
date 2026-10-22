@@ -76,6 +76,10 @@ public:
     // Grouping
     void setGroupBy(FileListModel::GroupBy g);
     FileListModel::GroupBy groupBy() const;
+    void collapseAllGroups();
+    void expandAllGroups();
+    bool toggleCurrentGroup(); // false when not grouped
+    GroupTreeView *detailsView() const { return m_details; }
 
     // Filter bar
     void setFilterBarVisible(bool visible);

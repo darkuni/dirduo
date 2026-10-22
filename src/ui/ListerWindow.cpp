@@ -210,6 +210,14 @@ void ListerWindow::fillViewMenus()
                             QStringLiteral("Set GROUPBY=%1").arg(FileListModel::groupByName(g)));
     }
     fill(m_groupMenu, groups, t ? FileListModel::groupByName(t->groupBy()) : QString());
+    m_groupMenu->addSeparator();
+    const bool grouped = t && t->groupBy() != FileListModel::GroupBy::None;
+    QAction *collapse = m_groupMenu->addAction(QStringLiteral("Collapse All Groups"));
+    collapse->setEnabled(grouped);
+    connect(collapse, &QAction::triggered, this, [this]() { runCommand(QStringLiteral("Set GROUPCOLLAPSE=all")); });
+    QAction *expand = m_groupMenu->addAction(QStringLiteral("Expand All Groups"));
+    expand->setEnabled(grouped);
+    connect(expand, &QAction::triggered, this, [this]() { runCommand(QStringLiteral("Set GROUPCOLLAPSE=none")); });
     QList<QPair<QString, QString>> themes;
     for (const QString &name : Style::instance()->themeNames())
         themes << qMakePair(name, QStringLiteral("Set THEME=\"%1\"").arg(name));
@@ -635,7 +643,7 @@ void ListerWindow::setTreeMode(TreeMode mode)
     if (mode != TreeMode::Off)
         m_lastTreeMode = mode;
     if (mode == TreeMode::Shared && !m_sharedTree) {
-        m_sharedTree = new FolderTree(m_outer);
+        m_sharedTree = new FolderTree(&m_app.aliases(), m_outer);
         m_sharedTree->setShowHidden(sourceDisplay()->showHidden());
         m_outer->insertWidget(0, m_sharedTree);
         m_outer->setStretchFactor(0, 0);
@@ -940,6 +948,18 @@ bool ListerWindow::set(const ParsedCommand &cmd, QString *error)
             if (!FileListModel::groupByFromName(value, g))
                 return fail(QStringLiteral("GROUPBY takes none, type, name, size, modified, extension or folder."));
             sourceTab()->setGroupBy(g);
+        } else if (key == QLatin1String("GROUPCOLLAPSE")) {
+            FolderTab *t = sourceTab();
+            if (t->groupBy() == FileListModel::GroupBy::None)
+                return fail(QStringLiteral("Turn grouping on first (Set GROUPBY=type, for example)."));
+            if (value == QLatin1String("all") || value == QLatin1String("on"))
+                t->collapseAllGroups();
+            else if (value == QLatin1String("none") || value == QLatin1String("off"))
+                t->expandAllGroups();
+            else if (value == QLatin1String("toggle") || value.isEmpty())
+                t->toggleCurrentGroup();
+            else
+                return fail(QStringLiteral("GROUPCOLLAPSE takes all, none or toggle."));
         } else if (key == QLatin1String("FILTERBAR")) {
             bool on = sourceTab()->filterBarVisible();
             if (!parseSwitch(value, on, on))

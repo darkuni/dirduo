@@ -17,7 +17,7 @@
 #include <QAbstractItemView>
 #include <QApplication>
 #include <QDir>
-#include <QFileSystemModel>
+#include <QStandardPaths>
 #include <QHeaderView>
 #include <QTreeView>
 #include <QFile>
@@ -386,8 +386,7 @@ private Q_SLOTS:
         QVERIFY(tree && tree->isVisible());
         QCOMPARE(tree->currentFolder(), root + QStringLiteral("/a"));
         // Picking a folder in the tree reads it into the source.
-        auto *fs = qobject_cast<QFileSystemModel *>(tree->model());
-        tree->setCurrentIndex(fs->index(root + QStringLiteral("/b")));
+        tree->setCurrentIndex(tree->treeModel()->indexForPath(root + QStringLiteral("/b")));
         QTRY_COMPARE(w->display(0)->currentTab()->path(), root + QStringLiteral("/b"));
         // ...and follows the source when it moves.
         w->display(0)->currentTab()->navigate(root + QStringLiteral("/a"));
@@ -472,6 +471,117 @@ private Q_SLOTS:
         QVERIFY(t->checkMode());
     }
 
+    void treeRootsShowHomeDrivesAndAliases()
+    {
+        QVERIFY(m_app->aliases().setUserAlias(QStringLiteral("roms"), root + QStringLiteral("/b")));
+        QVERIFY(w->runCommand(QStringLiteral("Set TREE=shared")));
+        FolderTree *tree = w->sharedTree();
+        DriveEntry rootDrive;
+        rootDrive.kind = DriveEntry::Kind::Root;
+        rootDrive.name = QStringLiteral("/");
+        rootDrive.path = QStringLiteral("/");
+        DriveEntry sd;
+        sd.kind = DriveEntry::Kind::SdCard;
+        sd.name = QStringLiteral("Games");
+        sd.path = root; // stands in for /run/media/deck/Games
+        tree->setDrivesForTesting({rootDrive, sd});
+        FolderTreeModel *m = tree->treeModel();
+        QStringList top;
+        for (int r = 0; r < m->rowCount(); ++r)
+            top << m->index(r, 0).data().toString();
+        QCOMPARE(top, (QStringList{QStringLiteral("Home"), QStringLiteral("Root"), QStringLiteral("Games"), QStringLiteral("Aliases")}));
+        const QModelIndex aliases = m->index(3, 0);
+        QCOMPARE(m->rowCount(aliases), 1);
+        QCOMPARE(m->index(0, 0, aliases).data().toString(), QStringLiteral("/roms"));
+        QVERIFY(!(m->flags(aliases) & Qt::ItemIsSelectable));
+
+        // The source folder lies under the SD card: that root is the one opened.
+        const QModelIndex cur = tree->currentIndex();
+        QCOMPARE(m->pathOf(cur), root + QStringLiteral("/a"));
+        QCOMPARE(cur.parent().data().toString(), QStringLiteral("Games"));
+
+        // New folders appear without a refresh.
+        QDir().mkpath(root + QStringLiteral("/fresh"));
+        const QModelIndex games = m->index(2, 0);
+        QTRY_VERIFY_WITH_TIMEOUT(m->rowCount(games) == 3, 5000);
+        QCOMPARE(m->index(1, 0, games).data().toString(), QStringLiteral("b"));
+        QDir(root + QStringLiteral("/fresh")).removeRecursively();
+        QTRY_VERIFY_WITH_TIMEOUT(m->rowCount(games) == 2, 5000);
+    }
+
+    void groupsCollapse()
+    {
+        touch(root + QStringLiteral("/a/song.mp3"));
+        FolderTab *t = w->display(0)->currentTab();
+        t->refresh();
+        waitListed(t, 4);
+        QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=type")));
+        GroupTreeView *view = t->detailsView();
+        QCOMPARE(view->groupKeys().size(), 2); // audio, text
+        // Text group: three rows, the first stays as the heading.
+        int textFirst = -1;
+        for (int r = 0; r < view->model()->rowCount(); ++r) {
+            if (view->model()->index(r, 0).data().toString().endsWith(QLatin1String(".txt"))) {
+                textFirst = r;
+                break;
+            }
+        }
+        QVERIFY(textFirst >= 0);
+        const QModelIndex lead = view->model()->index(textFirst, 0);
+        QTest::mouseClick(view->viewport(), Qt::LeftButton, {}, view->arrowRect(lead).center());
+        QVERIFY(view->isCollapsed(lead));
+        QVERIFY(!view->isRowHidden(textFirst, {}));
+        QVERIFY(view->isRowHidden(textFirst + 1, {}) && view->isRowHidden(textFirst + 2, {}));
+        QCOMPARE(view->visualRect(lead).height(), view->bandHeight());
+        // A refresh keeps it folded.
+        t->refresh();
+        QTest::qWait(300);
+        QVERIFY(view->isRowHidden(textFirst + 1, {}));
+        // Clicking the heading still selects the whole group.
+        QTest::mouseClick(view->viewport(), Qt::LeftButton, {}, view->bandRect(lead).center());
+        QCOMPARE(t->selectedPaths().size(), 3);
+        QVERIFY(w->runCommand(QStringLiteral("Set GROUPCOLLAPSE=none")));
+        QVERIFY(!view->isRowHidden(textFirst + 1, {}));
+        QVERIFY(w->runCommand(QStringLiteral("Set GROUPCOLLAPSE=all")));
+        QVERIFY(view->isRowHidden(textFirst + 1, {}));
+        // Left and Right fold and open the group the cursor is in.
+        view->setFocus();
+        view->setCurrentIndex(lead);
+        QTest::keyClick(view, Qt::Key_Right);
+        QVERIFY(!view->isCollapsed(lead));
+        QTest::keyClick(view, Qt::Key_Left);
+        QVERIFY(view->isCollapsed(lead));
+        // Grouping off shows everything.
+        QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=none")));
+        for (int r = 0; r < view->model()->rowCount(); ++r)
+            QVERIFY(!view->isRowHidden(r, {}));
+        QVERIFY(!runFailing(QStringLiteral("Set GROUPCOLLAPSE=all")));
+    }
+
+    void dateAndSizeBuckets()
+    {
+        auto setAge = [this](const char *name, int daysAgo) {
+            const QString p = root + QStringLiteral("/a/") + QLatin1String(name);
+            QFile f(p);
+            QVERIFY(f.open(QIODevice::ReadWrite));
+            QVERIFY(f.setFileTime(QDateTime::currentDateTime().addDays(-daysAgo), QFileDevice::FileModificationTime));
+        };
+        setAge("one.txt", 0);
+        setAge("two.txt", 400);
+        setAge("three.txt", -30);
+        FolderTab *t = w->display(0)->currentTab();
+        t->refresh();
+        QTest::qWait(300);
+        QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=modified")));
+        QTRY_VERIFY(!labels(t).isEmpty());
+        QStringList l = labels(t);
+        QCOMPARE(l.first(), QStringLiteral("In the future"));
+        QVERIFY(l.contains(QStringLiteral("Today")));
+        QVERIFY(l.last() == QStringLiteral("Last year") || l.last() == QStringLiteral("Older"));
+        QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=size")));
+        QCOMPARE(labels(t), (QStringList{QStringLiteral("Tiny (under 16 KB)")}));
+    }
+
     void sessionRoundTrip()
     {
         w->runCommand(QStringLiteral("Set DUAL=horizontal\nSet VIEW=list"));
@@ -502,6 +612,18 @@ private:
         });
         closer.start(50);
         return w->runCommand(command);
+    }
+
+    static QStringList labels(FolderTab *t)
+    {
+        QStringList out;
+        QAbstractItemModel *m = t->view()->model();
+        for (int r = 0; r < m->rowCount(); ++r) {
+            const QString l = m->index(r, 0).data(FileListModel::GroupLabelRole).toString();
+            if (out.isEmpty() || out.last() != l)
+                out << l;
+        }
+        return out;
     }
 
     static void waitListed(FolderTab *t, int expectedRows)

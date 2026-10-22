@@ -115,6 +115,7 @@ FolderTab::FolderTab(QWidget *parent)
     resetColumns();
     m_details->setSelectionModel(m_selection);
     m_delegate->setGroupView(m_details);
+    connect(m_details, &GroupTreeView::collapsedChanged, this, &FolderTab::viewStateChanged);
 
     // List and icons share one QListView.
     m_list->setModel(m_proxy);
@@ -613,6 +614,10 @@ bool FolderTab::eventFilter(QObject *watched, QEvent *event)
         if ((ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter) && ke->modifiers() == Qt::NoModifier) {
             const QStringList sel = selectedPaths();
             const QModelIndex cur = m_selection->currentIndex();
+            if (m_mode == ViewMode::Details && m_details->isCollapsed(cur)) {
+                m_details->toggleGroup(cur); // Enter on a folded heading opens it
+                return true;
+            }
             if (sel.size() <= 1 && cur.isValid()) {
                 activateIndex(cur);
             } else {
@@ -735,6 +740,13 @@ void FolderTab::showHeaderMenu(const QPoint &globalPos)
         a->setChecked(groupBy() == g);
         connect(a, &QAction::triggered, this, [this, g]() { setGroupBy(g); });
     }
+    group->addSeparator();
+    QAction *collapse = group->addAction(QStringLiteral("Collapse All Groups"));
+    QAction *expand = group->addAction(QStringLiteral("Expand All Groups"));
+    collapse->setEnabled(groupBy() != G::None);
+    expand->setEnabled(groupBy() != G::None);
+    connect(collapse, &QAction::triggered, this, &FolderTab::collapseAllGroups);
+    connect(expand, &QAction::triggered, this, &FolderTab::expandAllGroups);
     menu.addSeparator();
     QAction *sizes = menu.addAction(QStringLiteral("Calculate All Folder Sizes"));
     sizes->setCheckable(true);
@@ -764,6 +776,27 @@ void FolderTab::setGroupBy(FileListModel::GroupBy g)
 FileListModel::GroupBy FolderTab::groupBy() const
 {
     return m_model->groupBy();
+}
+
+void FolderTab::collapseAllGroups()
+{
+    m_details->collapseAll();
+}
+
+void FolderTab::expandAllGroups()
+{
+    m_details->expandAll();
+}
+
+bool FolderTab::toggleCurrentGroup()
+{
+    if (groupBy() == FileListModel::GroupBy::None)
+        return false;
+    QModelIndex cur = m_selection->currentIndex();
+    if (!cur.isValid() && m_proxy->rowCount() > 0)
+        cur = m_proxy->index(0, 0);
+    m_details->toggleGroup(cur);
+    return true;
 }
 
 // ---- Filter ----------------------------------------------------------------
@@ -989,7 +1022,7 @@ void FolderTab::fitNameColumn()
     // The name column takes the room left over, but never less than enough to
     // read a name: on a narrow display the list scrolls sideways instead.
     QHeaderView *h = m_details->header();
-    const int minName = fontMetrics().averageCharWidth() * 22;
+    const int minName = fontMetrics().averageCharWidth() * 18;
     int others = 0;
     for (int c = 0; c < FileListModel::ColumnCount; ++c) {
         if (c != FileListModel::NameColumn && !h->isSectionHidden(c))

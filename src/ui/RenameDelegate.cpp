@@ -121,8 +121,11 @@ QSize RenameDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelI
     QSize s = QStyledItemDelegate::sizeHint(option, index);
     if (m_checkMode && index.column() == FileListModel::NameColumn)
         s.rwidth() += 24;
-    if (isLeader(index))
+    if (isLeader(index)) {
+        if (m_groupView->isCollapsed(index))
+            return QSize(s.width(), m_groupView->bandHeight()); // heading only
         s.rheight() += m_groupView->bandHeight();
+    }
     return s;
 }
 

@@ -203,31 +203,35 @@ QPair<QString, QString> FileListModel::groupFor(int row) const
             return {QStringLiteral("4"), QStringLiteral("Medium (1 to 128 MB)")};
         if (s < 1024LL * 1024 * 1024)
             return {QStringLiteral("5"), QStringLiteral("Large (128 MB to 1 GB)")};
-        return {QStringLiteral("6"), QStringLiteral("Huge (over 1 GB)")};
+        if (s < 16LL * 1024 * 1024 * 1024)
+            return {QStringLiteral("6"), QStringLiteral("Huge (1 to 16 GB)")};
+        return {QStringLiteral("7"), QStringLiteral("Gigantic (over 16 GB)")};
     }
     case GroupBy::Modified: {
         const QDate d = it.modified.date();
         const QDate today = QDate::currentDate();
         const int days = d.daysTo(today);
         const QDate weekStart = today.addDays(1 - today.dayOfWeek());
-        if (days <= 0)
-            return {QStringLiteral("0"), QStringLiteral("Today")};
+        if (days < 0) // copied from a machine with its clock ahead
+            return {QStringLiteral("10"), QStringLiteral("In the future")};
+        if (days == 0)
+            return {QStringLiteral("11"), QStringLiteral("Today")};
         if (days == 1)
-            return {QStringLiteral("1"), QStringLiteral("Yesterday")};
+            return {QStringLiteral("12"), QStringLiteral("Yesterday")};
         if (d >= weekStart)
-            return {QStringLiteral("2"), QStringLiteral("Earlier this week")};
+            return {QStringLiteral("13"), QStringLiteral("Earlier this week")};
         if (d >= weekStart.addDays(-7))
-            return {QStringLiteral("3"), QStringLiteral("Last week")};
+            return {QStringLiteral("14"), QStringLiteral("Last week")};
         if (d.year() == today.year() && d.month() == today.month())
-            return {QStringLiteral("4"), QStringLiteral("Earlier this month")};
+            return {QStringLiteral("15"), QStringLiteral("Earlier this month")};
         const QDate lastMonth = today.addMonths(-1);
         if (d.year() == lastMonth.year() && d.month() == lastMonth.month())
-            return {QStringLiteral("5"), QStringLiteral("Last month")};
+            return {QStringLiteral("16"), QStringLiteral("Last month")};
         if (d.year() == today.year())
-            return {QStringLiteral("6"), QStringLiteral("Earlier this year")};
+            return {QStringLiteral("17"), QStringLiteral("Earlier this year")};
         if (d.year() == today.year() - 1)
-            return {QStringLiteral("7"), QStringLiteral("Last year")};
-        return {QStringLiteral("8"), QStringLiteral("Older")};
+            return {QStringLiteral("18"), QStringLiteral("Last year")};
+        return {QStringLiteral("19"), QStringLiteral("Older")};
     }
     case GroupBy::Extension: {
         if (it.isDir)

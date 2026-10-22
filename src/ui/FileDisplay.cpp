@@ -133,7 +133,7 @@ FileDisplay::FileDisplay(AliasManager &aliases, QWidget *parent)
 void FileDisplay::setTreeVisible(bool visible)
 {
     if (visible && !m_tree) {
-        m_tree = new FolderTree(m_body);
+        m_tree = new FolderTree(&m_aliases, m_body);
         m_tree->setShowHidden(m_showHidden);
         m_body->insertWidget(0, m_tree);
         m_body->setStretchFactor(0, 0);
