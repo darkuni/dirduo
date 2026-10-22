@@ -99,6 +99,7 @@ public:
     bool printFolder(const ParsedCommand &cmd, QString *error) override;
     bool settings(const ParsedCommand &cmd, QString *error) override;
     bool tool(const ParsedCommand &cmd, QString *error) override;
+    bool imageCommand(const ParsedCommand &cmd, QString *error);
     bool advancedRename(const QStringList &paths, const RenameOptions &initial, QString *error) override;
     void afterLocalChange(const QStringList &selectPaths) override;
 

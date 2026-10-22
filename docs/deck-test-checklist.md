@@ -59,6 +59,7 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Ctrl+, opens Preferences; type "colour" in the search box; change the SOURCE colour in the Theme Editor (it shows at once); Cancel puts it back.
 - [ ] Ctrl+D in a few folders, then the Favourites button: they are listed; Organise Favourites to group them.
 - [ ] Tools > Find Duplicates on a ROM folder: groups show; check copies, then Move Checked to Trash.
+- [ ] Select a few Steam screenshots, Tools > Convert Images: JPEG, Width 1280, Destination; Convert. The JPEGs land in the other display.
 
 ## Report back
 

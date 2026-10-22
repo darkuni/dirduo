@@ -16,6 +16,7 @@
 #include "ui/ButtonBar.h"
 #include "ui/PreferencesDialog.h"
 #include "ui/ViewerPane.h"
+#include "ui/ImageConvertDialog.h"
 #include "ui/DuplicatesDialog.h"
 #include "ui/SyncDialog.h"
 #include "ui/ButtonEditor.h"
@@ -428,6 +429,28 @@ int main(int argc, char *argv[])
         QTest::qWait(900);
         shot(w, out, QStringLiteral("28-viewer-nfo"));
         w->runCommand(QStringLiteral("Set VIEWER=off\nSet THEME=\"Linopus Light\""));
+    }
+
+    // Convert Images: screenshots going to JPEG at 1280 wide.
+    {
+        QStringList shots;
+        for (int i = 1; i <= 4; ++i) {
+            QImage img(1280 * 2, 800 * 2, QImage::Format_RGB32);
+            img.fill(QColor::fromHsv(i * 60, 120, 200));
+            const QString p = root + QStringLiteral("/Pictures/Screenshot_2026102%1_181500.png").arg(i);
+            img.save(p);
+            shots << p;
+        }
+        ImageOptions o;
+        o.format = QStringLiteral("jpg");
+        o.quality = 85;
+        o.resize = ImageOptions::Resize::Width;
+        o.width = 1280;
+        ImageConvertDialog dlg(shots, o, root + QStringLiteral("/Documents"), w);
+        dlg.show();
+        QTest::qWait(500);
+        dlg.grab().save(out + QStringLiteral("/29-convert-images.png"));
+        dlg.reject();
     }
 
 #ifdef LINOPUS_HAVE_KIO

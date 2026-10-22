@@ -7,6 +7,8 @@
 #include "ui/AdvancedRenameDialog.h"
 #include "ui/ButtonEditor.h"
 #include "ui/DuplicatesDialog.h"
+#include "ui/ImageConvertDialog.h"
+#include <QImageReader>
 #include "ui/FindDialog.h"
 #include "core/Collections.h"
 #include "core/Favorites.h"
@@ -53,6 +55,7 @@
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QSignalSpy>
 #include <QTimer>
 
 namespace {
@@ -1422,6 +1425,74 @@ private Q_SLOTS:
         QCOMPARE(w->display(1)->tabCount(), 2);
         QCOMPARE(w->display(0)->currentTab()->viewMode(), FolderTab::ViewMode::List);
         QCOMPARE(w->display(0)->currentTab()->path(), root + QStringLiteral("/a"));
+    }
+
+    void imageConvert()
+    {
+        const QString pics = root + QStringLiteral("/pics");
+        QDir().mkpath(pics);
+        for (const char *n : {"one.png", "two.png"}) {
+            QImage img(80, 40, QImage::Format_RGB32);
+            img.fill(Qt::green);
+            QVERIFY(img.save(pics + QLatin1Char('/') + QLatin1String(n)));
+        }
+        touch(pics + QStringLiteral("/notes.txt"));
+        FolderTab *t = w->display(0)->currentTab();
+        t->navigate(pics);
+        waitListed(t, 3);
+
+        t->selectPaths({pics + QStringLiteral("/notes.txt")});
+        QVERIFY(!w->evaluateCondition(QStringLiteral("images"), true));
+        QVERIFY(!runFailing(QStringLiteral("Image RUN"))); // no pictures in the selection
+
+        t->selectPaths({pics + QStringLiteral("/one.png"), pics + QStringLiteral("/two.png"), pics + QStringLiteral("/notes.txt")});
+        QVERIFY(w->evaluateCondition(QStringLiteral("images"), false));
+        QVERIFY(!runFailing(QStringLiteral("Image CONVERT=doc RUN")));
+        QVERIFY(!runFailing(QStringLiteral("Image ROTATE=45 RUN")));
+
+        // Straight to the destination display, no window.
+        QVERIFY(w->runCommand(QStringLiteral("Image CONVERT=jpg WIDTH=20 TO=dest RUN")));
+        const QString dest = root + QStringLiteral("/b");
+        QTRY_VERIFY(QFileInfo::exists(dest + QStringLiteral("/one.jpg")) && QFileInfo::exists(dest + QStringLiteral("/two.jpg")));
+        QTRY_COMPARE(QImageReader(dest + QStringLiteral("/two.jpg")).size(), QSize(20, 10));
+        QVERIFY(!QFileInfo::exists(dest + QStringLiteral("/notes.jpg")));
+
+        // The window: a row per picture showing what it becomes.
+        ImageOptions o;
+        o.format = QStringLiteral("bmp");
+        o.resize = ImageOptions::Resize::Percent;
+        o.percent = 50;
+        o.rotate = 90;
+        ImageConvertDialog dlg({pics + QStringLiteral("/one.png"), pics + QStringLiteral("/two.png")}, o, dest, w);
+        QCOMPARE(dlg.tree()->topLevelItemCount(), 2);
+        QCOMPARE(dlg.tree()->topLevelItem(0)->text(2), QStringLiteral("one.bmp"));
+        QCOMPARE(dlg.tree()->topLevelItem(0)->text(3), QStringLiteral("20 \u00d7 40"));
+        QVERIFY(dlg.summary().startsWith(QStringLiteral("2 pictures")));
+        // Changing a setting updates the list.
+        ImageOptions o2 = dlg.options();
+        QCOMPARE(o2.rotate, 90);
+        o2.rotate = 0;
+        o2.destFolder = dest;
+        o2.format = QStringLiteral("jpg");
+        o2.whenExists = ImageOptions::WhenExists::Skip;
+        dlg.setOptions(o2);
+        QTRY_VERIFY(dlg.summary().contains(QStringLiteral("left out")));
+        QVERIFY(dlg.tree()->topLevelItem(0)->text(2).contains(QStringLiteral("already exists")));
+        o2.whenExists = ImageOptions::WhenExists::Rename;
+        dlg.setOptions(o2);
+        QTRY_VERIFY(dlg.tree()->topLevelItem(0)->text(2).endsWith(QStringLiteral("one (2).jpg")));
+        QSignalSpy done(&dlg, &ImageConvertDialog::converted);
+        dlg.startConvert();
+        QTRY_VERIFY(!dlg.isConverting());
+        QCOMPARE(done.size(), 1);
+        QCOMPARE(dlg.results().size(), 2);
+        QVERIFY(QFileInfo::exists(dest + QStringLiteral("/one (2).jpg")));
+        QCOMPARE(QImageReader(dest + QStringLiteral("/one (2).jpg")).size(), QSize(40, 20));
+        // Remembered for next time, apart from the folder.
+        const ImageOptions saved = ImageConvertDialog::savedOptions();
+        QCOMPARE(saved.format, QStringLiteral("jpg"));
+        QCOMPARE(saved.resize, ImageOptions::Resize::Percent);
+        QVERIFY(saved.destFolder.isEmpty());
     }
 
 private:

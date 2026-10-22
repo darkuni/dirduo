@@ -10,6 +10,9 @@
 #include "ui/AppContext.h"
 #include "ui/DuplicatesDialog.h"
 #include "ui/FindDialog.h"
+#include "ui/ImageConvertDialog.h"
+#include "core/FileKind.h"
+#include "core/ImageConvert.h"
 #include "core/Collections.h"
 #include "core/Favorites.h"
 #include "ui/FavoritesDialog.h"
@@ -432,6 +435,7 @@ void ListerWindow::buildMenus()
     tools->addAction(commandAction(QStringLiteral("Synchronize..."), QStringLiteral("Sync"), {}, QStringLiteral("folder-sync")));
     tools->addAction(commandAction(QStringLiteral("Find Duplicates..."), QStringLiteral("Duplicates"), {}, QStringLiteral("edit-copy")));
     tools->addSeparator();
+    tools->addAction(commandAction(QStringLiteral("Convert Images..."), QStringLiteral("Image"), {}, QStringLiteral("image-x-generic")));
     tools->addAction(commandAction(QStringLiteral("Advanced Rename..."), QStringLiteral("Rename ADVANCED"), {}, QStringLiteral("edit-rename")));
 
     QMenu *window = menuBar()->addMenu(QStringLiteral("&Window"));
@@ -633,6 +637,12 @@ std::optional<bool> ListerWindow::conditionAtom(const QString &name, const QStri
     }
     if (name == QLatin1String("single"))
         return flag(sel.size() == 1);
+    if (name == QLatin1String("images")) {
+        bool any = false;
+        for (const QString &p : sel)
+            any = any || (Location::isLocal(p) && FileKind::categoryFor(p, t->isFolder(p)) == FileKind::Category::Image);
+        return flag(any);
+    }
     if (name == QLatin1String("multiple"))
         return flag(sel.size() > 1);
     if (name == QLatin1String("dual"))
@@ -2083,6 +2093,8 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
         dlg->show();
         return true;
     }
+    if (cmd.is(QStringLiteral("Image")))
+        return imageCommand(cmd, error);
     if (cmd.is(QStringLiteral("Layout"))) {
         if (cmd.hasArg(QStringLiteral("SAVE"))) {
             QString name = cmd.value(QStringLiteral("SAVE"));
@@ -2258,4 +2270,131 @@ void ListerWindow::updateViewer()
         return;
     FolderTab *t = sourceTab();
     m_viewer->showPath(t ? t->focusedPath() : QString());
+}
+
+bool ListerWindow::imageCommand(const ParsedCommand &cmd, QString *error)
+{
+    auto fail = [error](const QString &msg) {
+        if (error)
+            *error = msg;
+        return false;
+    };
+    CommandEngine &engine = m_app.engine();
+    QStringList candidates;
+    for (const QString &f : cmd.values(QStringLiteral("FILE")))
+        candidates << engine.resolvePath(f, sourcePath());
+    if (candidates.isEmpty())
+        candidates = selectedPaths();
+    QStringList files;
+    bool remote = false;
+    for (const QString &p : std::as_const(candidates)) {
+        if (!Location::isLocal(p))
+            remote = true;
+        else if (ImageConvert::canRead(p))
+            files << p;
+    }
+    if (files.isEmpty()) {
+        return fail(remote ? QStringLiteral("Convert Images works on pictures in local folders (including SD cards) for now.")
+                           : QStringLiteral("Select some pictures to convert first."));
+    }
+
+    ImageOptions o = ImageConvertDialog::savedOptions();
+    if (cmd.hasArg(QStringLiteral("CONVERT"))) {
+        const QString f = cmd.value(QStringLiteral("CONVERT"));
+        if (f.compare(QLatin1String("keep"), Qt::CaseInsensitive) == 0) {
+            o.format.clear();
+        } else {
+            o.format = ImageConvert::normaliseFormat(f);
+            if (o.format.isEmpty()) {
+                QStringList names;
+                for (const QString &w : ImageConvert::writableFormats())
+                    names << w;
+                return fail(QStringLiteral("CONVERT takes keep or one of: %1.").arg(names.join(QStringLiteral(", "))));
+            }
+        }
+    }
+    auto number = [&](const char *key, int lo, int hi, int &out) {
+        if (!cmd.hasArg(QLatin1String(key)))
+            return true;
+        bool ok = false;
+        const int v = cmd.value(QLatin1String(key)).toInt(&ok);
+        if (!ok || v < lo || v > hi)
+            return false;
+        out = v;
+        return true;
+    };
+    if (!number("QUALITY", 1, 100, o.quality))
+        return fail(QStringLiteral("QUALITY takes 1 to 100."));
+    if (!number("WIDTH", 1, 65535, o.width) || !number("HEIGHT", 1, 65535, o.height))
+        return fail(QStringLiteral("WIDTH and HEIGHT take a number of pixels."));
+    if (!number("PERCENT", 1, 1000, o.percent))
+        return fail(QStringLiteral("PERCENT takes 1 to 1000."));
+    const bool w = cmd.hasArg(QStringLiteral("WIDTH")), h = cmd.hasArg(QStringLiteral("HEIGHT"));
+    if (cmd.hasArg(QStringLiteral("PERCENT")))
+        o.resize = ImageOptions::Resize::Percent;
+    else if (w && h)
+        o.resize = cmd.hasFlag(QStringLiteral("STRETCH")) ? ImageOptions::Resize::Exact : ImageOptions::Resize::Fit;
+    else if (w)
+        o.resize = ImageOptions::Resize::Width;
+    else if (h)
+        o.resize = ImageOptions::Resize::Height;
+    else if (cmd.hasFlag(QStringLiteral("RUN")))
+        o.resize = ImageOptions::Resize::None; // a button that only converts keeps the size
+    if (cmd.hasFlag(QStringLiteral("ENLARGE")))
+        o.noEnlarge = false;
+    if (cmd.hasArg(QStringLiteral("ROTATE"))) {
+        bool ok = false;
+        const int r = ((cmd.value(QStringLiteral("ROTATE")).toInt(&ok) % 360) + 360) % 360;
+        if (!ok || r % 90 != 0)
+            return fail(QStringLiteral("ROTATE takes 90, 180 or 270."));
+        o.rotate = r;
+    }
+    if (cmd.hasArg(QStringLiteral("FLIP"))) {
+        const QString f = cmd.value(QStringLiteral("FLIP")).toLower();
+        o.flipH = f == QLatin1String("h") || f == QLatin1String("both");
+        o.flipV = f == QLatin1String("v") || f == QLatin1String("both");
+        if (!o.flipH && !o.flipV)
+            return fail(QStringLiteral("FLIP takes h, v or both."));
+    }
+    if (cmd.hasArg(QStringLiteral("WHENEXISTS"))
+        && !ImageOptions::whenExistsFromName(cmd.value(QStringLiteral("WHENEXISTS")), o.whenExists))
+        return fail(QStringLiteral("WHENEXISTS takes rename, replace or skip."));
+    const QString dest = Location::isLocal(destPath()) ? destPath() : QString();
+    if (cmd.hasArg(QStringLiteral("TO"))) {
+        const QString to = cmd.value(QStringLiteral("TO"));
+        o.destFolder = to.compare(QLatin1String("dest"), Qt::CaseInsensitive) == 0 ? dest : engine.resolvePath(to, sourcePath());
+        if (o.destFolder.isEmpty() || !Location::isLocal(o.destFolder))
+            return fail(QStringLiteral("TO needs a local folder (there is no destination to use)."));
+    }
+
+    auto *dlg = new ImageConvertDialog(files, o, dest, this);
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    if (cmd.hasFlag(QStringLiteral("RUN"))) {
+        // Out of sight; speaks up only when something went wrong.
+        connect(dlg, &ImageConvertDialog::converted, this, [this, dlg](const QList<ImageResult> &results) {
+            QStringList failed;
+            for (const ImageResult &r : results) {
+                if (r.target.isEmpty() && !r.skipped)
+                    failed << QStringLiteral("%1: %2").arg(QFileInfo(r.source).fileName(), r.error);
+            }
+            dlg->close();
+            if (!failed.isEmpty()) {
+                auto *box = new QMessageBox(QMessageBox::Warning, QStringLiteral("Convert Images"),
+                                            QStringLiteral("%1 pictures could not be converted.").arg(failed.size()),
+                                            QMessageBox::Ok, this);
+                box->setDetailedText(failed.join(QLatin1Char('\n')));
+                box->setAttribute(Qt::WA_DeleteOnClose);
+                box->show();
+            }
+        });
+        dlg->startConvert();
+        if (!dlg->isConverting()) {
+            const QString why = dlg->summary();
+            dlg->close();
+            return fail(QStringLiteral("Nothing to convert: %1").arg(why));
+        }
+        return true;
+    }
+    dlg->show();
+    return true;
 }
