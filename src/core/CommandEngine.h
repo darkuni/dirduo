@@ -31,6 +31,13 @@ public:
     virtual bool set(const ParsedCommand &cmd, QString *error) = 0;
     virtual bool select(const ParsedCommand &cmd, QString *error) = 0;
     virtual bool beginInlineRename() = 0;
+    virtual bool toolbar(const ParsedCommand &cmd, QString *error)
+    {
+        Q_UNUSED(cmd)
+        if (error)
+            *error = QStringLiteral("This window has no toolbars.");
+        return false;
+    }
 
     // Something changed right away (rename, new folder): refresh, then select
     // these paths.
@@ -52,6 +59,8 @@ public:
 //       NAVLOCK=on|off|toggle
 //       VIEW=details|list|icons  HIDDEN=on|off|toggle
 //   Select ALL|NONE|INVERT|PATTERN=<wildcard>
+//   Toolbar NAME=buttons|drives PLACE=top|bottom|left|right|between [NEWROW]
+//           STATE=on|off|toggle
 //
 // Argument codes: {sourcepath} {destpath} {filepath} {file} {focusedpath}
 // {dlgstring|Prompt text}. A trailing $ ({filepath$}) means the code is

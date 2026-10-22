@@ -38,6 +38,7 @@ add_library(linopus_core STATIC
     src/core/JobManager.cpp
     src/core/CommandParser.cpp
     src/core/CommandEngine.cpp
+    src/core/DriveList.cpp
 )
 target_include_directories(linopus_core PUBLIC src)
 target_link_libraries(linopus_core PUBLIC Qt6::Core Qt6::Gui Qt6::Concurrent)
@@ -56,6 +57,8 @@ add_library(linopus_ui STATIC
     src/ui/ButtonBar.cpp
     src/ui/CollisionDialog.cpp
     src/ui/ProgressWindow.cpp
+    src/ui/DrivesBar.cpp
+    src/ui/ToolbarStrip.cpp
     src/ui/ListerWindow.cpp
     src/ui/AppContext.cpp
 )
@@ -74,7 +77,7 @@ endif()
 if(LINOPUS_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS Test)
     enable_testing()
-    foreach(t aliases commandparser fileops trash jobmanager commandengine)
+    foreach(t aliases commandparser fileops trash jobmanager commandengine drives)
         add_executable(tst_${t} tests/tst_${t}.cpp)
         target_link_libraries(tst_${t} PRIVATE linopus_core Qt6::Test)
         add_test(NAME ${t} COMMAND tst_${t})

@@ -20,6 +20,8 @@ Targets: SteamOS Desktop Mode on the Steam Deck (x86_64) and Steam Frame (aarch6
 - Clipboard cut/copy/paste of files, interoperable with Dolphin and Nautilus
 - Drag and drop between displays and with other apps: same drive moves, another drive copies; Ctrl copies, Shift moves
 - Three-button toolbar: left, right and middle click run different commands
+- Drives toolbar: Root, Home, and every mounted SD card, USB stick or extra disk (anything under `/run/media`, `/media` or `/mnt`), updating as cards and sticks come and go. Click opens the drive in the source, middle-click in a new tab, right-click in the destination. The drive the source is on stays highlighted; hover for free space
+- Toolbars go anywhere: top, bottom, left, right, or between the two displays (where Drives starts). Between the displays they run vertically when the displays are side by side and horizontally when stacked. Several toolbars stack as rows or columns. Right-click a toolbar's handle or empty space, or use Window > Toolbars, to move, stack, reorder or hide it. Placement is saved per lister
 - Session: listers, tabs, layout and views come back next launch
 
 FTP/SFTP and archives-as-folders arrive with the KIO backend (see "Phase 1 gaps" below).
@@ -39,6 +41,7 @@ Every button, menu item, hotkey, drop and inline rename runs one of these. Butto
 | `Clipboard` | `COPY`, `CUT`, `PASTE` |
 | `Set` | `DUAL=on\|off\|toggle\|vertical\|horizontal\|flip`, `SOURCE=toggle`, `DESTLOCK=on\|off\|toggle`, `NAVLOCK=on\|off\|toggle`, `VIEW=details\|list\|icons`, `HIDDEN=on\|off\|toggle` |
 | `Select` | `ALL`, `NONE`, `INVERT`, `PATTERN=*.mp3` |
+| `Toolbar` | `NAME=buttons\|drives`, `PLACE=top\|bottom\|left\|right\|between`, `NEWROW`, `STATE=on\|off\|toggle` |
 
 Argument codes: `{sourcepath}`, `{destpath}`, `{filepath}` (every selected item), `{file}` (names only), `{focusedpath}`, `{dlgstring|Prompt text}`. Add `$` to require a value: `{filepath$}` stops the function when nothing is selected. Codes expand to whole arguments, so paths with spaces need no quoting.
 

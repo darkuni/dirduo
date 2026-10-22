@@ -7,6 +7,7 @@
 
 class AppContext;
 class ButtonBar;
+class DrivesBar;
 class FileDisplay;
 class FolderTab;
 class QAction;
@@ -14,6 +15,8 @@ class QActionGroup;
 class QMenu;
 class QSettings;
 class QSplitter;
+class QToolBar;
+class ToolbarStrip;
 
 // A lister: a window with one or two file displays. In dual mode one display
 // is SOURCE and the other DEST, and every command acts source to dest.
@@ -35,6 +38,16 @@ public:
     FileDisplay *display(int index) const { return m_displays[index]; }
     bool isDual() const { return m_dual; }
 
+    enum class ToolbarPlace { Top, Bottom, Left, Right, Between };
+    // Moves a toolbar to an edge of the window or between the displays.
+    // newRow starts a new row (or column) instead of sharing the last one.
+    void placeToolbar(QToolBar *bar, ToolbarPlace place, bool newRow = false);
+    ToolbarPlace toolbarPlace(QToolBar *bar) const;
+    QList<QToolBar *> toolbars() const;
+    QToolBar *toolbarByName(const QString &name) const;
+    DrivesBar *drivesBar() const { return m_drives; }
+    ToolbarStrip *toolbarStrip() const { return m_strip; }
+
     // CommandContext
     QString sourcePath() const override;
     QString destPath() const override;
@@ -48,6 +61,7 @@ public:
     bool set(const ParsedCommand &cmd, QString *error) override;
     bool select(const ParsedCommand &cmd, QString *error) override;
     bool beginInlineRename() override;
+    bool toolbar(const ParsedCommand &cmd, QString *error) override;
     void afterLocalChange(const QStringList &selectPaths) override;
 
 protected:
@@ -58,6 +72,9 @@ private:
     void buildActions();
     void buildMenus();
     void buildToolbar();
+    void setupToolbarMenu(QToolBar *bar);
+    void fillToolbarMenu(QMenu *menu, QToolBar *bar);
+    void rebuildToolbarsMenu();
 
     void setDual(bool on);
     void setSideBySide(bool sideBySide);
@@ -89,6 +106,9 @@ private:
     QString m_lastPath[2]; // for navigation lock
 
     ButtonBar *m_buttons = nullptr;
+    DrivesBar *m_drives = nullptr;
+    ToolbarStrip *m_strip = nullptr;
+    QMenu *m_toolbarsMenu = nullptr;
 
     QPointer<FolderTab> m_changeTarget; // tab that afterLocalChange refers to
 

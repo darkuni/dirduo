@@ -61,7 +61,7 @@ QStringList CommandEngine::commandNames()
 {
     return {QStringLiteral("Clipboard"), QStringLiteral("Copy"), QStringLiteral("CreateFolder"),
             QStringLiteral("Delete"), QStringLiteral("Go"), QStringLiteral("Move"),
-            QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Set")};
+            QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Set"), QStringLiteral("Toolbar")};
 }
 
 QString CommandEngine::resolvePath(const QString &input, const QString &base) const
@@ -167,6 +167,8 @@ bool CommandEngine::execute(const ParsedCommand &cmd, CommandContext &ctx, QStri
         return ctx.set(cmd, error);
     if (cmd.is(QStringLiteral("Select")))
         return ctx.select(cmd, error);
+    if (cmd.is(QStringLiteral("Toolbar")))
+        return ctx.toolbar(cmd, error);
     if (error)
         *error = QStringLiteral("Unknown command \"%1\".").arg(cmd.name);
     return false;

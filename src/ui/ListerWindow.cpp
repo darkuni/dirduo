@@ -7,6 +7,8 @@
 #include "ui/AppContext.h"
 #include "ui/BreadcrumbBar.h"
 #include "ui/ButtonBar.h"
+#include "ui/DrivesBar.h"
+#include "ui/ToolbarStrip.h"
 #include "ui/FileDisplay.h"
 #include "ui/FolderTab.h"
 #include "ui/ProgressWindow.h"
@@ -71,6 +73,8 @@ ListerWindow::ListerWindow(AppContext &app, QWidget *parent)
                 mirrorNavigation(from, before, now);
             updateTitle();
             syncViewActions();
+            if (m_drives && from == sourceDisplay())
+                m_drives->setActivePath(now);
         });
         connect(d, &FileDisplay::navigateRequested, this, &ListerWindow::onNavigateRequested);
         connect(d, &FileDisplay::renameRequested, this, &ListerWindow::onRenameRequested);
@@ -85,6 +89,12 @@ ListerWindow::ListerWindow(AppContext &app, QWidget *parent)
                 t->focusView(); // focusing it makes it the source unless it is a locked dest
         });
     }
+    // Toolbars can live between the two displays.
+    m_strip = new ToolbarStrip(m_split);
+    m_split->insertWidget(1, m_strip);
+    m_split->setStretchFactor(0, 1);
+    m_split->setStretchFactor(1, 0);
+    m_split->setStretchFactor(2, 1);
     m_split->setChildrenCollapsible(false);
     setCentralWidget(m_split);
 
@@ -229,6 +239,9 @@ void ListerWindow::buildMenus()
     connect(m_aliasMenu, &QMenu::aboutToShow, this, &ListerWindow::rebuildAliasMenu);
 
     QMenu *window = menuBar()->addMenu(QStringLiteral("&Window"));
+    m_toolbarsMenu = window->addMenu(QIcon::fromTheme(QStringLiteral("configure-toolbars")), QStringLiteral("Toolbars"));
+    connect(m_toolbarsMenu, &QMenu::aboutToShow, this, &ListerWindow::rebuildToolbarsMenu);
+    window->addSeparator();
     QAction *jobs = window->addAction(QIcon::fromTheme(QStringLiteral("view-process-all")), QStringLiteral("File Operations"));
     jobs->setShortcut(QKeySequence(QStringLiteral("Ctrl+J")));
     connect(window, &QMenu::aboutToShow, this, [this, jobs]() { jobs->setEnabled(m_app.progress().count() > 0); });
@@ -253,6 +266,193 @@ void ListerWindow::buildToolbar()
     m_buttons = new ButtonBar(QStringLiteral("Buttons"), defs, this);
     connect(m_buttons, &ButtonBar::commandTriggered, this, [this](const QString &cmd) { runCommand(cmd); });
     addToolBar(Qt::TopToolBarArea, m_buttons);
+    setupToolbarMenu(m_buttons);
+
+    m_drives = new DrivesBar(this);
+    connect(m_drives, &DrivesBar::commandTriggered, this, [this](const QString &cmd) { runCommand(cmd); });
+    setupToolbarMenu(m_drives);
+    // Opus puts the drives between the displays; so does Linopus by default.
+    placeToolbar(m_drives, ToolbarPlace::Between);
+}
+
+QList<QToolBar *> ListerWindow::toolbars() const
+{
+    return {m_buttons, m_drives};
+}
+
+QToolBar *ListerWindow::toolbarByName(const QString &name) const
+{
+    const QString n = name.toLower();
+    for (QToolBar *bar : toolbars()) {
+        if (bar->windowTitle().toLower() == n || bar->objectName() == QStringLiteral("toolbar-") + n)
+            return bar;
+    }
+    return nullptr;
+}
+
+ListerWindow::ToolbarPlace ListerWindow::toolbarPlace(QToolBar *bar) const
+{
+    if (m_strip->contains(bar))
+        return ToolbarPlace::Between;
+    switch (toolBarArea(bar)) {
+    case Qt::BottomToolBarArea:
+        return ToolbarPlace::Bottom;
+    case Qt::LeftToolBarArea:
+        return ToolbarPlace::Left;
+    case Qt::RightToolBarArea:
+        return ToolbarPlace::Right;
+    default:
+        return ToolbarPlace::Top;
+    }
+}
+
+void ListerWindow::placeToolbar(QToolBar *bar, ToolbarPlace place, bool newRow)
+{
+    if (m_strip->contains(bar)) {
+        m_strip->removeBar(bar);
+    } else if (toolBarArea(bar) != Qt::NoToolBarArea) {
+        removeToolBarBreak(bar);
+        removeToolBar(bar);
+    }
+
+    if (place == ToolbarPlace::Between) {
+        m_strip->addBar(bar);
+        bar->setVisible(true);
+        m_strip->updateGeometryForBars();
+        return;
+    }
+
+    Qt::ToolBarArea area = Qt::TopToolBarArea;
+    if (place == ToolbarPlace::Bottom)
+        area = Qt::BottomToolBarArea;
+    else if (place == ToolbarPlace::Left)
+        area = Qt::LeftToolBarArea;
+    else if (place == ToolbarPlace::Right)
+        area = Qt::RightToolBarArea;
+
+    bool areaHasBars = false;
+    for (QToolBar *other : toolbars()) {
+        if (other != bar && !m_strip->contains(other) && toolBarArea(other) == area && !other->isHidden())
+            areaHasBars = true;
+    }
+    if (newRow && areaHasBars)
+        addToolBarBreak(area);
+    bar->setParent(this);
+    bar->setMovable(true);
+    addToolBar(area, bar);
+    bar->show();
+    m_strip->updateGeometryForBars();
+}
+
+void ListerWindow::setupToolbarMenu(QToolBar *bar)
+{
+    // Right-click on a toolbar's handle or empty space; buttons keep their own
+    // right-click function.
+    bar->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(bar, &QWidget::customContextMenuRequested, this, [this, bar](const QPoint &pos) {
+        QMenu menu(this);
+        fillToolbarMenu(&menu, bar);
+        menu.exec(bar->mapToGlobal(pos));
+    });
+}
+
+void ListerWindow::fillToolbarMenu(QMenu *menu, QToolBar *bar)
+{
+    const ToolbarPlace current = toolbarPlace(bar);
+    auto *group = new QActionGroup(menu);
+    auto add = [&](const QString &text, ToolbarPlace p) {
+        QAction *a = menu->addAction(text);
+        a->setCheckable(true);
+        a->setChecked(!bar->isHidden() && current == p);
+        group->addAction(a);
+        connect(a, &QAction::triggered, this, [this, bar, p]() { placeToolbar(bar, p); });
+    };
+    QAction *title = menu->addAction(bar->windowTitle());
+    title->setEnabled(false);
+    add(QStringLiteral("Between the Displays"), ToolbarPlace::Between);
+    add(QStringLiteral("Top"), ToolbarPlace::Top);
+    add(QStringLiteral("Bottom"), ToolbarPlace::Bottom);
+    add(QStringLiteral("Left"), ToolbarPlace::Left);
+    add(QStringLiteral("Right"), ToolbarPlace::Right);
+    menu->addSeparator();
+    if (current == ToolbarPlace::Between) {
+        const int idx = m_strip->bars().indexOf(bar);
+        const bool sideBySide = m_split->orientation() == Qt::Horizontal;
+        QAction *earlier = menu->addAction(sideBySide ? QStringLiteral("Move Left") : QStringLiteral("Move Up"));
+        earlier->setEnabled(idx > 0);
+        connect(earlier, &QAction::triggered, this, [this, bar]() { m_strip->moveBar(bar, -1); });
+        QAction *later = menu->addAction(sideBySide ? QStringLiteral("Move Right") : QStringLiteral("Move Down"));
+        later->setEnabled(idx >= 0 && idx < m_strip->bars().size() - 1);
+        connect(later, &QAction::triggered, this, [this, bar]() { m_strip->moveBar(bar, 1); });
+    } else {
+        QAction *row = menu->addAction(QStringLiteral("Start a New Row"));
+        row->setToolTip(QStringLiteral("Stack this toolbar on its own row instead of sharing one"));
+        connect(row, &QAction::triggered, this, [this, bar, current]() { placeToolbar(bar, current, true); });
+    }
+    menu->addSeparator();
+    QAction *hide = menu->addAction(QStringLiteral("Hide %1").arg(bar->windowTitle()));
+    connect(hide, &QAction::triggered, this, [this, bar]() {
+        bar->hide();
+        m_strip->updateGeometryForBars();
+    });
+}
+
+void ListerWindow::rebuildToolbarsMenu()
+{
+    m_toolbarsMenu->clear();
+    for (QToolBar *bar : toolbars()) {
+        QMenu *sub = m_toolbarsMenu->addMenu(bar->windowTitle());
+        QAction *shown = sub->addAction(QStringLiteral("Show"));
+        shown->setCheckable(true);
+        shown->setChecked(!bar->isHidden());
+        connect(shown, &QAction::toggled, this, [this, bar](bool on) {
+            bar->setVisible(on);
+            m_strip->updateGeometryForBars();
+        });
+        sub->addSeparator();
+        fillToolbarMenu(sub, bar);
+    }
+}
+
+bool ListerWindow::toolbar(const ParsedCommand &cmd, QString *error)
+{
+    auto fail = [error](const QString &msg) {
+        if (error)
+            *error = msg;
+        return false;
+    };
+    QString name = cmd.value(QStringLiteral("NAME"));
+    if (name.isEmpty() && !cmd.positional.isEmpty())
+        name = cmd.positional.first();
+    QToolBar *bar = toolbarByName(name);
+    if (!bar)
+        return fail(QStringLiteral("There is no toolbar called \"%1\". Try buttons or drives.").arg(name));
+
+    if (cmd.hasArg(QStringLiteral("PLACE"))) {
+        const QString p = cmd.value(QStringLiteral("PLACE")).toLower();
+        ToolbarPlace place;
+        if (p == QLatin1String("top"))
+            place = ToolbarPlace::Top;
+        else if (p == QLatin1String("bottom"))
+            place = ToolbarPlace::Bottom;
+        else if (p == QLatin1String("left"))
+            place = ToolbarPlace::Left;
+        else if (p == QLatin1String("right"))
+            place = ToolbarPlace::Right;
+        else if (p == QLatin1String("between") || p == QLatin1String("middle") || p == QLatin1String("center"))
+            place = ToolbarPlace::Between;
+        else
+            return fail(QStringLiteral("PLACE takes top, bottom, left, right or between."));
+        placeToolbar(bar, place, cmd.hasFlag(QStringLiteral("NEWROW")));
+    }
+    if (cmd.hasArg(QStringLiteral("STATE"))) {
+        bool on = !bar->isHidden();
+        if (!parseSwitch(cmd.value(QStringLiteral("STATE")), on, on))
+            return fail(QStringLiteral("STATE takes on, off or toggle."));
+        bar->setVisible(on);
+        m_strip->updateGeometryForBars();
+    }
+    return true;
 }
 
 // ---------------------------------------------------------------- layout & roles
@@ -302,9 +502,13 @@ void ListerWindow::setSideBySide(bool sideBySide)
 {
     m_sideBySide = sideBySide;
     m_split->setOrientation(sideBySide ? Qt::Horizontal : Qt::Vertical);
+    m_strip->setSplitOrientation(m_split->orientation());
     const int total = sideBySide ? m_split->width() : m_split->height();
-    if (total > 0)
-        m_split->setSizes({total / 2, total - total / 2});
+    const int strip = m_strip->isVisible() ? (sideBySide ? m_strip->width() : m_strip->height()) : 0;
+    if (total > 0) {
+        const int rest = total - strip;
+        m_split->setSizes({rest / 2, strip, rest - rest / 2});
+    }
     syncViewActions();
 }
 
@@ -334,6 +538,8 @@ void ListerWindow::updateRoles()
     }
     updateTitle();
     syncViewActions();
+    if (m_drives && sourceTab())
+        m_drives->setActivePath(sourceTab()->path());
 }
 
 void ListerWindow::updateTitle()
@@ -787,7 +993,17 @@ void ListerWindow::saveListerState(QSettings &s) const
     s.setValue(QStringLiteral("windowState"), QMainWindow::saveState());
     s.setValue(QStringLiteral("dual"), m_dual);
     s.setValue(QStringLiteral("sideBySide"), m_sideBySide);
-    s.setValue(QStringLiteral("splitter"), m_split->saveState());
+    s.setValue(QStringLiteral("splitter3"), m_split->saveState()); // display, strip, display
+    QStringList between;
+    for (QToolBar *bar : m_strip->bars())
+        between << bar->objectName();
+    QStringList hiddenBars;
+    for (QToolBar *bar : toolbars()) {
+        if (bar->isHidden())
+            hiddenBars << bar->objectName();
+    }
+    s.setValue(QStringLiteral("toolbarsBetween"), between);
+    s.setValue(QStringLiteral("toolbarsHidden"), hiddenBars);
     s.setValue(QStringLiteral("source"), m_source);
     s.setValue(QStringLiteral("hidden"), m_displays[0]->showHidden());
     for (int i = 0; i < 2; ++i) {
@@ -843,8 +1059,25 @@ bool ListerWindow::restoreListerState(QSettings &s)
             m_displays[i]->setDestLocked(s.value(QStringLiteral("display%1/destLocked").arg(i), false).toBool());
     }
     restoreGeometry(s.value(QStringLiteral("geometry")).toByteArray());
+    // Edge toolbars come back through QMainWindow; it looks for every toolbar it
+    // saved, so take the between-displays ones out of the strip first.
+    for (QToolBar *bar : m_strip->bars())
+        placeToolbar(bar, ToolbarPlace::Top);
     QMainWindow::restoreState(s.value(QStringLiteral("windowState")).toByteArray());
-    m_split->restoreState(s.value(QStringLiteral("splitter")).toByteArray());
+    const QStringList between = s.contains(QStringLiteral("toolbarsBetween"))
+        ? s.value(QStringLiteral("toolbarsBetween")).toStringList()
+        : QStringList{m_drives->objectName()}; // sessions from before the strip existed
+    for (const QString &name : between) {
+        for (QToolBar *bar : toolbars()) {
+            if (bar->objectName() == name)
+                placeToolbar(bar, ToolbarPlace::Between);
+        }
+    }
+    const QStringList hiddenBars = s.value(QStringLiteral("toolbarsHidden")).toStringList();
+    for (QToolBar *bar : toolbars())
+        bar->setVisible(!hiddenBars.contains(bar->objectName()));
+    m_strip->updateGeometryForBars();
+    m_split->restoreState(s.value(QStringLiteral("splitter3")).toByteArray());
     updateRoles();
     if (auto *t = sourceTab())
         t->focusView();

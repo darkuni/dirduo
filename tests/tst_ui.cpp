@@ -3,6 +3,9 @@
 #include "core/Paths.h"
 #include "ui/AppContext.h"
 #include "ui/BreadcrumbBar.h"
+#include "ui/ButtonBar.h"
+#include "ui/DrivesBar.h"
+#include "ui/ToolbarStrip.h"
 #include "ui/FileDisplay.h"
 #include "ui/FolderTab.h"
 #include "ui/ListerWindow.h"
@@ -15,6 +18,7 @@
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTimer>
 
 namespace {
 
@@ -206,6 +210,72 @@ private Q_SLOTS:
         FolderTab *t = w->display(0)->currentTab();
         QTRY_COMPARE(t->selectedPaths().size(), 2);
         QVERIFY(QFileInfo(root + QStringLiteral("/a/X")).isDir());
+    }
+
+    void drivesBarStartsBetweenDisplays()
+    {
+        QCOMPARE(w->toolbarPlace(w->drivesBar()), ListerWindow::ToolbarPlace::Between);
+        QVERIFY(w->toolbarStrip()->isVisible());
+        const auto &drives = w->drivesBar()->drives();
+        QVERIFY(drives.size() >= 2);
+        QCOMPARE(drives.at(0).name, QStringLiteral("Root"));
+        QCOMPARE(drives.at(1).name, QStringLiteral("Home"));
+    }
+
+    void driveButtonsNavigate()
+    {
+        QList<DriveEntry> drives = w->drivesBar()->drives().mid(0, 2);
+        DriveEntry card;
+        card.kind = DriveEntry::Kind::SdCard;
+        card.name = QStringLiteral("Card");
+        card.path = root + QStringLiteral("/b");
+        drives << card;
+        w->drivesBar()->setDrivesForTesting(drives);
+        auto buttons = w->drivesBar()->findChildren<ThreeButton *>();
+        QCOMPARE(buttons.size(), 3);
+        QTest::mouseClick(buttons.at(2), Qt::LeftButton);
+        QTRY_COMPARE(w->display(0)->currentTab()->path(), root + QStringLiteral("/b"));
+        QTRY_VERIFY(buttons.at(2)->isChecked()); // marks the drive the source is on
+        QVERIFY(!buttons.at(0)->isChecked());
+        // Right-click opens it in the destination.
+        w->display(1)->currentTab()->navigate(root + QStringLiteral("/a"));
+        QTest::mouseClick(buttons.at(2), Qt::RightButton);
+        QTRY_COMPARE(w->display(1)->currentTab()->path(), root + QStringLiteral("/b"));
+    }
+
+    void toolbarsMoveAndStack()
+    {
+        QVERIFY(w->runCommand(QStringLiteral("Toolbar NAME=buttons PLACE=between")));
+        QCOMPARE(w->toolbarStrip()->bars().size(), 2);
+        // Side by side: the strip's bars run vertically.
+        QCOMPARE(w->toolbarByName(QStringLiteral("buttons"))->orientation(), Qt::Vertical);
+        QVERIFY(w->runCommand(QStringLiteral("Set DUAL=horizontal")));
+        QCOMPARE(w->toolbarByName(QStringLiteral("buttons"))->orientation(), Qt::Horizontal);
+
+        QVERIFY(w->runCommand(QStringLiteral("Toolbar NAME=drives PLACE=left\nToolbar NAME=buttons PLACE=left NEWROW")));
+        QCOMPARE(w->toolbarPlace(w->drivesBar()), ListerWindow::ToolbarPlace::Left);
+        QVERIFY(!w->toolbarStrip()->isVisible()); // nothing left between the displays
+        QVERIFY(w->runCommand(QStringLiteral("Toolbar drives STATE=off")));
+        QVERIFY(w->drivesBar()->isHidden());
+        QTimer::singleShot(200, []() {
+            if (QWidget *box = QApplication::activeModalWidget())
+                box->close();
+        });
+        QVERIFY(!w->runCommand(QStringLiteral("Toolbar NAME=nope PLACE=top"))); // error box, closed above
+    }
+
+    void toolbarPlacementIsSaved()
+    {
+        QVERIFY(w->runCommand(QStringLiteral("Toolbar NAME=buttons PLACE=between\nToolbar NAME=drives PLACE=bottom")));
+        m_app->saveSession({w});
+        w->close();
+        w = nullptr;
+        QApplication::processEvents();
+        m_app->restoreSession();
+        w = m_app->activeLister();
+        QVERIFY(w);
+        QCOMPARE(w->toolbarPlace(w->toolbarByName(QStringLiteral("buttons"))), ListerWindow::ToolbarPlace::Between);
+        QCOMPARE(w->toolbarPlace(w->drivesBar()), ListerWindow::ToolbarPlace::Bottom);
     }
 
     void sessionRoundTrip()

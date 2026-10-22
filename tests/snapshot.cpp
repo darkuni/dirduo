@@ -7,6 +7,8 @@
 #include "core/Paths.h"
 #include "ui/AppContext.h"
 #include "ui/CollisionDialog.h"
+#include "ui/DrivesBar.h"
+#include "ui/ToolbarStrip.h"
 #include "ui/FileDisplay.h"
 #include "ui/FolderTab.h"
 #include "ui/ListerWindow.h"
@@ -62,6 +64,23 @@ int main(int argc, char *argv[])
     AppContext context;
     ListerWindow *w = context.newLister(root);
     w->resize(1280, 800); // Steam Deck screen
+
+    // No SD card in a build box: show what the Deck would have.
+    QDir().mkpath(root + QStringLiteral("/media/Games/roms"));
+    QDir().mkpath(root + QStringLiteral("/media/KINGSTON"));
+    QList<DriveEntry> drives = w->drivesBar()->drives().mid(0, 2);
+    DriveEntry sd;
+    sd.kind = DriveEntry::Kind::SdCard;
+    sd.name = QStringLiteral("Games");
+    sd.path = root + QStringLiteral("/media/Games");
+    sd.bytesFree = 120LL * 1024 * 1024 * 1024;
+    sd.bytesTotal = 476LL * 1024 * 1024 * 1024;
+    DriveEntry usb = sd;
+    usb.kind = DriveEntry::Kind::Usb;
+    usb.name = QStringLiteral("KINGSTON");
+    usb.path = root + QStringLiteral("/media/KINGSTON");
+    drives << sd << usb;
+    w->drivesBar()->setDrivesForTesting(drives);
     w->display(1)->currentTab()->navigate(root + QStringLiteral("/Backup"));
     w->display(0)->currentTab()->navigate(root + QStringLiteral("/Music"));
     QTest::qWait(500);
@@ -74,6 +93,10 @@ int main(int argc, char *argv[])
     context.jobs().waitForIdle(5000);
     QTest::qWait(500);
     shot(w, out, QStringLiteral("03-after-copy"));
+
+    w->runCommand(QStringLiteral("Go \"") + root + QStringLiteral("/media/Games\""));
+    shot(w, out, QStringLiteral("03b-on-sd-card"));
+    w->runCommand(QStringLiteral("Go \"") + root + QStringLiteral("/Music\""));
 
     w->runCommand(QStringLiteral("Set DUAL=horizontal\nSet VIEW=icons"));
     w->display(0)->currentTab()->navigate(root + QStringLiteral("/Pictures"));
@@ -89,6 +112,16 @@ int main(int argc, char *argv[])
     w->display(0)->currentTab()->selectPaths({root + QStringLiteral("/Music/audio1.mp3")});
     w->runCommand(QStringLiteral("Rename"));
     shot(w, out, QStringLiteral("06-rename-locked"));
+
+    // Both toolbars stacked between the displays.
+    w->runCommand(QStringLiteral("Set DESTLOCK=off\nToolbar NAME=buttons PLACE=between"));
+    QTest::qWait(300);
+    shot(w, out, QStringLiteral("06b-both-bars-between"));
+    w->runCommand(QStringLiteral("Set DUAL=horizontal"));
+    shot(w, out, QStringLiteral("06c-both-bars-between-horizontal"));
+    w->runCommand(QStringLiteral("Set DUAL=vertical\nToolbar NAME=buttons PLACE=top\nToolbar NAME=drives PLACE=top NEWROW"));
+    shot(w, out, QStringLiteral("06d-stacked-at-top"));
+    w->runCommand(QStringLiteral("Toolbar NAME=drives PLACE=between"));
 
     // Collision dialog, rendered on its own.
     writeFile(root + QStringLiteral("/Backup/audio1.mp3"), 900);
