@@ -41,8 +41,16 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 ## File operations
 
 - [ ] Copy a large file (a few GB) from internal storage to the SD card: progress, pause and resume work.
-- [ ] Copy onto an existing file: the collision dialog shows both files; Keep Both makes a renamed copy.
+- [ ] Copy onto an existing file: the collision dialog shows both files; Rename keeps both under a new name.
 - [ ] Delete goes to the trash on both internal storage and the SD card.
+
+## Newer things (quick)
+
+- [ ] View > Text and Icon Size > Larger: everything readable from arm's length; back to Normal.
+- [ ] Take a screenshot with Spectacle and copy it to the clipboard, then Ctrl+V in a folder: a PNG appears.
+- [ ] Select a few files, Shift+F2: Advanced Rename shows the before and after; rename, then Edit > Undo Rename.
+- [ ] Window > Customize Toolbars: drag a button to another spot, double-click one to edit, close.
+- [ ] File > Settings > Back Up Settings: a zip lands where you choose.
 
 ## Report back
 
