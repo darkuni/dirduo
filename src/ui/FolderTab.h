@@ -137,6 +137,7 @@ private:
     void applyFormatFor(const QString &path);
     void autoSwitchForContent();
     void updateLocationColumn();
+    void fitNameColumn();
 
     QString m_path;
     QString m_error;

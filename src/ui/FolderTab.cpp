@@ -565,6 +565,10 @@ bool FolderTab::eventFilter(QObject *watched, QEvent *event)
     case QEvent::MouseButtonPress:
         Q_EMIT activated();
         break;
+    case QEvent::Resize:
+        if (watched == m_details->viewport())
+            fitNameColumn();
+        break;
     case QEvent::MouseMove: {
         // Hovering a folder measures it; the size fills in when ready.
         if (!isViewport || !Location::isLocal(m_path))
@@ -683,6 +687,7 @@ void FolderTab::setColumnVisible(int column, bool visible)
     h->setSectionHidden(column, !visible);
     if (visible && h->sectionSize(column) < 40)
         h->resizeSection(column, column == FileListModel::LocationColumn ? 220 : 120);
+    fitNameColumn();
     Q_EMIT viewStateChanged();
 }
 
@@ -707,6 +712,7 @@ void FolderTab::updateLocationColumn()
     // The Location column only means something in flat view.
     const bool flat = m_lister->flatMode() != DirLister::FlatMode::Off;
     m_details->header()->setSectionHidden(FileListModel::LocationColumn, !flat);
+    fitNameColumn();
 }
 
 void FolderTab::showHeaderMenu(const QPoint &globalPos)
@@ -975,5 +981,25 @@ void FolderTab::autoSwitchForContent()
         m_modeBeforeAuto = m_mode;
         m_autoIcons = true;
         setViewMode(ViewMode::Icons);
+    }
+}
+
+void FolderTab::fitNameColumn()
+{
+    // The name column takes the room left over, but never less than enough to
+    // read a name: on a narrow display the list scrolls sideways instead.
+    QHeaderView *h = m_details->header();
+    const int minName = fontMetrics().averageCharWidth() * 22;
+    int others = 0;
+    for (int c = 0; c < FileListModel::ColumnCount; ++c) {
+        if (c != FileListModel::NameColumn && !h->isSectionHidden(c))
+            others += h->sectionSize(c);
+    }
+    const bool roomy = m_details->viewport()->width() - others >= minName;
+    if (roomy && h->sectionResizeMode(FileListModel::NameColumn) != QHeaderView::Stretch) {
+        h->setSectionResizeMode(FileListModel::NameColumn, QHeaderView::Stretch);
+    } else if (!roomy && h->sectionResizeMode(FileListModel::NameColumn) == QHeaderView::Stretch) {
+        h->setSectionResizeMode(FileListModel::NameColumn, QHeaderView::Interactive);
+        h->resizeSection(FileListModel::NameColumn, minName);
     }
 }
