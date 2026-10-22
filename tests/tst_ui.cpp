@@ -10,6 +10,8 @@
 #include "ui/ImageConvertDialog.h"
 #include "ui/HistoryDialog.h"
 #include "ui/SelectDialog.h"
+#include "ui/Launch.h"
+#include <QtConcurrent>
 #include <QImageReader>
 #include "ui/FindDialog.h"
 #include "core/Collections.h"
@@ -1949,6 +1951,94 @@ private Q_SLOTS:
         type(QStringLiteral("zf"));
         QTest::keyClick(t->typeAheadEdit(), Qt::Key_Return);
         QTRY_COMPARE(t->path(), root + QStringLiteral("/a/zfolder"));
+    }
+
+    void launchTargets()
+    {
+        const QString a = root + QStringLiteral("/a");
+        Launch::Target t = Launch::resolve(a, QString(), &m_app->aliases());
+        QCOMPARE(t.folder, a);
+        QVERIFY(t.select.isEmpty());
+        // A file: its folder, with it selected ("Show in folder").
+        t = Launch::resolve(QStringLiteral("file://") + a + QStringLiteral("/one.txt"), QString(), &m_app->aliases());
+        QCOMPARE(t.folder, a);
+        QCOMPARE(t.select, a + QStringLiteral("/one.txt"));
+        // Relative to where it was started, and percent-encoded links.
+        touch(root + QStringLiteral("/with space/x.txt"));
+        t = Launch::resolve(QStringLiteral("with space"), root, &m_app->aliases());
+        QCOMPARE(t.folder, root + QStringLiteral("/with space"));
+        t = Launch::resolve(QUrl::fromLocalFile(root + QStringLiteral("/with space")).toString(), QString(), &m_app->aliases());
+        QCOMPARE(t.folder, root + QStringLiteral("/with space"));
+        // Aliases, and something that is not there: the nearest folder that is.
+        QVERIFY(m_app->aliases().setUserAlias(QStringLiteral("roms"), a));
+        QCOMPARE(Launch::resolve(QStringLiteral("/roms"), QString(), &m_app->aliases()).folder, a);
+        QCOMPARE(Launch::resolve(a + QStringLiteral("/not/there"), QString(), &m_app->aliases()).folder, a);
+        // Servers stay as they are.
+        QCOMPARE(Launch::resolve(QStringLiteral("sftp://deck@unraid/mnt/user"), QString(), nullptr).folder,
+                 QStringLiteral("sftp://deck@unraid/mnt/user"));
+        QCOMPARE(Launch::resolve(QStringLiteral("~"), QString(), nullptr).folder, QDir::homePath());
+    }
+
+    void secondLaunchHandsOver()
+    {
+        QTemporaryDir run;
+        const QByteArray oldRuntime = qgetenv("XDG_RUNTIME_DIR");
+        qputenv("XDG_RUNTIME_DIR", run.path().toUtf8());
+        qunsetenv("FLATPAK_ID");
+        QCOMPARE(Launch::socketPath(), run.path() + QStringLiteral("/linopus.sock"));
+        // Nobody running yet.
+        QVERIFY(!Launch::sendToRunning(Launch::Request(), 300));
+
+        auto server = std::make_unique<InstanceServer>();
+        QVERIFY(server->listen());
+        QList<Launch::Request> got;
+        connect(server.get(), &InstanceServer::requested, this, [this, &got](const Launch::Request &r) {
+            got << r;
+            m_app->handleLaunch(r);
+        });
+        auto send = [](const Launch::Request &r) {
+            // The client waits for an answer, so it cannot share the server's thread.
+            QFuture<bool> f = QtConcurrent::run([r]() { return Launch::sendToRunning(r, 3000); });
+            while (!f.isFinished())
+                QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+            return f.result();
+        };
+
+        // A file: a new lister on its folder, the file selected.
+        const int before = m_app->listerCount();
+        Launch::Request r;
+        r.args = {QStringLiteral("a/two.txt")};
+        r.cwd = root;
+        QVERIFY(send(r));
+        QTRY_COMPARE(got.size(), 1);
+        QCOMPARE(got.first().cwd, root);
+        QCOMPARE(m_app->listerCount(), before + 1);
+        ListerWindow *opened = m_app->activeLister();
+        QTRY_COMPARE(opened->sourceDisplay()->currentTab()->selectedPaths(), QStringList{root + QStringLiteral("/a/two.txt")});
+
+        // --tab: a tab in that lister. --cmd: run in it.
+        r = {};
+        r.args = {root + QStringLiteral("/b")};
+        r.tab = true;
+        r.commands = {QStringLiteral("Set VIEW=list")};
+        QVERIFY(send(r));
+        QTRY_COMPARE(got.size(), 2);
+        QCOMPARE(m_app->listerCount(), before + 1);
+        QCOMPARE(opened->sourceDisplay()->tabCount(), 2);
+        QCOMPARE(opened->sourceDisplay()->currentTab()->path(), root + QStringLiteral("/b"));
+        QCOMPARE(opened->sourceDisplay()->currentTab()->viewMode(), FolderTab::ViewMode::List);
+        opened->close();
+
+        // A second server cannot take over the running one's socket; a
+        // stale one (after a crash) is taken.
+        InstanceServer other;
+        QVERIFY(!other.listen());
+        server.reset();
+        QFile stale(run.path() + QStringLiteral("/linopus.sock"));
+        QVERIFY(stale.open(QIODevice::WriteOnly));
+        stale.close();
+        QVERIFY(other.listen());
+        qputenv("XDG_RUNTIME_DIR", oldRuntime);
     }
 
 private:

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ui/Launch.h"
+
 #include "core/Job.h"
 
 #include <QList>
@@ -64,6 +66,9 @@ public:
     void quitAll();
     bool isQuitting() const { return m_quitting; }
 
+    // A launch from outside (or handed over by a later launch): folders and
+    // files to open, commands to run; brings a lister to the front.
+    void handleLaunch(const Launch::Request &request);
     // Reopens the listers from last time (or one default lister).
     void restoreSession();
     void saveSession(const QList<ListerWindow *> &listers);

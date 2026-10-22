@@ -1,4 +1,6 @@
 #include "ui/AppContext.h"
+#include "ui/FolderTab.h"
+#include "ui/FileDisplay.h"
 
 #include "core/AliasManager.h"
 #include "core/CommandEngine.h"
@@ -158,6 +160,41 @@ void AppContext::quitAll()
     m_quitting = true;
     for (ListerWindow *w : std::as_const(open))
         w->close();
+}
+
+void AppContext::handleLaunch(const Launch::Request &request)
+{
+    ListerWindow *target = activeLister();
+    for (const QString &arg : request.args) {
+        const Launch::Target t = Launch::resolve(arg, request.cwd, &aliases());
+        if (t.folder.isEmpty())
+            continue;
+        FolderTab *tab = nullptr;
+        if (request.tab && target) {
+            tab = target->sourceDisplay()->addTab(t.folder);
+        } else {
+            target = newLister(t.folder);
+            tab = target->sourceDisplay()->currentTab();
+        }
+        if (tab && !t.select.isEmpty())
+            tab->selectPaths({t.select}); // once it has been read
+    }
+    if (!request.commands.isEmpty()) {
+        if (!target)
+            target = newLister();
+        for (const QString &c : request.commands)
+            target->runCommand(c);
+    }
+    if (!target)
+        target = newLister(); // started again with nothing to say: a lister
+    // Wayland only lets a window come forward with the launcher's token.
+    if (!request.activationToken.isEmpty())
+        qputenv("XDG_ACTIVATION_TOKEN", request.activationToken.toUtf8());
+    if (target->isMinimized())
+        target->showNormal();
+    target->show();
+    target->raise();
+    target->activateWindow();
 }
 
 void AppContext::restoreSession()

@@ -12,7 +12,7 @@ endif()
 
 set(LINOPUS_APP_ID "com.monroeworld.Linopus")
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Concurrent)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Concurrent Network)
 
 # KIO adds servers (SFTP, FTP, SMB, WebDAV...) and archives as folders. Without
 # it Linopus still builds and handles local files.
@@ -136,12 +136,13 @@ add_library(linopus_ui STATIC
     src/ui/ImageConvertDialog.cpp
     src/ui/HistoryDialog.cpp
     src/ui/SelectDialog.cpp
+    src/ui/Launch.cpp
     src/ui/PreferencesDialog.cpp
     src/ui/ViewerPane.cpp
     src/ui/ListerWindow.cpp
     src/ui/AppContext.cpp
 )
-target_link_libraries(linopus_ui PUBLIC linopus_core Qt6::Widgets)
+target_link_libraries(linopus_ui PUBLIC linopus_core Qt6::Widgets Qt6::Network)
 
 if(LINOPUS_WITH_KIO)
     add_library(linopus_kio STATIC

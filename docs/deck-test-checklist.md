@@ -47,6 +47,8 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 ## Newer things (quick)
 
 - [ ] View > Text and Icon Size > Larger: everything readable from arm's length; back to Normal.
+- [ ] With Linopus open, start it again from the application menu: no second copy; the open one comes to the front. In Konsole: `flatpak run com.monroeworld.Linopus --tab ~/Downloads` opens a tab in it.
+- [ ] In Steam, a game's Browse Local Files (or Firefox's Show in Folder) opens in Linopus if it is the default file manager (System Settings > Default Applications).
 - [ ] In a big ROM folder, type a few letters of a game: it jumps there; Enter opens it. Type `>Set VIEW=icons` and Enter. Type `/sdcard` and Enter.
 - [ ] ROMs on internal storage on one side, the SD card's ROMs on the other: Edit > Select by Comparing > Newer Here, or Not There selects what the card is missing.
 - [ ] Copy something to the SD card, then Ctrl+Z: the copy goes (to the SD card's trash). Trash a file, Ctrl+Z: it is back. Tools > File Log shows both.
