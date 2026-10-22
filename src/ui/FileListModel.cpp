@@ -1,6 +1,10 @@
 #include "ui/FileListModel.h"
 
+#include "core/FileKind.h"
 #include "core/FileOps.h"
+#include "core/FolderSizes.h"
+#include "core/Location.h"
+#include "ui/Style.h"
 
 #include <QApplication>
 #include <QFileInfo>
@@ -14,6 +18,229 @@
 FileListModel::FileListModel(QObject *parent)
     : QAbstractTableModel(parent)
 {
+    connect(FolderSizes::instance(), &FolderSizes::ready, this, &FileListModel::onFolderSizeReady);
+    connect(Style::instance(), &Style::changed, this, [this]() {
+        if (!m_items.isEmpty())
+            Q_EMIT dataChanged(index(0, 0), index(m_items.size() - 1, ColumnCount - 1));
+    });
+}
+
+QString FileListModel::columnName(int column)
+{
+    switch (column) {
+    case NameColumn:
+        return QStringLiteral("Name");
+    case SizeColumn:
+        return QStringLiteral("Size");
+    case TypeColumn:
+        return QStringLiteral("Type");
+    case ModifiedColumn:
+        return QStringLiteral("Modified");
+    case CreatedColumn:
+        return QStringLiteral("Created");
+    case AccessedColumn:
+        return QStringLiteral("Accessed");
+    case ExtensionColumn:
+        return QStringLiteral("Extension");
+    case PermissionsColumn:
+        return QStringLiteral("Permissions");
+    case OwnerColumn:
+        return QStringLiteral("Owner");
+    case GroupColumn:
+        return QStringLiteral("Group");
+    case LocationColumn:
+        return QStringLiteral("Location");
+    }
+    return {};
+}
+
+QString FileListModel::groupByName(GroupBy g)
+{
+    switch (g) {
+    case GroupBy::None:
+        return QStringLiteral("none");
+    case GroupBy::Type:
+        return QStringLiteral("type");
+    case GroupBy::Name:
+        return QStringLiteral("name");
+    case GroupBy::Size:
+        return QStringLiteral("size");
+    case GroupBy::Modified:
+        return QStringLiteral("modified");
+    case GroupBy::Extension:
+        return QStringLiteral("extension");
+    case GroupBy::Folder:
+        return QStringLiteral("folder");
+    }
+    return QStringLiteral("none");
+}
+
+bool FileListModel::groupByFromName(const QString &name, GroupBy &out)
+{
+    const QString n = name.toLower();
+    for (GroupBy g : {GroupBy::None, GroupBy::Type, GroupBy::Name, GroupBy::Size, GroupBy::Modified, GroupBy::Extension,
+                      GroupBy::Folder}) {
+        if (groupByName(g) == n) {
+            out = g;
+            return true;
+        }
+    }
+    if (n == QLatin1String("off") || n.isEmpty()) {
+        out = GroupBy::None;
+        return true;
+    }
+    if (n == QLatin1String("date")) {
+        out = GroupBy::Modified;
+        return true;
+    }
+    return false;
+}
+
+void FileListModel::setGroupBy(GroupBy g)
+{
+    if (m_groupBy == g)
+        return;
+    m_groupBy = g;
+    if (!m_items.isEmpty())
+        Q_EMIT dataChanged(index(0, 0), index(m_items.size() - 1, ColumnCount - 1), {GroupKeyRole, GroupLabelRole});
+}
+
+void FileListModel::setLiveFolderSizes(bool on)
+{
+    if (m_liveSizes == on)
+        return;
+    m_liveSizes = on;
+    if (on)
+        requestAllFolderSizes();
+    if (!m_items.isEmpty())
+        Q_EMIT dataChanged(index(0, SizeColumn), index(m_items.size() - 1, SizeColumn));
+}
+
+void FileListModel::requestFolderSize(int row)
+{
+    if (row < 0 || row >= m_items.size())
+        return;
+    const FileItem &it = m_items.at(row);
+    if (it.isDir && !it.isSymlink && Location::isLocal(it.path))
+        FolderSizes::instance()->request(it.path);
+}
+
+void FileListModel::requestAllFolderSizes()
+{
+    m_maxFolderBytes = 0;
+    for (int row = 0; row < m_items.size(); ++row) {
+        const FileItem &it = m_items.at(row);
+        if (!it.isDir)
+            continue;
+        if (FolderSizes::instance()->has(it.path))
+            m_maxFolderBytes = qMax(m_maxFolderBytes, FolderSizes::instance()->result(it.path).bytes);
+        else
+            requestFolderSize(row);
+    }
+}
+
+void FileListModel::onFolderSizeReady(const QString &path)
+{
+    const int row = m_rowByPath.value(path, -1);
+    if (row < 0)
+        return;
+    const qint64 bytes = FolderSizes::instance()->result(path).bytes;
+    if (bytes > m_maxFolderBytes) {
+        m_maxFolderBytes = bytes;
+        // Bars are relative to the biggest folder: they all change.
+        if (m_liveSizes) {
+            Q_EMIT dataChanged(index(0, SizeColumn), index(m_items.size() - 1, SizeColumn));
+            return;
+        }
+    }
+    Q_EMIT dataChanged(index(row, SizeColumn), index(row, SizeColumn));
+}
+
+QString FileListModel::folderSizeText(int row) const
+{
+    const FileItem &it = m_items.at(row);
+    FolderSizes *sizes = FolderSizes::instance();
+    if (sizes->has(it.path)) {
+        const FolderSizes::Result r = sizes->result(it.path);
+        if (r.isEmpty())
+            return QStringLiteral("EMPTY");
+        return FileOps::formatSize(r.bytes);
+    }
+    if (sizes->isPending(it.path))
+        return QStringLiteral("\u2026");
+    return {};
+}
+
+QPair<QString, QString> FileListModel::groupFor(int row) const
+{
+    const FileItem &it = m_items.at(row);
+    switch (m_groupBy) {
+    case GroupBy::None:
+        return {};
+    case GroupBy::Type: {
+        const auto c = FileKind::categoryFor(it.name, it.isDir);
+        return {QStringLiteral("%1").arg(static_cast<int>(c), 2, 10, QLatin1Char('0')), FileKind::categoryName(c)};
+    }
+    case GroupBy::Name: {
+        const QChar ch = it.name.isEmpty() ? QChar() : it.name.at(0).toUpper();
+        if (ch.isLetter())
+            return {QStringLiteral("2") + ch, QString(ch)};
+        if (ch.isDigit())
+            return {QStringLiteral("1"), QStringLiteral("0-9")};
+        return {QStringLiteral("0"), QStringLiteral("#")};
+    }
+    case GroupBy::Size: {
+        if (it.isDir)
+            return {QStringLiteral("0"), QStringLiteral("Folders")};
+        const qint64 s = it.size;
+        if (s == 0)
+            return {QStringLiteral("1"), QStringLiteral("Empty")};
+        if (s < 16 * 1024)
+            return {QStringLiteral("2"), QStringLiteral("Tiny (under 16 KB)")};
+        if (s < 1024 * 1024)
+            return {QStringLiteral("3"), QStringLiteral("Small (16 KB to 1 MB)")};
+        if (s < 128LL * 1024 * 1024)
+            return {QStringLiteral("4"), QStringLiteral("Medium (1 to 128 MB)")};
+        if (s < 1024LL * 1024 * 1024)
+            return {QStringLiteral("5"), QStringLiteral("Large (128 MB to 1 GB)")};
+        return {QStringLiteral("6"), QStringLiteral("Huge (over 1 GB)")};
+    }
+    case GroupBy::Modified: {
+        const QDate d = it.modified.date();
+        const QDate today = QDate::currentDate();
+        const int days = d.daysTo(today);
+        const QDate weekStart = today.addDays(1 - today.dayOfWeek());
+        if (days <= 0)
+            return {QStringLiteral("0"), QStringLiteral("Today")};
+        if (days == 1)
+            return {QStringLiteral("1"), QStringLiteral("Yesterday")};
+        if (d >= weekStart)
+            return {QStringLiteral("2"), QStringLiteral("Earlier this week")};
+        if (d >= weekStart.addDays(-7))
+            return {QStringLiteral("3"), QStringLiteral("Last week")};
+        if (d.year() == today.year() && d.month() == today.month())
+            return {QStringLiteral("4"), QStringLiteral("Earlier this month")};
+        const QDate lastMonth = today.addMonths(-1);
+        if (d.year() == lastMonth.year() && d.month() == lastMonth.month())
+            return {QStringLiteral("5"), QStringLiteral("Last month")};
+        if (d.year() == today.year())
+            return {QStringLiteral("6"), QStringLiteral("Earlier this year")};
+        if (d.year() == today.year() - 1)
+            return {QStringLiteral("7"), QStringLiteral("Last year")};
+        return {QStringLiteral("8"), QStringLiteral("Older")};
+    }
+    case GroupBy::Extension: {
+        if (it.isDir)
+            return {QStringLiteral("0"), QStringLiteral("Folders")};
+        const QString ext = FileKind::extensionOf(it.name);
+        if (ext.isEmpty())
+            return {QStringLiteral("1"), QStringLiteral("No extension")};
+        return {QStringLiteral("2") + ext, ext.toUpper()};
+    }
+    case GroupBy::Folder:
+        return {it.relPath, it.relPath.isEmpty() ? QStringLiteral("(this folder)") : it.relPath};
+    }
+    return {};
 }
 
 void FileListModel::rebuildIndex()
@@ -32,6 +259,8 @@ void FileListModel::setListing(const QString &dir, const FileItemList &items)
     m_mimeNames = QVector<QString>(m_items.size());
     rebuildIndex();
     endResetModel();
+    if (m_liveSizes)
+        requestAllFolderSizes();
 }
 
 void FileListModel::clear(const QString &dir)
@@ -96,6 +325,8 @@ void FileListModel::updateListing(const FileItemList &items)
         m_mimeNames.resize(m_items.size());
         rebuildIndex();
         endInsertRows();
+        if (m_liveSizes)
+            requestAllFolderSizes();
     }
 }
 
@@ -138,6 +369,17 @@ QString FileListModel::mimeNameFor(int row) const
 QString FileListModel::typeName(int row) const
 {
     const QString mime = mimeNameFor(row);
+    if (mime == QLatin1String("application/octet-stream")) {
+        // Unknown to the MIME database: name it after its extension, so a
+        // folder of D64s or ADFs does not read "Unknown" all the way down.
+        const FileItem &it = m_items.at(row);
+        const QString ext = FileKind::extensionOf(it.name).toUpper();
+        if (!ext.isEmpty()) {
+            return FileKind::categoryFor(it.name, false) == FileKind::Category::DiskImage
+                ? QStringLiteral("%1 disk image").arg(ext)
+                : QStringLiteral("%1 file").arg(ext);
+        }
+    }
     auto it = m_typeCache.constFind(mime);
     if (it != m_typeCache.cend())
         return *it;
@@ -173,6 +415,30 @@ QIcon FileListModel::iconFor(int row) const
     return icon;
 }
 
+namespace {
+
+QString permissionText(QFile::Permissions p, bool isDir)
+{
+    QString out(10, QLatin1Char('-'));
+    out[0] = isDir ? QLatin1Char('d') : QLatin1Char('-');
+    const QFile::Permission bits[9] = {QFile::ReadOwner, QFile::WriteOwner, QFile::ExeOwner,
+                                       QFile::ReadGroup, QFile::WriteGroup, QFile::ExeGroup,
+                                       QFile::ReadOther, QFile::WriteOther, QFile::ExeOther};
+    const char letters[] = "rwxrwxrwx";
+    for (int i = 0; i < 9; ++i) {
+        if (p & bits[i])
+            out[i + 1] = QLatin1Char(letters[i]);
+    }
+    return out;
+}
+
+QString dateText(const QDateTime &d)
+{
+    return d.isValid() ? QLocale().toString(d, QLocale::ShortFormat) : QString();
+}
+
+} // namespace
+
 QVariant FileListModel::data(const QModelIndex &index, int role) const
 {
     if (!index.isValid() || index.row() >= m_items.size())
@@ -186,11 +452,25 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
         case NameColumn:
             return it.name;
         case SizeColumn:
-            return it.isDir ? QString() : FileOps::formatSize(it.size);
+            return it.isDir ? folderSizeText(index.row()) : FileOps::formatSize(it.size);
         case TypeColumn:
             return typeName(index.row());
         case ModifiedColumn:
-            return QLocale().toString(it.modified, QLocale::ShortFormat);
+            return dateText(it.modified);
+        case CreatedColumn:
+            return dateText(it.created);
+        case AccessedColumn:
+            return dateText(it.accessed);
+        case ExtensionColumn:
+            return it.isDir ? QString() : FileKind::extensionOf(it.name);
+        case PermissionsColumn:
+            return permissionText(it.permissions, it.isDir);
+        case OwnerColumn:
+            return it.owner;
+        case GroupColumn:
+            return it.group;
+        case LocationColumn:
+            return it.relPath;
         }
         break;
     case Qt::EditRole:
@@ -204,21 +484,46 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
     case Qt::ToolTipRole:
         if (col == NameColumn && it.isSymlink)
             return QStringLiteral("Link to %1").arg(it.symlinkTarget);
-        break;
-    case Qt::ForegroundRole:
-        if (it.isHidden) {
-            QColor c = QApplication::palette().color(QPalette::Text);
-            c.setAlphaF(0.55);
-            return c;
+        if (col == SizeColumn && it.isDir && FolderSizes::instance()->has(it.path)) {
+            const FolderSizes::Result r = FolderSizes::instance()->result(it.path);
+            return QStringLiteral("%1 files, %2 folders%3")
+                .arg(r.files)
+                .arg(r.folders)
+                .arg(r.complete ? QString() : QStringLiteral(" (some folders could not be read)"));
         }
         break;
-    case Qt::FontRole:
-        if (col == NameColumn && it.isSymlink) {
+    case Qt::ForegroundRole: {
+        const Style *style = Style::instance();
+        QColor c;
+        if (const LabelRule *rule = style->labels().match(it.name, it.isDir); rule && rule->color.isValid())
+            c = rule->color;
+        else if (col == NameColumn || col == ExtensionColumn)
+            c = style->theme().typeColor(FileKind::categoryFor(it.name, it.isDir));
+        if (it.isHidden) {
+            if (!c.isValid())
+                c = QApplication::palette().color(QPalette::Text);
+            c.setAlphaF(0.5);
+        }
+        if (c.isValid())
+            return c;
+        break;
+    }
+    case Qt::BackgroundRole:
+        if (const LabelRule *rule = Style::instance()->labels().match(it.name, it.isDir); rule && rule->background.isValid())
+            return rule->background;
+        break;
+    case Qt::FontRole: {
+        const LabelRule *rule = Style::instance()->labels().match(it.name, it.isDir);
+        const bool italic = (col == NameColumn && it.isSymlink) || (rule && rule->italic);
+        const bool bold = rule && rule->bold;
+        if (italic || bold) {
             QFont f = QApplication::font();
-            f.setItalic(true);
+            f.setItalic(italic);
+            f.setBold(bold);
             return f;
         }
         break;
+    }
     case Qt::TextAlignmentRole:
         if (col == SizeColumn)
             return QVariant(Qt::AlignRight | Qt::AlignVCenter);
@@ -227,14 +532,44 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
         return it.path;
     case IsDirRole:
         return it.isDir;
+    case RelPathRole:
+        return it.relPath;
+    case FolderBarRole:
+        if (m_liveSizes && it.isDir && m_maxFolderBytes > 0 && FolderSizes::instance()->has(it.path))
+            return static_cast<double>(FolderSizes::instance()->result(it.path).bytes) / static_cast<double>(m_maxFolderBytes);
+        return -1.0;
+    case FolderBytesRole:
+        if (it.isDir && FolderSizes::instance()->has(it.path))
+            return FolderSizes::instance()->result(it.path).bytes;
+        return qint64(-1);
+    case GroupKeyRole:
+        return groupFor(index.row()).first;
+    case GroupLabelRole:
+        return groupFor(index.row()).second;
     case SortRole:
         switch (col) {
         case SizeColumn:
+            if (it.isDir)
+                return FolderSizes::instance()->has(it.path) ? FolderSizes::instance()->result(it.path).bytes : qint64(-1);
             return it.size;
         case TypeColumn:
             return typeName(index.row());
         case ModifiedColumn:
             return it.modified;
+        case CreatedColumn:
+            return it.created;
+        case AccessedColumn:
+            return it.accessed;
+        case ExtensionColumn:
+            return FileKind::extensionOf(it.name);
+        case PermissionsColumn:
+            return static_cast<int>(it.permissions);
+        case OwnerColumn:
+            return it.owner;
+        case GroupColumn:
+            return it.group;
+        case LocationColumn:
+            return it.relPath;
         default:
             return it.name;
         }
@@ -259,17 +594,7 @@ QVariant FileListModel::headerData(int section, Qt::Orientation orientation, int
 {
     if (orientation != Qt::Horizontal || role != Qt::DisplayRole)
         return {};
-    switch (section) {
-    case NameColumn:
-        return QStringLiteral("Name");
-    case SizeColumn:
-        return QStringLiteral("Size");
-    case TypeColumn:
-        return QStringLiteral("Type");
-    case ModifiedColumn:
-        return QStringLiteral("Modified");
-    }
-    return {};
+    return columnName(section);
 }
 
 Qt::ItemFlags FileListModel::flags(const QModelIndex &index) const

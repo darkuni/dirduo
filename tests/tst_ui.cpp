@@ -7,12 +7,19 @@
 #include "ui/DrivesBar.h"
 #include "ui/ToolbarStrip.h"
 #include "ui/FileDisplay.h"
+#include "ui/FolderFormats.h"
 #include "ui/FolderTab.h"
+#include "ui/FolderTree.h"
+#include "ui/GroupTreeView.h"
+#include "ui/Style.h"
 #include "ui/ListerWindow.h"
 
 #include <QAbstractItemView>
 #include <QApplication>
 #include <QDir>
+#include <QFileSystemModel>
+#include <QHeaderView>
+#include <QTreeView>
 #include <QFile>
 #include <QLineEdit>
 #include <QSettings>
@@ -54,6 +61,7 @@ private Q_SLOTS:
         root = m_dir->filePath(QStringLiteral("root"));
         for (const char *n : {"a/one.txt", "a/two.txt", "a/three.txt", "b/keep.txt"})
             touch(root + QLatin1Char('/') + QLatin1String(n));
+        FolderFormats::instance().setFile(m_dir->filePath(QStringLiteral("config/formats.ini")));
         m_app = std::make_unique<AppContext>();
         w = m_app->newLister(root + QStringLiteral("/a"));
         w->display(1)->currentTab()->navigate(root + QStringLiteral("/b"));
@@ -68,6 +76,7 @@ private Q_SLOTS:
             w->close();
         QApplication::processEvents();
         m_app.reset();
+        Style::instance()->setTheme(QStringLiteral("Follow Desktop"));
     }
 
     void inlineRenameTravels()
@@ -278,6 +287,191 @@ private Q_SLOTS:
         QCOMPARE(w->toolbarPlace(w->drivesBar()), ListerWindow::ToolbarPlace::Bottom);
     }
 
+    void groupingAndFilter()
+    {
+        FolderTab *t = w->display(0)->currentTab();
+        QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=type")));
+        QCOMPARE(t->groupBy(), FileListModel::GroupBy::Type);
+        auto *view = qobject_cast<GroupTreeView *>(t->view());
+        QVERIFY(view && view->grouping());
+        QVERIFY(view->isGroupLeader(view->model()->index(0, 0)));
+        QVERIFY(!view->isGroupLeader(view->model()->index(1, 0))); // three text files, one group
+        QCOMPARE(view->groupRows(view->model()->index(2, 0)).size(), 3);
+
+        QVERIFY(w->runCommand(QStringLiteral("Set FILTER=one*")));
+        QVERIFY(t->filterBarVisible());
+        QCOMPARE(t->view()->model()->rowCount(), 1);
+        QVERIFY(t->statusText().contains(QStringLiteral("2 hidden")));
+        QVERIFY(w->runCommand(QStringLiteral("Set FILTER=!one*")));
+        QCOMPARE(t->view()->model()->rowCount(), 2);
+        QVERIFY(w->runCommand(QStringLiteral("Set FILTERBAR=off")));
+        QCOMPARE(t->view()->model()->rowCount(), 3);
+        QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=none")));
+        QVERIFY(!view->grouping());
+        QVERIFY(!runFailing(QStringLiteral("Set GROUPBY=colour")));
+    }
+
+    void columnsHiddenByDefaultAndToggle()
+    {
+        FolderTab *t = w->display(0)->currentTab();
+        QVERIFY(t->isColumnVisible(FileListModel::SizeColumn));
+        QVERIFY(!t->isColumnVisible(FileListModel::CreatedColumn));
+        QVERIFY(!t->isColumnVisible(FileListModel::LocationColumn));
+        QVERIFY(w->runCommand(QStringLiteral("Set COLUMNSTOGGLE=created")));
+        QVERIFY(t->isColumnVisible(FileListModel::CreatedColumn));
+        t->resetColumns();
+        QVERIFY(!t->isColumnVisible(FileListModel::CreatedColumn));
+    }
+
+    void flatViewModes()
+    {
+        FolderTab *t = w->display(0)->currentTab();
+        t->navigate(root);
+        waitListed(t, 2);
+        QVERIFY(w->runCommand(QStringLiteral("Set FLATVIEW=mixed")));
+        waitListed(t, 6); // a, b and four files
+        QVERIFY(t->isColumnVisible(FileListModel::LocationColumn));
+        QVERIFY(w->runCommand(QStringLiteral("Set FLATVIEW=nofolders")));
+        waitListed(t, 4);
+        QVERIFY(w->runCommand(QStringLiteral("Set FLATVIEW=grouped")));
+        waitListed(t, 6);
+        QCOMPARE(t->groupBy(), FileListModel::GroupBy::Folder);
+        QVERIFY(t->statusText().contains(QStringLiteral("flat view")));
+        QVERIFY(w->runCommand(QStringLiteral("Set FLATVIEW=off")));
+        waitListed(t, 2);
+        QCOMPARE(t->groupBy(), FileListModel::GroupBy::None);
+        QVERIFY(!t->isColumnVisible(FileListModel::LocationColumn));
+    }
+
+    void checkBoxesToggleSelection()
+    {
+        FolderTab *t = w->display(0)->currentTab();
+        QVERIFY(w->runCommand(QStringLiteral("Set CHECKBOXES=on")));
+        QVERIFY(t->checkMode());
+        t->selectNone();
+        auto *view = qobject_cast<QTreeView *>(t->view());
+        const QModelIndex first = view->model()->index(0, 0);
+        const QModelIndex second = view->model()->index(1, 0);
+        const int x = view->header()->sectionViewportPosition(0) + 4 + 6;
+        QTest::mouseClick(view->viewport(), Qt::LeftButton, {}, QPoint(x, view->visualRect(first).center().y()));
+        QTest::mouseClick(view->viewport(), Qt::LeftButton, {}, QPoint(x, view->visualRect(second).center().y()));
+        QCOMPARE(t->selectedPaths().size(), 2); // boxes add to the selection
+        QTest::mouseClick(view->viewport(), Qt::LeftButton, {}, QPoint(x, view->visualRect(first).center().y()));
+        QCOMPARE(t->selectedPaths().size(), 1);
+    }
+
+    void folderSizesCalculate()
+    {
+        FolderTab *t = w->display(0)->currentTab();
+        t->navigate(root);
+        waitListed(t, 2);
+        QVERIFY(w->runCommand(QStringLiteral("Set FOLDERSIZES=on")));
+        auto bytesOf = [t](const QString &name) -> qint64 {
+            QAbstractItemModel *m = t->view()->model();
+            for (int r = 0; r < m->rowCount(); ++r) {
+                if (m->index(r, 0).data().toString() == name)
+                    return m->index(r, 0).data(FileListModel::FolderBytesRole).toLongLong();
+            }
+            return -2;
+        };
+        QTRY_COMPARE_WITH_TIMEOUT(bytesOf(QStringLiteral("a")), qint64(3), 5000);
+        QTRY_COMPARE_WITH_TIMEOUT(bytesOf(QStringLiteral("b")), qint64(1), 5000);
+    }
+
+    void folderTrees()
+    {
+        QVERIFY(w->runCommand(QStringLiteral("Set TREE=shared")));
+        QCOMPARE(w->treeMode(), ListerWindow::TreeMode::Shared);
+        FolderTree *tree = w->sharedTree();
+        QVERIFY(tree && tree->isVisible());
+        QCOMPARE(tree->currentFolder(), root + QStringLiteral("/a"));
+        // Picking a folder in the tree reads it into the source.
+        auto *fs = qobject_cast<QFileSystemModel *>(tree->model());
+        tree->setCurrentIndex(fs->index(root + QStringLiteral("/b")));
+        QTRY_COMPARE(w->display(0)->currentTab()->path(), root + QStringLiteral("/b"));
+        // ...and follows the source when it moves.
+        w->display(0)->currentTab()->navigate(root + QStringLiteral("/a"));
+        QCOMPARE(tree->currentFolder(), root + QStringLiteral("/a"));
+
+        QVERIFY(w->runCommand(QStringLiteral("Set TREE=separate")));
+        QVERIFY(!tree->isVisible());
+        QVERIFY(w->display(0)->treeVisible() && w->display(1)->treeVisible());
+        QCOMPARE(w->display(1)->tree()->currentFolder(), root + QStringLiteral("/b"));
+        QVERIFY(w->runCommand(QStringLiteral("Set TREE=toggle")));
+        QCOMPARE(w->treeMode(), ListerWindow::TreeMode::Off);
+        QVERIFY(!w->display(0)->treeVisible());
+        QVERIFY(w->runCommand(QStringLiteral("Set TREE=toggle")));
+        QCOMPARE(w->treeMode(), ListerWindow::TreeMode::Separate); // the last one used
+    }
+
+    void folderFormatsFollowFolders()
+    {
+        FolderTab *t = w->display(0)->currentTab();
+        QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=type\nSet VIEW=list\nSet FORMAT=save")));
+        t->navigate(root + QStringLiteral("/b"));
+        QCOMPARE(t->viewMode(), FolderTab::ViewMode::Details);
+        QCOMPARE(t->groupBy(), FileListModel::GroupBy::None);
+        t->navigate(root + QStringLiteral("/a"));
+        QCOMPARE(t->viewMode(), FolderTab::ViewMode::List);
+        QCOMPARE(t->groupBy(), FileListModel::GroupBy::Type);
+        QVERIFY(w->runCommand(QStringLiteral("Set FORMAT=clear")));
+        QVERIFY(!runFailing(QStringLiteral("Set FORMAT=clear")));
+
+        // Subfolders inherit a format saved "with subfolders".
+        QVERIFY(w->runCommand(QStringLiteral("Set VIEW=icons\nSet FORMAT=savesub")));
+        QDir().mkpath(root + QStringLiteral("/a/deeper"));
+        t->navigate(root + QStringLiteral("/a/deeper"));
+        QCOMPARE(t->viewMode(), FolderTab::ViewMode::Icons);
+        t->navigate(root + QStringLiteral("/b"));
+        QCOMPARE(t->viewMode(), FolderTab::ViewMode::Details);
+    }
+
+    void pictureFoldersSwitchToIcons()
+    {
+        for (const char *n : {"p/1.png", "p/2.jpg", "p/3.jpg", "p/4.webp", "p/notes.txt"})
+            touch(root + QLatin1Char('/') + QLatin1String(n));
+        FolderTab *t = w->display(0)->currentTab();
+        t->navigate(root + QStringLiteral("/p"));
+        waitListed(t, 5);
+        QCOMPARE(t->viewMode(), FolderTab::ViewMode::Icons);
+        t->navigate(root + QStringLiteral("/a"));
+        QCOMPARE(t->viewMode(), FolderTab::ViewMode::Details);
+        QVERIFY(w->runCommand(QStringLiteral("Set AUTOFORMAT=off")));
+        t->navigate(root + QStringLiteral("/p"));
+        waitListed(t, 5);
+        QCOMPARE(t->viewMode(), FolderTab::ViewMode::Details);
+        QVERIFY(w->runCommand(QStringLiteral("Set AUTOFORMAT=on")));
+    }
+
+    void themesApplyAndPersist()
+    {
+        QVERIFY(w->runCommand(QStringLiteral("Set THEME=\"linopus dark\"")));
+        QCOMPARE(Style::instance()->theme().name, QStringLiteral("Linopus Dark"));
+        QVERIFY(QApplication::palette().color(QPalette::Base).lightness() < 100);
+        QCOMPARE(m_app->settings().value(QStringLiteral("Appearance/theme")).toString(), QStringLiteral("Linopus Dark"));
+        QVERIFY(w->runCommand(QStringLiteral("Set THEME=Workbench")));
+        QCOMPARE(Style::instance()->theme().name, QStringLiteral("Workbench"));
+        QVERIFY(!runFailing(QStringLiteral("Set THEME=Nope")));
+        QVERIFY(w->runCommand(QStringLiteral("Set THEME=next")));
+        QVERIFY(Style::instance()->theme().name != QStringLiteral("Workbench"));
+    }
+
+    void viewStateRoundTrip()
+    {
+        QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=extension\nSet CHECKBOXES=on\nSet TREE=shared")));
+        m_app->saveSession({w});
+        w->close();
+        w = nullptr;
+        QApplication::processEvents();
+        m_app->restoreSession();
+        w = m_app->activeLister();
+        QVERIFY(w);
+        QCOMPARE(w->treeMode(), ListerWindow::TreeMode::Shared);
+        FolderTab *t = w->display(0)->currentTab();
+        QCOMPARE(t->groupBy(), FileListModel::GroupBy::Extension);
+        QVERIFY(t->checkMode());
+    }
+
     void sessionRoundTrip()
     {
         w->runCommand(QStringLiteral("Set DUAL=horizontal\nSet VIEW=list"));
@@ -298,6 +492,18 @@ private Q_SLOTS:
     }
 
 private:
+    // A failing command shows an error box; close it and report the result.
+    bool runFailing(const QString &command)
+    {
+        QTimer closer;
+        connect(&closer, &QTimer::timeout, []() {
+            if (QWidget *m = QApplication::activeModalWidget())
+                m->close();
+        });
+        closer.start(50);
+        return w->runCommand(command);
+    }
+
     static void waitListed(FolderTab *t, int expectedRows)
     {
         QTRY_VERIFY_WITH_TIMEOUT(t->view()->model()->rowCount() == expectedRows, 5000);

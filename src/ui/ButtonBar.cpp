@@ -124,6 +124,15 @@ QList<ButtonDef> ButtonBar::defaultButtons()
           "Set DUAL=horizontal", "Set DUAL=off"),
         b("Lock Dest", "object-locked", "Keep the destination where it is", "Set DESTLOCK=toggle"),
         b("Hidden", "view-hidden", "Show or hide hidden files", "Set HIDDEN=toggle"),
+        sep,
+        b("Tree", "view-list-tree", "Folder tree: shared by the lister (right-click: one per display)",
+          "Set TREE=toggle", "Set TREE=separate"),
+        b("Flat", "view-list-details", "Flat view: everything under this folder, grouped by folder (right-click: mixed)",
+          "Set FLATVIEW=toggle", "Set FLATVIEW=mixed"),
+        b("Group", "view-group", "Group by type (right-click: no grouping)", "Set GROUPBY=type", "Set GROUPBY=none"),
+        b("Filter", "view-filter", "Filter the list as you type (Ctrl+F)", "Set FILTERBAR=toggle"),
+        b("Sizes", "folder-stats", "Calculate the size of every folder", "Set FOLDERSIZES=toggle"),
+        b("Theme", "color-management", "Next theme (Linopus Light, Dark, Workbench...)", "Set THEME=next"),
     };
 }
 

@@ -1,14 +1,19 @@
 #pragma once
 
+#include "core/DirLister.h"
 #include "core/FileItem.h"
+#include "ui/FileListModel.h"
+#include "ui/FileSortProxy.h"
+#include "ui/FolderFormats.h"
 
 #include <QStringList>
 #include <QUrl>
 #include <QWidget>
 
-class DirLister;
-class FileListModel;
-class FileSortProxy;
+class GroupTreeView;
+class QCheckBox;
+class QComboBox;
+class QLineEdit;
 class QAbstractItemView;
 class QItemSelectionModel;
 class QListView;
@@ -63,11 +68,52 @@ public:
     QByteArray headerState() const;
     void restoreHeaderState(const QByteArray &state);
 
+    // Columns
+    bool isColumnVisible(int column) const;
+    void setColumnVisible(int column, bool visible);
+    void resetColumns();
+
+    // Grouping
+    void setGroupBy(FileListModel::GroupBy g);
+    FileListModel::GroupBy groupBy() const;
+
+    // Filter bar
+    void setFilterBarVisible(bool visible);
+    bool filterBarVisible() const;
+    void setFilter(const QString &text, bool invert = false,
+                   FileSortProxy::FilterScope scope = FileSortProxy::FilterScope::Files);
+    QString filterText() const;
+
+    // Check box mode
+    void setCheckMode(bool on);
+    bool checkMode() const;
+
+    // Folder sizes for every folder, with bars
+    void setLiveFolderSizes(bool on);
+    bool liveFolderSizes() const;
+
+    // Flat view
+    void setFlatMode(DirLister::FlatMode mode);
+    DirLister::FlatMode flatMode() const;
+    static QString flatModeName(DirLister::FlatMode mode);
+    static bool flatModeFromName(const QString &name, DirLister::FlatMode &out);
+
+    // Folder formats
+    FolderFormat currentFormat() const;
+    void applyFormat(const FolderFormat &format);
+    bool hasOwnFormat() const { return m_formatActive; }
+    // After saving a format for this folder: leaving it brings back the
+    // default format, or the standard look when there is none.
+    void formatSaved();
+
+    void showHeaderMenu(const QPoint &globalPos);
+
     static QString viewModeName(ViewMode mode);
     static bool viewModeFromName(const QString &name, ViewMode &out);
 
 Q_SIGNALS:
     void pathChanged(const QString &path);
+    void viewStateChanged(); // grouping, filter, columns or modes changed
     void activated();                 // clicked or focused
     void selectionChanged();
     void statusChanged();
@@ -88,6 +134,9 @@ private:
     void activateIndex(const QModelIndex &proxyIndex);
     void setupView(QAbstractItemView *v);
     void travelRename(int delta);
+    void applyFormatFor(const QString &path);
+    void autoSwitchForContent();
+    void updateLocationColumn();
 
     QString m_path;
     QString m_error;
@@ -102,7 +151,17 @@ private:
     FileSortProxy *m_proxy;
     QItemSelectionModel *m_selection;
     QStackedLayout *m_stack;
-    QTreeView *m_details;
+    GroupTreeView *m_details;
+    QWidget *m_filterBar;
+    QLineEdit *m_filterEdit;
+    QCheckBox *m_filterInvert;
+    QComboBox *m_filterScope;
+    // Folder formats: the look before a folder's own format took over.
+    bool m_formatActive = false;
+    FolderFormat m_baseFormat;
+    bool m_autoIcons = false;
+    ViewMode m_modeBeforeAuto = ViewMode::Details;
+    FileListModel::GroupBy m_groupBeforeFlat = FileListModel::GroupBy::None;
     QListView *m_list;
     RenameDelegate *m_delegate;     // details view
     RenameDelegate *m_listDelegate; // list and icon views

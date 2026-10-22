@@ -1,12 +1,23 @@
 #include "ui/FolderTab.h"
 
 #include "core/DirLister.h"
+#include "core/FileKind.h"
 #include "core/FileOps.h"
+#include "core/FolderSizes.h"
 #include "core/Location.h"
 #include "core/RemoteBackend.h"
 #include "ui/FileListModel.h"
 #include "ui/FileSortProxy.h"
+#include "ui/GroupTreeView.h"
 #include "ui/RenameDelegate.h"
+
+#include <QCheckBox>
+#include <QComboBox>
+#include <QHBoxLayout>
+#include <QLineEdit>
+#include <QMenu>
+#include <QToolButton>
+#include <QVBoxLayout>
 
 #include <QDir>
 #include <QFileInfo>
@@ -26,8 +37,8 @@ FolderTab::FolderTab(QWidget *parent)
     , m_lister(new DirLister(this))
     , m_model(new FileListModel(this))
     , m_proxy(new FileSortProxy(this))
-    , m_stack(new QStackedLayout(this))
-    , m_details(new QTreeView(this))
+    , m_stack(new QStackedLayout)
+    , m_details(new GroupTreeView(this))
     , m_list(new QListView(this))
     , m_delegate(new RenameDelegate(this))
     , m_listDelegate(new RenameDelegate(this))
@@ -35,9 +46,47 @@ FolderTab::FolderTab(QWidget *parent)
     m_proxy->setSourceModel(m_model);
     m_selection = new QItemSelectionModel(m_proxy, this);
 
+    auto *outer = new QVBoxLayout(this);
+    outer->setContentsMargins(0, 0, 0, 0);
+    outer->setSpacing(0);
     m_stack->setContentsMargins(0, 0, 0, 0);
     m_stack->addWidget(m_details);
     m_stack->addWidget(m_list);
+    outer->addLayout(m_stack, 1);
+
+    // Filter bar (Ctrl+F): hides what does not match, live as you type.
+    m_filterBar = new QWidget(this);
+    auto *fl = new QHBoxLayout(m_filterBar);
+    fl->setContentsMargins(4, 3, 4, 3);
+    fl->setSpacing(6);
+    m_filterEdit = new QLineEdit(m_filterBar);
+    m_filterEdit->setPlaceholderText(QStringLiteral("Filter: text, or wildcards like *.mp3;*.flac"));
+    m_filterEdit->setClearButtonEnabled(true);
+    m_filterInvert = new QCheckBox(QStringLiteral("Hide matches"), m_filterBar);
+    m_filterScope = new QComboBox(m_filterBar);
+    m_filterScope->addItem(QStringLiteral("Files"));
+    m_filterScope->addItem(QStringLiteral("Folders"));
+    m_filterScope->addItem(QStringLiteral("Both"));
+    auto *closeFilter = new QToolButton(m_filterBar);
+    closeFilter->setAutoRaise(true);
+    closeFilter->setIcon(QIcon::fromTheme(QStringLiteral("window-close")));
+    closeFilter->setToolTip(QStringLiteral("Close the filter (Esc)"));
+    fl->addWidget(m_filterEdit, 1);
+    fl->addWidget(m_filterInvert);
+    fl->addWidget(m_filterScope);
+    fl->addWidget(closeFilter);
+    m_filterBar->hide();
+    outer->addWidget(m_filterBar);
+    auto applyFilter = [this]() {
+        m_proxy->setFilter(m_filterEdit->text(), m_filterInvert->isChecked(),
+                           static_cast<FileSortProxy::FilterScope>(m_filterScope->currentIndex()));
+        Q_EMIT statusChanged();
+    };
+    connect(m_filterEdit, &QLineEdit::textChanged, this, applyFilter);
+    connect(m_filterInvert, &QCheckBox::toggled, this, applyFilter);
+    connect(m_filterScope, &QComboBox::currentIndexChanged, this, applyFilter);
+    connect(closeFilter, &QToolButton::clicked, this, [this]() { setFilterBarVisible(false); });
+    m_filterEdit->installEventFilter(this);
 
     // Details
     m_details->setRootIsDecorated(false);
@@ -60,7 +109,12 @@ FolderTab::FolderTab(QWidget *parent)
     header->resizeSection(FileListModel::ModifiedColumn, 140);
     header->setSortIndicatorShown(true);
     header->setSectionsMovable(true);
+    header->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(header, &QWidget::customContextMenuRequested, this,
+            [this, header](const QPoint &pos) { showHeaderMenu(header->mapToGlobal(pos)); });
+    resetColumns();
     m_details->setSelectionModel(m_selection);
+    m_delegate->setGroupView(m_details);
 
     // List and icons share one QListView.
     m_list->setModel(m_proxy);
@@ -105,6 +159,7 @@ void FolderTab::setupView(QAbstractItemView *v)
     v->setContextMenuPolicy(Qt::CustomContextMenu);
     v->installEventFilter(this);
     v->viewport()->installEventFilter(this);
+    v->viewport()->setMouseTracking(true); // folder sizes fill in on hover
 
     // Double-click opens, whatever the desktop's single-click setting says.
     connect(v, &QAbstractItemView::doubleClicked, this, &FolderTab::activateIndex);
@@ -152,6 +207,7 @@ void FolderTab::navigate(const QString &rawPath, bool addToHistory)
     m_error.clear();
     m_pendingSelection.clear();
     m_model->clear(path);
+    applyFormatFor(path);
     m_lister->open(path);
     Q_EMIT pathChanged(m_path);
     Q_EMIT statusChanged();
@@ -204,6 +260,7 @@ void FolderTab::onListed(const QString &path, const FileItemList &items, bool is
         m_model->setListing(path, items);
         if (m_pendingSelection.isEmpty() && m_proxy->rowCount() > 0)
             m_selection->setCurrentIndex(m_proxy->index(0, 0), QItemSelectionModel::NoUpdate);
+        autoSwitchForContent();
     }
     applyPendingSelection();
     Q_EMIT statusChanged();
@@ -280,6 +337,17 @@ QString FolderTab::statusText() const
                 bytes += m_model->item(row).size;
         }
         text += QStringLiteral(" - %1 selected (%2)").arg(sel.size()).arg(FileOps::formatSize(bytes));
+    }
+    if (!m_proxy->filterText().isEmpty()) {
+        const int hidden = m_model->rowCount() - m_proxy->rowCount();
+        text += QStringLiteral(" - filter \"%1\"").arg(m_proxy->filterText());
+        if (hidden > 0)
+            text += QStringLiteral(", %1 hidden").arg(hidden);
+    }
+    if (m_lister->flatMode() != DirLister::FlatMode::Off) {
+        text += QStringLiteral(" - flat view");
+        if (m_lister->lastListingTruncated())
+            text += QStringLiteral(" (stopped at %1 items)").arg(DirLister::kFlatLimit);
     }
     return text;
 }
@@ -475,6 +543,18 @@ bool FolderTab::isFolder(const QString &path) const
 
 bool FolderTab::eventFilter(QObject *watched, QEvent *event)
 {
+    if (watched == m_filterEdit && event->type() == QEvent::KeyPress) {
+        auto *ke = static_cast<QKeyEvent *>(event);
+        if (ke->key() == Qt::Key_Escape) {
+            setFilterBarVisible(false);
+            return true;
+        }
+        if (ke->key() == Qt::Key_Down || ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter) {
+            focusView();
+            return true;
+        }
+        return false;
+    }
     const bool isView = watched == m_details || watched == m_list;
     const bool isViewport = watched == m_details->viewport() || watched == m_list->viewport();
     if (!isView && !isViewport)
@@ -485,6 +565,16 @@ bool FolderTab::eventFilter(QObject *watched, QEvent *event)
     case QEvent::MouseButtonPress:
         Q_EMIT activated();
         break;
+    case QEvent::MouseMove: {
+        // Hovering a folder measures it; the size fills in when ready.
+        if (!isViewport || !Location::isLocal(m_path))
+            break;
+        auto *me = static_cast<QMouseEvent *>(event);
+        const QModelIndex idx = view()->indexAt(me->position().toPoint());
+        if (idx.isValid() && idx.data(FileListModel::IsDirRole).toBool())
+            m_model->requestFolderSize(m_proxy->mapToSource(idx).row());
+        break;
+    }
     case QEvent::MouseButtonRelease: {
         auto *me = static_cast<QMouseEvent *>(event);
         if (isViewport && me->button() == Qt::MiddleButton) {
@@ -574,4 +664,316 @@ bool FolderTab::viewModeFromName(const QString &name, ViewMode &out)
     else
         return false;
     return true;
+}
+
+// ---- Columns ---------------------------------------------------------------
+
+bool FolderTab::isColumnVisible(int column) const
+{
+    return !m_details->header()->isSectionHidden(column);
+}
+
+void FolderTab::setColumnVisible(int column, bool visible)
+{
+    if (column <= FileListModel::NameColumn || column >= FileListModel::ColumnCount)
+        return; // the name column always shows
+    QHeaderView *h = m_details->header();
+    if (h->isSectionHidden(column) == !visible)
+        return;
+    h->setSectionHidden(column, !visible);
+    if (visible && h->sectionSize(column) < 40)
+        h->resizeSection(column, column == FileListModel::LocationColumn ? 220 : 120);
+    Q_EMIT viewStateChanged();
+}
+
+void FolderTab::resetColumns()
+{
+    QHeaderView *h = m_details->header();
+    for (int c = 0; c < FileListModel::ColumnCount; ++c) {
+        const bool standard = c == FileListModel::NameColumn || c == FileListModel::SizeColumn
+            || c == FileListModel::TypeColumn || c == FileListModel::ModifiedColumn;
+        h->setSectionHidden(c, !standard);
+        if (c > FileListModel::ModifiedColumn) {
+            h->setSectionResizeMode(c, QHeaderView::Interactive);
+            h->resizeSection(c, c == FileListModel::LocationColumn ? 220 : 120);
+        }
+    }
+    updateLocationColumn();
+    Q_EMIT viewStateChanged();
+}
+
+void FolderTab::updateLocationColumn()
+{
+    // The Location column only means something in flat view.
+    const bool flat = m_lister->flatMode() != DirLister::FlatMode::Off;
+    m_details->header()->setSectionHidden(FileListModel::LocationColumn, !flat);
+}
+
+void FolderTab::showHeaderMenu(const QPoint &globalPos)
+{
+    QMenu menu(this);
+    menu.addSection(QStringLiteral("Columns"));
+    for (int c = FileListModel::SizeColumn; c < FileListModel::ColumnCount; ++c) {
+        QAction *a = menu.addAction(FileListModel::columnName(c));
+        a->setCheckable(true);
+        a->setChecked(isColumnVisible(c));
+        connect(a, &QAction::toggled, this, [this, c](bool on) { setColumnVisible(c, on); });
+    }
+    QMenu *group = menu.addMenu(QStringLiteral("Group By"));
+    using G = FileListModel::GroupBy;
+    for (G g : {G::None, G::Type, G::Name, G::Size, G::Modified, G::Extension, G::Folder}) {
+        QString label = FileListModel::groupByName(g);
+        label[0] = label[0].toUpper();
+        QAction *a = group->addAction(g == G::None ? QStringLiteral("No Grouping") : label);
+        a->setCheckable(true);
+        a->setChecked(groupBy() == g);
+        connect(a, &QAction::triggered, this, [this, g]() { setGroupBy(g); });
+    }
+    menu.addSeparator();
+    QAction *sizes = menu.addAction(QStringLiteral("Calculate All Folder Sizes"));
+    sizes->setCheckable(true);
+    sizes->setChecked(liveFolderSizes());
+    connect(sizes, &QAction::toggled, this, &FolderTab::setLiveFolderSizes);
+    QAction *checks = menu.addAction(QStringLiteral("Check Boxes"));
+    checks->setCheckable(true);
+    checks->setChecked(checkMode());
+    connect(checks, &QAction::toggled, this, &FolderTab::setCheckMode);
+    menu.addSeparator();
+    connect(menu.addAction(QStringLiteral("Reset Columns")), &QAction::triggered, this, &FolderTab::resetColumns);
+    menu.exec(globalPos);
+}
+
+// ---- Grouping --------------------------------------------------------------
+
+void FolderTab::setGroupBy(FileListModel::GroupBy g)
+{
+    const bool on = g != FileListModel::GroupBy::None;
+    m_model->setGroupBy(g);
+    m_proxy->setGrouping(on);
+    m_details->setGrouping(on);
+    m_details->doItemsLayout();
+    Q_EMIT viewStateChanged();
+}
+
+FileListModel::GroupBy FolderTab::groupBy() const
+{
+    return m_model->groupBy();
+}
+
+// ---- Filter ----------------------------------------------------------------
+
+void FolderTab::setFilterBarVisible(bool visible)
+{
+    m_filterBar->setVisible(visible);
+    if (visible) {
+        m_filterEdit->setFocus(Qt::ShortcutFocusReason);
+        m_filterEdit->selectAll();
+    } else {
+        // Closing the bar drops the filter, as in Opus.
+        m_filterEdit->clear();
+        focusView();
+    }
+    Q_EMIT viewStateChanged();
+}
+
+bool FolderTab::filterBarVisible() const
+{
+    return !m_filterBar->isHidden();
+}
+
+void FolderTab::setFilter(const QString &text, bool invert, FileSortProxy::FilterScope scope)
+{
+    {
+        const QSignalBlocker b1(m_filterEdit), b2(m_filterInvert), b3(m_filterScope);
+        m_filterEdit->setText(text);
+        m_filterInvert->setChecked(invert);
+        m_filterScope->setCurrentIndex(static_cast<int>(scope));
+    }
+    m_proxy->setFilter(text, invert, scope);
+    if (!text.isEmpty())
+        m_filterBar->setVisible(true);
+    Q_EMIT statusChanged();
+    Q_EMIT viewStateChanged();
+}
+
+QString FolderTab::filterText() const
+{
+    return m_proxy->filterText();
+}
+
+// ---- Check boxes and folder sizes ------------------------------------------
+
+void FolderTab::setCheckMode(bool on)
+{
+    m_delegate->setCheckMode(on, m_selection);
+    m_listDelegate->setCheckMode(on, m_selection);
+    m_details->doItemsLayout();
+    m_list->doItemsLayout();
+    m_details->viewport()->update();
+    m_list->viewport()->update();
+    Q_EMIT viewStateChanged();
+}
+
+bool FolderTab::checkMode() const
+{
+    return m_delegate->checkMode();
+}
+
+void FolderTab::setLiveFolderSizes(bool on)
+{
+    m_model->setLiveFolderSizes(on);
+    Q_EMIT viewStateChanged();
+}
+
+bool FolderTab::liveFolderSizes() const
+{
+    return m_model->liveFolderSizes();
+}
+
+// ---- Flat view -------------------------------------------------------------
+
+void FolderTab::setFlatMode(DirLister::FlatMode mode)
+{
+    const DirLister::FlatMode old = m_lister->flatMode();
+    if (old == mode)
+        return;
+    // Grouped flat view groups by folder; going back restores the old grouping.
+    if (mode == DirLister::FlatMode::Grouped) {
+        if (old != DirLister::FlatMode::Grouped)
+            m_groupBeforeFlat = groupBy();
+        setGroupBy(FileListModel::GroupBy::Folder);
+    } else if (old == DirLister::FlatMode::Grouped) {
+        setGroupBy(m_groupBeforeFlat);
+    }
+    m_model->clear(m_path);
+    m_lister->setFlatMode(mode);
+    updateLocationColumn();
+    Q_EMIT statusChanged();
+    Q_EMIT viewStateChanged();
+}
+
+DirLister::FlatMode FolderTab::flatMode() const
+{
+    return m_lister->flatMode();
+}
+
+QString FolderTab::flatModeName(DirLister::FlatMode mode)
+{
+    switch (mode) {
+    case DirLister::FlatMode::Off:
+        return QStringLiteral("off");
+    case DirLister::FlatMode::Grouped:
+        return QStringLiteral("grouped");
+    case DirLister::FlatMode::Mixed:
+        return QStringLiteral("mixed");
+    case DirLister::FlatMode::MixedNoFolders:
+        return QStringLiteral("nofolders");
+    }
+    return QStringLiteral("off");
+}
+
+bool FolderTab::flatModeFromName(const QString &name, DirLister::FlatMode &out)
+{
+    const QString n = name.toLower();
+    if (n == QLatin1String("off") || n == QLatin1String("none"))
+        out = DirLister::FlatMode::Off;
+    else if (n == QLatin1String("grouped") || n == QLatin1String("on"))
+        out = DirLister::FlatMode::Grouped;
+    else if (n == QLatin1String("mixed"))
+        out = DirLister::FlatMode::Mixed;
+    else if (n == QLatin1String("nofolders") || n == QLatin1String("mixednofolders"))
+        out = DirLister::FlatMode::MixedNoFolders;
+    else
+        return false;
+    return true;
+}
+
+// ---- Folder formats --------------------------------------------------------
+
+FolderFormat FolderTab::currentFormat() const
+{
+    FolderFormat f;
+    f.path = m_path;
+    f.header = headerState();
+    f.groupBy = FileListModel::groupByName(groupBy());
+    f.view = viewModeName(m_autoIcons ? m_modeBeforeAuto : m_mode);
+    return f;
+}
+
+void FolderTab::formatSaved()
+{
+    if (m_formatActive)
+        return;
+    m_formatActive = true;
+    m_baseFormat = FolderFormat(); // standard: details, no grouping, standard columns
+    m_baseFormat.view = viewModeName(ViewMode::Details);
+    m_baseFormat.groupBy = FileListModel::groupByName(FileListModel::GroupBy::None);
+}
+
+void FolderTab::applyFormat(const FolderFormat &format)
+{
+    if (!format.header.isEmpty())
+        restoreHeaderState(format.header);
+    else
+        resetColumns();
+    FileListModel::GroupBy g;
+    if (FileListModel::groupByFromName(format.groupBy, g) && m_lister->flatMode() != DirLister::FlatMode::Grouped)
+        setGroupBy(g);
+    ViewMode mode;
+    if (viewModeFromName(format.view, mode))
+        setViewMode(mode);
+    updateLocationColumn();
+}
+
+void FolderTab::applyFormatFor(const QString &path)
+{
+    // Undo the picture-folder switch from the previous folder.
+    if (m_autoIcons) {
+        m_autoIcons = false;
+        setViewMode(m_modeBeforeAuto);
+    }
+    FolderFormat f;
+    const bool own = FolderFormats::instance().find(path, f);
+    if (own) {
+        if (!m_formatActive) {
+            m_baseFormat = currentFormat(); // remember the look to come back to
+            m_formatActive = true;
+        }
+        applyFormat(f);
+        return;
+    }
+    // No format of its own: the default format when there is one, else the
+    // look from before the last formatted folder.
+    FolderFormat base;
+    if (FolderFormats::instance().defaultFormat(base)) {
+        m_formatActive = false;
+        applyFormat(base);
+    } else if (m_formatActive) {
+        m_formatActive = false;
+        applyFormat(m_baseFormat);
+    }
+}
+
+void FolderTab::autoSwitchForContent()
+{
+    if (m_formatActive || !FolderFormats::instance().autoSwitch() || m_mode != ViewMode::Details)
+        return;
+    if (m_lister->flatMode() != DirLister::FlatMode::Off)
+        return;
+    int files = 0;
+    int pictures = 0;
+    for (int r = 0; r < m_model->rowCount(); ++r) {
+        const FileItem &it = m_model->item(r);
+        if (it.isDir)
+            continue;
+        ++files;
+        if (FileKind::categoryFor(it.name, false) == FileKind::Category::Image)
+            ++pictures;
+    }
+    // Mostly pictures: icons. Any other folder keeps the view it had.
+    if (files >= 4 && pictures * 10 >= files * 7) {
+        m_modeBeforeAuto = m_mode;
+        m_autoIcons = true;
+        setViewMode(ViewMode::Icons);
+    }
 }

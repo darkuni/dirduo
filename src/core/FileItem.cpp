@@ -14,6 +14,10 @@ FileItem FileItem::fromFileInfo(const QFileInfo &info)
     item.isDir = info.isDir();
     item.size = item.isDir ? 0 : info.size();
     item.modified = info.lastModified();
+    item.created = info.birthTime();
+    item.accessed = info.lastRead();
+    item.owner = info.owner();
+    item.group = info.group();
     item.permissions = info.permissions();
     item.isHidden = item.name.startsWith(QLatin1Char('.'));
     item.isReadable = info.isReadable();

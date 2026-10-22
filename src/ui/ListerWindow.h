@@ -9,6 +9,7 @@ class AppContext;
 class ButtonBar;
 class DrivesBar;
 class FileDisplay;
+class FolderTree;
 class FolderTab;
 class QAction;
 class QActionGroup;
@@ -39,6 +40,11 @@ public:
     bool isDual() const { return m_dual; }
 
     enum class ToolbarPlace { Top, Bottom, Left, Right, Between };
+    // Off; one tree for the lister that follows the source; or one per display.
+    enum class TreeMode { Off, Shared, Separate };
+    TreeMode treeMode() const { return m_treeMode; }
+    void setTreeMode(TreeMode mode);
+    FolderTree *sharedTree() const { return m_sharedTree; }
     // Moves a toolbar to an edge of the window or between the displays.
     // newRow starts a new row (or column) instead of sharing the last one.
     void placeToolbar(QToolBar *bar, ToolbarPlace place, bool newRow = false);
@@ -90,13 +96,18 @@ private:
     void onContextMenu(FileDisplay *d, const QPoint &globalPos, bool onItem);
     void openFile(const QString &path);
     void rebuildAliasMenu();
+    void fillViewMenus();
 
     QAction *commandAction(const QString &text, const QString &command, const QKeySequence &key = {},
                            const QString &icon = {});
     FolderTab *sourceTab() const;
 
     AppContext &m_app;
+    QSplitter *m_outer; // shared tree | displays
     QSplitter *m_split;
+    FolderTree *m_sharedTree = nullptr;
+    TreeMode m_treeMode = TreeMode::Off;
+    TreeMode m_lastTreeMode = TreeMode::Shared; // what TREE=toggle brings back
     FileDisplay *m_displays[2];
     int m_source = 0;
     bool m_dual = true;
@@ -122,4 +133,12 @@ private:
     QAction *m_actLock = nullptr;
     QAction *m_actNavLock = nullptr;
     QMenu *m_aliasMenu = nullptr;
+    QAction *m_actFilterBar = nullptr;
+    QAction *m_actChecks = nullptr;
+    QAction *m_actFolderSizes = nullptr;
+    QAction *m_actAutoFormat = nullptr;
+    QMenu *m_treeMenu = nullptr;
+    QMenu *m_flatMenu = nullptr;
+    QMenu *m_groupMenu = nullptr;
+    QMenu *m_themeMenu = nullptr;
 };

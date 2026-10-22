@@ -16,6 +16,8 @@
 #include <QFileInfo>
 #include <QIcon>
 #include <QMessageBox>
+#include "ui/Style.h"
+
 #include <QSettings>
 
 namespace {
@@ -31,6 +33,10 @@ AppContext::AppContext(QObject *parent)
     , m_progress(std::make_unique<ProgressWindows>(*m_jobs))
 {
     g_instance = this;
+    // The theme applies before the first lister opens.
+    const QString theme = m_settings->value(QStringLiteral("Appearance/theme"), QStringLiteral("Follow Desktop")).toString();
+    if (!Style::instance()->setTheme(theme))
+        Style::instance()->setTheme(QStringLiteral("Follow Desktop"));
     connect(m_jobs.get(), &JobManager::collisionRequested, this, &AppContext::onCollision);
 }
 

@@ -5,6 +5,8 @@
 #include <QWidget>
 
 class AliasManager;
+class FolderTree;
+class QSplitter;
 class BreadcrumbBar;
 class QLabel;
 class QStackedWidget;
@@ -39,6 +41,13 @@ public:
 
     BreadcrumbBar *breadcrumb() const { return m_crumbs; }
 
+    // This display's own folder tree (Set TREE=separate).
+    void setTreeVisible(bool visible);
+    bool treeVisible() const;
+    FolderTree *tree() const { return m_tree; }
+    QByteArray bodyState() const;
+    void restoreBodyState(const QByteArray &state);
+
     // Applied to every tab in this display, and to tabs opened later.
     void setShowHidden(bool show);
     bool showHidden() const { return m_showHidden; }
@@ -57,6 +66,7 @@ private:
     void wireTab(FolderTab *tab);
     void updateHeader();
     void updateTabText(FolderTab *tab);
+    void applyStyle();
 
     AliasManager &m_aliases;
     Role m_role = Role::None;
@@ -64,6 +74,9 @@ private:
     bool m_showBadge = true;
     bool m_showHidden = false;
 
+    QWidget *m_accent; // colored edge: source, dest or locked dest
+    QSplitter *m_body;
+    FolderTree *m_tree = nullptr;
     QLabel *m_badge;
     QToolButton *m_back;
     QToolButton *m_forward;

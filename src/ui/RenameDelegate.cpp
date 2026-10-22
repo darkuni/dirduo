@@ -1,6 +1,13 @@
 #include "ui/RenameDelegate.h"
 
 #include "ui/FileListModel.h"
+#include "ui/GroupTreeView.h"
+#include "ui/Style.h"
+
+#include <QApplication>
+#include <QItemSelectionModel>
+#include <QMouseEvent>
+#include <QPainter>
 
 #include <QKeyEvent>
 #include <QLineEdit>
@@ -80,4 +87,109 @@ bool RenameDelegate::eventFilter(QObject *object, QEvent *event)
         }
     }
     return QStyledItemDelegate::eventFilter(object, event);
+}
+
+void RenameDelegate::setCheckMode(bool on, QItemSelectionModel *selection)
+{
+    m_checkMode = on;
+    m_selection = selection;
+}
+
+bool RenameDelegate::isLeader(const QModelIndex &index) const
+{
+    return m_groupView && m_groupView->isGroupLeader(index);
+}
+
+QRect RenameDelegate::contentRect(const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
+    QRect r = option.rect;
+    if (isLeader(index) && r.height() > m_groupView->bandHeight())
+        r.setTop(r.top() + m_groupView->bandHeight());
+    return r;
+}
+
+QRect RenameDelegate::checkRect(const QStyleOptionViewItem &option) const
+{
+    const QStyle *style = option.widget ? option.widget->style() : QApplication::style();
+    const int w = style->pixelMetric(QStyle::PM_IndicatorWidth, &option, option.widget);
+    const int h = style->pixelMetric(QStyle::PM_IndicatorHeight, &option, option.widget);
+    return QRect(option.rect.left() + 4, option.rect.center().y() - h / 2, w, h);
+}
+
+QSize RenameDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
+    QSize s = QStyledItemDelegate::sizeHint(option, index);
+    if (m_checkMode && index.column() == FileListModel::NameColumn)
+        s.rwidth() += 24;
+    if (isLeader(index))
+        s.rheight() += m_groupView->bandHeight();
+    return s;
+}
+
+void RenameDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
+    QStyleOptionViewItem opt = option;
+    // GroupTreeView already moved the row below its band; nothing to shift.
+
+    // Live folder sizes: a bar behind the size, scaled to the biggest folder.
+    if (index.column() == FileListModel::SizeColumn) {
+        const double share = index.data(FileListModel::FolderBarRole).toDouble();
+        if (share >= 0.0) {
+            QColor bar = Style::instance()->theme().sizeBar;
+            bar.setAlphaF(0.55);
+            const QRect area = opt.rect.adjusted(3, 3, -3, -3);
+            painter->save();
+            painter->setRenderHint(QPainter::Antialiasing);
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(bar);
+            painter->drawRoundedRect(QRectF(area.left(), area.top(), qMax(2.0, area.width() * share), area.height()), 3, 3);
+            painter->restore();
+        }
+    }
+
+    if (m_checkMode && index.column() == FileListModel::NameColumn) {
+        QStyleOptionViewItem box = opt;
+        box.rect = checkRect(opt);
+        box.state &= ~QStyle::State_HasFocus;
+        const bool checked = m_selection && m_selection->isRowSelected(index.row(), index.parent());
+        box.state |= checked ? QStyle::State_On : QStyle::State_Off;
+        const QWidget *w = opt.widget;
+        // Paint the row background first so the box sits on it.
+        QStyleOptionViewItem bg = opt;
+        bg.text.clear();
+        bg.icon = QIcon();
+        (w ? w->style() : QApplication::style())->drawControl(QStyle::CE_ItemViewItem, &bg, painter, w);
+        (w ? w->style() : QApplication::style())->drawPrimitive(QStyle::PE_IndicatorItemViewItemCheck, &box, painter, w);
+        opt.rect.setLeft(box.rect.right() + 6);
+    }
+    QStyledItemDelegate::paint(painter, opt, index);
+}
+
+void RenameDelegate::updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
+    QStyleOptionViewItem opt = option;
+    opt.rect = contentRect(option, index);
+    if (m_checkMode && index.column() == FileListModel::NameColumn)
+        opt.rect.setLeft(checkRect(opt).right() + 6);
+    QStyledItemDelegate::updateEditorGeometry(editor, opt, index);
+}
+
+bool RenameDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, const QStyleOptionViewItem &option,
+                                 const QModelIndex &index)
+{
+    if (m_checkMode && m_selection && index.column() == FileListModel::NameColumn
+        && (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease
+            || event->type() == QEvent::MouseButtonDblClick)) {
+        auto *me = static_cast<QMouseEvent *>(event);
+        QStyleOptionViewItem opt = option;
+        opt.rect = contentRect(option, index);
+        if (checkRect(opt).adjusted(-3, -3, 3, 3).contains(me->position().toPoint())) {
+            if (event->type() == QEvent::MouseButtonPress && me->button() == Qt::LeftButton) {
+                m_selection->select(index, QItemSelectionModel::Toggle | QItemSelectionModel::Rows);
+                m_selection->setCurrentIndex(index, QItemSelectionModel::NoUpdate);
+            }
+            return true; // the box takes the click; the rest of the selection stays
+        }
+    }
+    return QStyledItemDelegate::editorEvent(event, model, option, index);
 }

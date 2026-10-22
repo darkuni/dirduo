@@ -14,6 +14,7 @@
 #include "ui/FolderTab.h"
 #include "ui/ListerWindow.h"
 #include "ui/ProgressWindow.h"
+#include "ui/Style.h"
 #ifdef LINOPUS_HAVE_KIO
 #include "kio/KioBackend.h"
 #endif
@@ -168,6 +169,59 @@ int main(int argc, char *argv[])
         context.jobs().cancel(id);
     context.jobs().waitForIdle(5000);
     QTest::qWait(200);
+
+    // Phase 2: themes, trees, grouping, folder sizes, flat view, filter, labels.
+    writeFile(root + QStringLiteral("/Emulation/roms/c64/Galaga.d64"), 174848);
+    writeFile(root + QStringLiteral("/Emulation/roms/c64/Elite.d64"), 174848);
+    writeFile(root + QStringLiteral("/Emulation/roms/amiga/Deluxe Galaga.adf"), 901120);
+    writeFile(root + QStringLiteral("/Emulation/roms/amiga/Turrican II.adf"), 901120);
+    writeFile(root + QStringLiteral("/Emulation/bios/kick13.rom"), 262144);
+    writeFile(root + QStringLiteral("/Emulation/README.md"), 2000);
+    writeFile(root + QStringLiteral("/Emulation/emulators.tar.gz"), 3400000);
+    writeFile(root + QStringLiteral("/Documents/Budget 2026.ods"), 40000);
+    writeFile(root + QStringLiteral("/Documents/backup-old.zip"), 900000);
+    writeFile(root + QStringLiteral("/Documents/linopus.cpp"), 30000);
+    writeFile(root + QStringLiteral("/Pictures/IMG0003.JPG"), 2700000);
+    writeFile(root + QStringLiteral("/Pictures/IMG0004.png"), 900000);
+    LabelRule star;
+    star.pattern = QStringLiteral("*Joan*;*Galaga*");
+    star.color = QColor::fromRgb(0xe0, 0x7a, 0x10);
+    star.bold = true;
+    LabelRule old;
+    old.pattern = QStringLiteral("*backup*;*-old*");
+    old.color = QColor::fromRgb(0xc0, 0x30, 0x30);
+    old.italic = true;
+    Style::instance()->setLabels({star, old});
+
+    w->runCommand(QStringLiteral("Toolbar NAME=buttons PLACE=top\nSet DUAL=vertical\nSet HIDDEN=off\nSet THEME=\"Linopus Light\"\nSet TREE=shared"));
+    w->display(0)->currentTab()->navigate(root);
+    w->display(1)->currentTab()->navigate(root + QStringLiteral("/Music"));
+    QTest::qWait(400);
+    w->runCommand(QStringLiteral("Set FOLDERSIZES=on\nSet GROUPBY=type"));
+    QTest::qWait(1200);
+    shot(w, out, QStringLiteral("12-light-tree-grouped-sizes"));
+
+    w->runCommand(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet FOLDERSIZES=off\nSet GROUPBY=none\nSet FLATVIEW=grouped"));
+    QTest::qWait(1200);
+    shot(w, out, QStringLiteral("13-dark-flat-grouped"));
+    w->runCommand(QStringLiteral("Set FILTER=*.mp3;*.d64"));
+    QTest::qWait(500);
+    shot(w, out, QStringLiteral("14-dark-flat-filtered"));
+    w->runCommand(QStringLiteral("Set FILTERBAR=off\nSet FLATVIEW=off"));
+
+    w->runCommand(QStringLiteral("Set THEME=Workbench\nSet TREE=separate"));
+    w->display(0)->currentTab()->navigate(root + QStringLiteral("/Emulation/roms/amiga"));
+    w->display(1)->currentTab()->navigate(root + QStringLiteral("/Documents"));
+    QTest::qWait(500);
+    w->runCommand(QStringLiteral("Set CHECKBOXES=on\nSelect ALL"));
+    QTest::qWait(500);
+    shot(w, out, QStringLiteral("15-workbench-separate-trees"));
+
+    w->runCommand(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet TREE=off\nSet CHECKBOXES=off"));
+    w->display(0)->currentTab()->navigate(root + QStringLiteral("/Pictures"));
+    QTest::qWait(800);
+    shot(w, out, QStringLiteral("16-dark-pictures-auto-icons"));
+    w->runCommand(QStringLiteral("Set THEME=\"Linopus Light\""));
 
 #ifdef LINOPUS_HAVE_KIO
     // Servers and archives, when run through tests/remote/run-remote-tests.sh.

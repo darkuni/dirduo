@@ -1,6 +1,10 @@
 #include "ui/FileDisplay.h"
 
 #include "ui/BreadcrumbBar.h"
+#include "ui/FolderTree.h"
+#include "ui/Style.h"
+
+#include <QSplitter>
 
 #include <QAbstractItemView>
 #include <QHBoxLayout>
@@ -31,6 +35,8 @@ QToolButton *navButton(const QString &icon, Qt::ArrowType fallback, const QStrin
 FileDisplay::FileDisplay(AliasManager &aliases, QWidget *parent)
     : QWidget(parent)
     , m_aliases(aliases)
+    , m_accent(new QWidget(this))
+    , m_body(new QSplitter(Qt::Horizontal, this))
     , m_badge(new QLabel(this))
     , m_back(navButton(QStringLiteral("go-previous"), Qt::LeftArrow, QStringLiteral("Back (Alt+Left)"), this))
     , m_forward(navButton(QStringLiteral("go-next"), Qt::RightArrow, QStringLiteral("Forward (Alt+Right)"), this))
@@ -43,6 +49,10 @@ FileDisplay::FileDisplay(AliasManager &aliases, QWidget *parent)
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
+
+    m_accent->setFixedHeight(3);
+    m_accent->setAutoFillBackground(true);
+    layout->addWidget(m_accent);
 
     auto *header = new QWidget(this);
     auto *hl = new QHBoxLayout(header);
@@ -65,8 +75,18 @@ FileDisplay::FileDisplay(AliasManager &aliases, QWidget *parent)
     m_tabs->setAutoHide(true);
     m_tabs->setElideMode(Qt::ElideMiddle);
     m_tabs->setFocusPolicy(Qt::NoFocus);
-    layout->addWidget(m_tabs);
-    layout->addWidget(m_stack, 1);
+    // Tree (when shown) beside the tabs and the folder.
+    auto *panel = new QWidget(m_body);
+    auto *pl = new QVBoxLayout(panel);
+    pl->setContentsMargins(0, 0, 0, 0);
+    pl->setSpacing(0);
+    m_tabs->setParent(panel);
+    m_stack->setParent(panel);
+    pl->addWidget(m_tabs);
+    pl->addWidget(m_stack, 1);
+    m_body->addWidget(panel);
+    m_body->setChildrenCollapsible(false);
+    layout->addWidget(m_body, 1);
 
     m_status->setContentsMargins(6, 2, 6, 2);
     m_status->setTextInteractionFlags(Qt::NoTextInteraction);
@@ -106,7 +126,46 @@ FileDisplay::FileDisplay(AliasManager &aliases, QWidget *parent)
     connect(m_tabs, &QTabBar::tabCloseRequested, this, &FileDisplay::closeTab);
     connect(m_tabs, &QTabBar::tabBarClicked, this, [this](int) { Q_EMIT activated(this); });
 
+    connect(Style::instance(), &Style::changed, this, &FileDisplay::applyStyle);
     setRole(Role::None);
+}
+
+void FileDisplay::setTreeVisible(bool visible)
+{
+    if (visible && !m_tree) {
+        m_tree = new FolderTree(m_body);
+        m_tree->setShowHidden(m_showHidden);
+        m_body->insertWidget(0, m_tree);
+        m_body->setStretchFactor(0, 0);
+        m_body->setStretchFactor(1, 1);
+        const int w = qBound(140, width() / 4, 220);
+        m_body->setSizes({w, qMax(200, width() - w)});
+        connect(m_tree, &FolderTree::folderActivated, this, [this](const QString &path) {
+            Q_EMIT activated(this);
+            if (auto *t = currentTab())
+                t->navigate(path);
+        });
+        if (auto *t = currentTab())
+            m_tree->setPath(t->path());
+    }
+    if (m_tree)
+        m_tree->setVisible(visible);
+}
+
+bool FileDisplay::treeVisible() const
+{
+    return m_tree && !m_tree->isHidden();
+}
+
+QByteArray FileDisplay::bodyState() const
+{
+    return m_body->saveState();
+}
+
+void FileDisplay::restoreBodyState(const QByteArray &state)
+{
+    if (!state.isEmpty() && m_body->count() > 1)
+        m_body->restoreState(state);
 }
 
 FolderTab *FileDisplay::currentTab() const
@@ -226,32 +285,48 @@ void FileDisplay::updateHeader()
     m_back->setEnabled(t->canGoBack());
     m_forward->setEnabled(t->canGoForward());
     m_up->setEnabled(t->path() != QLatin1String("/"));
+    if (m_tree)
+        m_tree->setPath(t->path());
     m_status->setText(t->statusText());
 }
 
 void FileDisplay::setRole(Role role)
 {
     m_role = role;
+    applyStyle();
+}
+
+void FileDisplay::applyStyle()
+{
+    const Theme &theme = Style::instance()->theme();
     const QPalette pal = palette();
+    auto textOn = [](const QColor &c) {
+        return c.lightness() > 150 ? QStringLiteral("#101010") : QStringLiteral("white");
+    };
     QString text;
-    QString bg;
-    QString fg = QStringLiteral("white");
-    switch (role) {
+    QColor accent;
+    QString fg;
+    switch (m_role) {
     case Role::Source:
         text = QStringLiteral("SOURCE");
-        bg = pal.color(QPalette::Highlight).name();
-        fg = pal.color(QPalette::HighlightedText).name();
+        accent = theme.sourceAccent;
         break;
     case Role::Dest:
         text = m_destLocked ? QStringLiteral("DEST ●") : QStringLiteral("DEST");
-        bg = QStringLiteral("#2e8b57");
+        accent = m_destLocked ? theme.lockedAccent : theme.destAccent;
         break;
     case Role::None:
         text = QStringLiteral("OFF");
-        bg = QStringLiteral("transparent");
-        fg = pal.color(QPalette::PlaceholderText).name();
         break;
     }
+    QPalette ap = m_accent->palette();
+    ap.setColor(QPalette::Window, accent.isValid() ? accent : pal.color(QPalette::Window));
+    m_accent->setPalette(ap);
+    // In single mode there is nothing to tell apart: no edge.
+    m_accent->setVisible(m_showBadge && accent.isValid());
+    QString bg = accent.isValid() ? accent.name() : QStringLiteral("transparent");
+    fg = accent.isValid() ? textOn(accent) : pal.color(QPalette::PlaceholderText).name();
+    const Role role = m_role;
     m_badge->setText(text);
     m_badge->setToolTip(role == Role::Dest && m_destLocked ? QStringLiteral("Destination (locked)") : QString());
     m_badge->setStyleSheet(QStringLiteral("QLabel { background: %1; color: %2; border-radius: 4px; font-weight: 600; }").arg(bg, fg));
@@ -267,7 +342,7 @@ void FileDisplay::setDestLocked(bool locked)
 void FileDisplay::setShowRoleBadge(bool show)
 {
     m_showBadge = show;
-    m_badge->setVisible(show);
+    applyStyle();
 }
 
 void FileDisplay::setShowHidden(bool show)
@@ -277,4 +352,6 @@ void FileDisplay::setShowHidden(bool show)
         if (auto *t = tab(i))
             t->setShowHidden(show);
     }
+    if (m_tree)
+        m_tree->setShowHidden(show);
 }

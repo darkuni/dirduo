@@ -14,8 +14,50 @@ struct ListResult
 {
     FileItemList items;
     QString error;
+    bool truncated = false;
 };
 } // namespace
+
+FileItemList DirLister::listRecursive(const QString &path, bool includeFolders, int maxItems, bool *truncated,
+                                      QString *error, const std::atomic<quint64> *generation, quint64 expected)
+{
+    FileItemList items;
+    if (truncated)
+        *truncated = false;
+    const QFileInfo dirInfo(path);
+    if (!dirInfo.isDir() || !dirInfo.isReadable()) {
+        if (error)
+            *error = dirInfo.exists() ? QStringLiteral("Permission denied.") : QStringLiteral("The folder does not exist.");
+        return items;
+    }
+    const QString root = QDir::cleanPath(path);
+    QDirIterator it(root, QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System,
+                    QDirIterator::Subdirectories);
+    int n = 0;
+    while (it.hasNext()) {
+        if (generation && generation->load() != expected)
+            return {}; // superseded
+        it.next();
+        const QFileInfo fi = it.fileInfo();
+        if (fi.isDir() && !includeFolders)
+            continue;
+        FileItem item = FileItem::fromFileInfo(fi);
+        const QString parent = fi.absolutePath();
+        item.relPath = parent == root ? QString() : parent.mid(root.size() + 1);
+        // A hidden folder anywhere up the path hides the item too.
+        if (!item.isHidden && item.relPath.contains(QLatin1String("/.")))
+            item.isHidden = true;
+        if (!item.isHidden && item.relPath.startsWith(QLatin1Char('.')))
+            item.isHidden = true;
+        items.append(item);
+        if (++n >= maxItems) {
+            if (truncated)
+                *truncated = true;
+            break;
+        }
+    }
+    return items;
+}
 
 DirLister::DirLister(QObject *parent)
     : QObject(parent)
@@ -103,6 +145,15 @@ void DirLister::openRemote(bool isRefresh)
     m_remote->open(m_path, isRefresh);
 }
 
+void DirLister::setFlatMode(FlatMode mode)
+{
+    if (m_flat == mode)
+        return;
+    m_flat = mode;
+    if (!m_path.isEmpty())
+        open(m_path);
+}
+
 void DirLister::refresh()
 {
     if (m_path.isEmpty())
@@ -141,6 +192,7 @@ void DirLister::start(bool isRefresh)
             return; // superseded by a newer request
         m_busy = false;
         const ListResult r = watcher->result();
+        m_truncated = r.truncated;
         if (!r.error.isEmpty())
             Q_EMIT failed(path, r.error);
         else
@@ -148,9 +200,18 @@ void DirLister::start(bool isRefresh)
         if (m_refreshPending)
             refresh();
     });
-    watcher->setFuture(QtConcurrent::run([path]() {
+    const FlatMode flat = m_flat;
+    if (!m_liveGeneration)
+        m_liveGeneration = std::make_shared<std::atomic<quint64>>(0);
+    m_liveGeneration->store(gen);
+    auto live = m_liveGeneration;
+    watcher->setFuture(QtConcurrent::run([path, flat, live, gen]() {
         ListResult r;
-        r.items = DirLister::listNow(path, &r.error);
+        if (flat == FlatMode::Off)
+            r.items = DirLister::listNow(path, &r.error);
+        else
+            r.items = DirLister::listRecursive(path, flat != FlatMode::MixedNoFolders, kFlatLimit, &r.truncated,
+                                               &r.error, live.get(), gen);
         return r;
     }));
 }

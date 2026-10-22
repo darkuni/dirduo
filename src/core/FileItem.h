@@ -14,7 +14,12 @@ struct FileItem
     QString name;
     QString path;
     QString symlinkTarget;
+    QString owner;
+    QString group;
+    QString relPath; // flat view: folder relative to the flat root ("" at the top)
     QDateTime modified;
+    QDateTime created;
+    QDateTime accessed;
     qint64 size = 0;
     QFile::Permissions permissions;
     bool isDir = false;
@@ -27,7 +32,7 @@ struct FileItem
     // True when anything shown in a column differs.
     bool sameContentAs(const FileItem &o) const
     {
-        return name == o.name && size == o.size && modified == o.modified && isDir == o.isDir
+        return name == o.name && size == o.size && modified == o.modified && isDir == o.isDir && relPath == o.relPath
             && isSymlink == o.isSymlink && permissions == o.permissions && symlinkTarget == o.symlinkTarget;
     }
 };

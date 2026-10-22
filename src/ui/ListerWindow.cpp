@@ -12,7 +12,10 @@
 #include "ui/DrivesBar.h"
 #include "ui/ToolbarStrip.h"
 #include "ui/FileDisplay.h"
+#include "ui/FolderFormats.h"
 #include "ui/FolderTab.h"
+#include "ui/FolderTree.h"
+#include "ui/Style.h"
 #include "ui/ProgressWindow.h"
 
 #include <QAbstractItemView>
@@ -56,7 +59,8 @@ bool parseSwitch(const QString &value, bool current, bool &out)
 ListerWindow::ListerWindow(AppContext &app, QWidget *parent)
     : QMainWindow(parent)
     , m_app(app)
-    , m_split(new QSplitter(this))
+    , m_outer(new QSplitter(Qt::Horizontal, this))
+    , m_split(new QSplitter(m_outer))
 {
     setAttribute(Qt::WA_DeleteOnClose);
     setWindowIcon(QIcon::fromTheme(QStringLiteral(LINOPUS_APP_ID), QIcon::fromTheme(QStringLiteral("system-file-manager"))));
@@ -77,6 +81,8 @@ ListerWindow::ListerWindow(AppContext &app, QWidget *parent)
             syncViewActions();
             if (m_drives && from == sourceDisplay())
                 m_drives->setActivePath(now);
+            if (m_sharedTree && from == sourceDisplay())
+                m_sharedTree->setPath(now);
         });
         connect(d, &FileDisplay::navigateRequested, this, &ListerWindow::onNavigateRequested);
         connect(d, &FileDisplay::renameRequested, this, &ListerWindow::onRenameRequested);
@@ -98,7 +104,9 @@ ListerWindow::ListerWindow(AppContext &app, QWidget *parent)
     m_split->setStretchFactor(1, 0);
     m_split->setStretchFactor(2, 1);
     m_split->setChildrenCollapsible(false);
-    setCentralWidget(m_split);
+    m_outer->addWidget(m_split);
+    m_outer->setChildrenCollapsible(false);
+    setCentralWidget(m_outer);
 
     buildActions();
     buildMenus();
@@ -152,6 +160,60 @@ void ListerWindow::buildActions()
     m_actNavLock = commandAction(QStringLiteral("Navigation Lock"), QStringLiteral("Set NAVLOCK=toggle"));
     m_actNavLock->setCheckable(true);
     m_actNavLock->setToolTip(QStringLiteral("The other display follows when you go into or out of folders"));
+
+    m_actFilterBar = commandAction(QStringLiteral("Filter Bar"), QStringLiteral("Set FILTERBAR=toggle"),
+                                   QKeySequence(QStringLiteral("Ctrl+F")), QStringLiteral("view-filter"));
+    m_actChecks = commandAction(QStringLiteral("Check Boxes"), QStringLiteral("Set CHECKBOXES=toggle"));
+    m_actFolderSizes = commandAction(QStringLiteral("Calculate All Folder Sizes"), QStringLiteral("Set FOLDERSIZES=toggle"),
+                                     QKeySequence(QStringLiteral("Ctrl+Shift+Z")));
+    m_actAutoFormat = commandAction(QStringLiteral("Icons for Picture Folders"), QStringLiteral("Set AUTOFORMAT=toggle"));
+    for (QAction *a : {m_actFilterBar, m_actChecks, m_actFolderSizes, m_actAutoFormat})
+        a->setCheckable(true);
+}
+
+void ListerWindow::fillViewMenus()
+{
+    FolderTab *t = sourceTab();
+    auto fill = [this](QMenu *menu, const QList<QPair<QString, QString>> &items, const QString &current) {
+        menu->clear();
+        auto *group = new QActionGroup(menu);
+        for (const auto &it : items) {
+            QAction *a = menu->addAction(it.first);
+            a->setCheckable(true);
+            a->setActionGroup(group);
+            const QString value = it.second.section(QLatin1Char('='), 1);
+            a->setChecked(value == current);
+            const QString command = it.second;
+            connect(a, &QAction::triggered, this, [this, command]() { runCommand(command); });
+        }
+    };
+    const QString tree = m_treeMode == TreeMode::Off ? QStringLiteral("off")
+        : m_treeMode == TreeMode::Shared               ? QStringLiteral("shared")
+                                                       : QStringLiteral("separate");
+    fill(m_treeMenu,
+         {{QStringLiteral("No Folder Tree"), QStringLiteral("Set TREE=off")},
+          {QStringLiteral("Shared Tree (follows the source)"), QStringLiteral("Set TREE=shared")},
+          {QStringLiteral("Separate Trees (one per display)"), QStringLiteral("Set TREE=separate")}},
+         tree);
+    fill(m_flatMenu,
+         {{QStringLiteral("Off"), QStringLiteral("Set FLATVIEW=off")},
+          {QStringLiteral("Grouped by Folder"), QStringLiteral("Set FLATVIEW=grouped")},
+          {QStringLiteral("Mixed"), QStringLiteral("Set FLATVIEW=mixed")},
+          {QStringLiteral("Mixed, Files Only"), QStringLiteral("Set FLATVIEW=nofolders")}},
+         t ? FolderTab::flatModeName(t->flatMode()) : QString());
+    using G = FileListModel::GroupBy;
+    QList<QPair<QString, QString>> groups;
+    for (G g : {G::None, G::Type, G::Name, G::Size, G::Modified, G::Extension, G::Folder}) {
+        QString label = FileListModel::groupByName(g);
+        label[0] = label[0].toUpper();
+        groups << qMakePair(g == G::None ? QStringLiteral("No Grouping") : label,
+                            QStringLiteral("Set GROUPBY=%1").arg(FileListModel::groupByName(g)));
+    }
+    fill(m_groupMenu, groups, t ? FileListModel::groupByName(t->groupBy()) : QString());
+    QList<QPair<QString, QString>> themes;
+    for (const QString &name : Style::instance()->themeNames())
+        themes << qMakePair(name, QStringLiteral("Set THEME=\"%1\"").arg(name));
+    fill(m_themeMenu, themes, QStringLiteral("\"%1\"").arg(Style::instance()->theme().name));
 }
 
 void ListerWindow::buildMenus()
@@ -221,6 +283,27 @@ void ListerWindow::buildMenus()
     view->addAction(m_actIcons);
     view->addSeparator();
     view->addAction(m_actHidden);
+    m_treeMenu = view->addMenu(QIcon::fromTheme(QStringLiteral("view-list-tree")), QStringLiteral("Folder Tree"));
+    m_flatMenu = view->addMenu(QStringLiteral("Flat View"));
+    m_groupMenu = view->addMenu(QStringLiteral("Group By"));
+    view->addAction(m_actFilterBar);
+    view->addAction(m_actChecks);
+    view->addAction(m_actFolderSizes);
+    QMenu *format = view->addMenu(QStringLiteral("Folder Format"));
+    format->addAction(commandAction(QStringLiteral("Save for This Folder"), QStringLiteral("Set FORMAT=save")));
+    format->addAction(commandAction(QStringLiteral("Save for This Folder and Subfolders"), QStringLiteral("Set FORMAT=savesub")));
+    format->addAction(commandAction(QStringLiteral("Clear This Folder's Format"), QStringLiteral("Set FORMAT=clear")));
+    format->addSeparator();
+    format->addAction(commandAction(QStringLiteral("Save as Default for All Folders"), QStringLiteral("Set FORMAT=savedefault")));
+    format->addAction(commandAction(QStringLiteral("Clear the Default"), QStringLiteral("Set FORMAT=cleardefault")));
+    format->addSeparator();
+    format->addAction(m_actAutoFormat);
+    m_themeMenu = view->addMenu(QIcon::fromTheme(QStringLiteral("color-management")), QStringLiteral("Theme"));
+    connect(view, &QMenu::aboutToShow, this, [this]() {
+        syncViewActions();
+        fillViewMenus();
+    });
+    view->addSeparator();
     view->addAction(m_actLock);
     view->addAction(m_actNavLock);
     view->addAction(commandAction(QStringLiteral("Swap Displays"), QStringLiteral("Go SWAP")));
@@ -542,6 +625,35 @@ void ListerWindow::updateRoles()
     syncViewActions();
     if (m_drives && sourceTab())
         m_drives->setActivePath(sourceTab()->path());
+    if (m_sharedTree && sourceTab())
+        m_sharedTree->setPath(sourceTab()->path());
+}
+
+void ListerWindow::setTreeMode(TreeMode mode)
+{
+    m_treeMode = mode;
+    if (mode != TreeMode::Off)
+        m_lastTreeMode = mode;
+    if (mode == TreeMode::Shared && !m_sharedTree) {
+        m_sharedTree = new FolderTree(m_outer);
+        m_sharedTree->setShowHidden(sourceDisplay()->showHidden());
+        m_outer->insertWidget(0, m_sharedTree);
+        m_outer->setStretchFactor(0, 0);
+        m_outer->setStretchFactor(1, 1);
+        const int w = qMax(180, width() / 6);
+        m_outer->setSizes({w, qMax(400, width() - w)});
+        connect(m_sharedTree, &FolderTree::folderActivated, this, [this](const QString &path) {
+            if (FolderTab *t = sourceTab())
+                t->navigate(path);
+        });
+    }
+    if (m_sharedTree) {
+        m_sharedTree->setVisible(mode == TreeMode::Shared);
+        if (sourceTab())
+            m_sharedTree->setPath(sourceTab()->path());
+    }
+    for (FileDisplay *d : m_displays)
+        d->setTreeVisible(mode == TreeMode::Separate);
 }
 
 void ListerWindow::updateTitle()
@@ -568,6 +680,12 @@ void ListerWindow::syncViewActions()
     m_actLock->setChecked(dest && dest->destLocked());
     m_actNavLock->setEnabled(dest != nullptr);
     m_actNavLock->setChecked(m_navLock);
+    if (FolderTab *t = sourceTab()) {
+        m_actFilterBar->setChecked(t->filterBarVisible());
+        m_actChecks->setChecked(t->checkMode());
+        m_actFolderSizes->setChecked(t->liveFolderSizes());
+    }
+    m_actAutoFormat->setChecked(FolderFormats::instance().autoSwitch());
 }
 
 void ListerWindow::mirrorNavigation(FileDisplay *from, const QString &oldPath, const QString &newPath)
@@ -798,11 +916,113 @@ bool ListerWindow::set(const ParsedCommand &cmd, QString *error)
                 return fail(QStringLiteral("HIDDEN takes on, off or toggle."));
             for (FileDisplay *d : m_displays)
                 d->setShowHidden(on);
+            if (m_sharedTree)
+                m_sharedTree->setShowHidden(on);
             syncViewActions();
+        } else if (key == QLatin1String("THEME")) {
+            const QString raw = it.value().value(0);
+            const QStringList names = Style::instance()->themeNames();
+            QString name;
+            if (value == QLatin1String("next") || value == QLatin1String("cycle")) {
+                const int at = names.indexOf(Style::instance()->theme().name);
+                name = names.value((at + 1) % qMax(1, int(names.size())));
+            } else {
+                for (const QString &n : names) {
+                    if (n.compare(raw, Qt::CaseInsensitive) == 0)
+                        name = n;
+                }
+            }
+            if (name.isEmpty() || !Style::instance()->setTheme(name))
+                return fail(QStringLiteral("There is no theme called %1. Themes: %2.").arg(raw, names.join(QStringLiteral(", "))));
+            m_app.settings().setValue(QStringLiteral("Appearance/theme"), name);
+        } else if (key == QLatin1String("GROUPBY")) {
+            FileListModel::GroupBy g;
+            if (!FileListModel::groupByFromName(value, g))
+                return fail(QStringLiteral("GROUPBY takes none, type, name, size, modified, extension or folder."));
+            sourceTab()->setGroupBy(g);
+        } else if (key == QLatin1String("FILTERBAR")) {
+            bool on = sourceTab()->filterBarVisible();
+            if (!parseSwitch(value, on, on))
+                return fail(QStringLiteral("FILTERBAR takes on, off or toggle."));
+            sourceTab()->setFilterBarVisible(on);
+        } else if (key == QLatin1String("FILTER")) {
+            // A leading ! hides what matches instead of showing it.
+            QString text = it.value().value(0);
+            const bool invert = text.startsWith(QLatin1Char('!'));
+            if (invert)
+                text.remove(0, 1);
+            sourceTab()->setFilter(text, invert, FileSortProxy::FilterScope::Files);
+        } else if (key == QLatin1String("CHECKBOXES")) {
+            bool on = sourceTab()->checkMode();
+            if (!parseSwitch(value, on, on))
+                return fail(QStringLiteral("CHECKBOXES takes on, off or toggle."));
+            sourceTab()->setCheckMode(on);
+        } else if (key == QLatin1String("FOLDERSIZES")) {
+            bool on = sourceTab()->liveFolderSizes();
+            if (!parseSwitch(value, on, on))
+                return fail(QStringLiteral("FOLDERSIZES takes on, off or toggle."));
+            sourceTab()->setLiveFolderSizes(on);
+        } else if (key == QLatin1String("FLATVIEW")) {
+            DirLister::FlatMode mode;
+            if (value == QLatin1String("toggle") || value.isEmpty())
+                mode = sourceTab()->flatMode() == DirLister::FlatMode::Off ? DirLister::FlatMode::Grouped
+                                                                           : DirLister::FlatMode::Off;
+            else if (!FolderTab::flatModeFromName(value, mode))
+                return fail(QStringLiteral("FLATVIEW takes off, grouped, mixed, nofolders or toggle."));
+            sourceTab()->setFlatMode(mode);
+        } else if (key == QLatin1String("TREE") || key == QLatin1String("FOLDERTREE")) {
+            TreeMode mode;
+            if (value == QLatin1String("shared"))
+                mode = TreeMode::Shared;
+            else if (value == QLatin1String("separate"))
+                mode = TreeMode::Separate;
+            else {
+                bool on = m_treeMode != TreeMode::Off;
+                if (!parseSwitch(value, on, on))
+                    return fail(QStringLiteral("TREE takes off, shared, separate, on or toggle."));
+                mode = on ? m_lastTreeMode : TreeMode::Off;
+            }
+            setTreeMode(mode);
+        } else if (key == QLatin1String("FORMAT")) {
+            FolderTab *t = sourceTab();
+            FolderFormats &formats = FolderFormats::instance();
+            FolderFormat f = t->currentFormat();
+            if (value == QLatin1String("save") || value == QLatin1String("savesub")) {
+                if (t->flatMode() != DirLister::FlatMode::Off)
+                    return fail(QStringLiteral("Turn flat view off before saving a folder format."));
+                f.subfolders = value == QLatin1String("savesub");
+                formats.set(f);
+                t->formatSaved();
+            } else if (value == QLatin1String("clear")) {
+                if (!formats.remove(t->path()))
+                    return fail(QStringLiteral("This folder has no format of its own."));
+            } else if (value == QLatin1String("savedefault")) {
+                formats.setDefault(f);
+            } else if (value == QLatin1String("cleardefault")) {
+                formats.clearDefault();
+            } else {
+                return fail(QStringLiteral("FORMAT takes save, savesub, clear, savedefault or cleardefault."));
+            }
+        } else if (key == QLatin1String("AUTOFORMAT")) {
+            bool on = FolderFormats::instance().autoSwitch();
+            if (!parseSwitch(value, on, on))
+                return fail(QStringLiteral("AUTOFORMAT takes on, off or toggle."));
+            FolderFormats::instance().setAutoSwitch(on);
+        } else if (key == QLatin1String("COLUMNSTOGGLE")) {
+            int column = -1;
+            for (int c = 0; c < FileListModel::ColumnCount; ++c) {
+                if (FileListModel::columnName(c).remove(QLatin1Char(' ')).toLower() == QString(value).remove(QLatin1Char(' ')))
+                    column = c;
+            }
+            if (column <= FileListModel::NameColumn)
+                return fail(QStringLiteral("COLUMNSTOGGLE takes a column name such as created, extension or owner."));
+            FolderTab *t = sourceTab();
+            t->setColumnVisible(column, !t->isColumnVisible(column));
         } else {
             return fail(QStringLiteral("Set does not know %1.").arg(key));
         }
     }
+    syncViewActions();
     return true;
 }
 
@@ -1029,15 +1249,34 @@ void ListerWindow::saveListerState(QSettings &s) const
     s.setValue(QStringLiteral("toolbarsBetween"), between);
     s.setValue(QStringLiteral("toolbarsHidden"), hiddenBars);
     s.setValue(QStringLiteral("source"), m_source);
+    s.setValue(QStringLiteral("tree"), int(m_treeMode));
+    s.setValue(QStringLiteral("lastTree"), int(m_lastTreeMode));
+    s.setValue(QStringLiteral("outer"), m_outer->saveState());
     s.setValue(QStringLiteral("hidden"), m_displays[0]->showHidden());
     for (int i = 0; i < 2; ++i) {
         const FileDisplay *d = m_displays[i];
         QStringList paths;
         QStringList modes;
+        QStringList groups;
+        QStringList flats;
+        QStringList extras;
         for (int t = 0; t < d->tabCount(); ++t) {
-            paths << d->tab(t)->path();
-            modes << FolderTab::viewModeName(d->tab(t)->viewMode());
+            const FolderTab *tab = d->tab(t);
+            paths << tab->path();
+            modes << FolderTab::viewModeName(tab->viewMode());
+            groups << FileListModel::groupByName(tab->groupBy());
+            flats << FolderTab::flatModeName(tab->flatMode());
+            QStringList x;
+            if (tab->checkMode())
+                x << QStringLiteral("checks");
+            if (tab->liveFolderSizes())
+                x << QStringLiteral("sizes");
+            extras << x.join(QLatin1Char('+'));
         }
+        s.setValue(QStringLiteral("display%1/groups").arg(i), groups);
+        s.setValue(QStringLiteral("display%1/flat").arg(i), flats);
+        s.setValue(QStringLiteral("display%1/extras").arg(i), extras);
+        s.setValue(QStringLiteral("display%1/body").arg(i), d->bodyState());
         const QString prefix = QStringLiteral("display%1/").arg(i);
         s.setValue(prefix + QStringLiteral("tabs"), paths);
         s.setValue(prefix + QStringLiteral("views"), modes);
@@ -1055,6 +1294,9 @@ bool ListerWindow::restoreListerState(QSettings &s)
         const QString prefix = QStringLiteral("display%1/").arg(i);
         const QStringList paths = s.value(prefix + QStringLiteral("tabs")).toStringList();
         const QStringList modes = s.value(prefix + QStringLiteral("views")).toStringList();
+        const QStringList groups = s.value(prefix + QStringLiteral("groups")).toStringList();
+        const QStringList flats = s.value(prefix + QStringLiteral("flat")).toStringList();
+        const QStringList extras = s.value(prefix + QStringLiteral("extras")).toStringList();
         FileDisplay *d = m_displays[i];
         d->setShowHidden(hidden);
         const QByteArray columns = s.value(prefix + QStringLiteral("columns")).toByteArray();
@@ -1070,6 +1312,15 @@ bool ListerWindow::restoreListerState(QSettings &s)
             if (FolderTab::viewModeFromName(modes.value(t), mode))
                 tab->setViewMode(mode);
             tab->restoreHeaderState(columns);
+            FileListModel::GroupBy g;
+            if (FileListModel::groupByFromName(groups.value(t), g))
+                tab->setGroupBy(g);
+            DirLister::FlatMode flat;
+            if (FolderTab::flatModeFromName(flats.value(t), flat))
+                tab->setFlatMode(flat);
+            const QStringList x = extras.value(t).split(QLatin1Char('+'), Qt::SkipEmptyParts);
+            tab->setCheckMode(x.contains(QLatin1String("checks")));
+            tab->setLiveFolderSizes(x.contains(QLatin1String("sizes")));
         }
         if (d->tabCount() == 0)
             d->addTab(QDir::homePath());
@@ -1102,6 +1353,12 @@ bool ListerWindow::restoreListerState(QSettings &s)
         bar->setVisible(!hiddenBars.contains(bar->objectName()));
     m_strip->updateGeometryForBars();
     m_split->restoreState(s.value(QStringLiteral("splitter3")).toByteArray());
+    m_lastTreeMode = TreeMode(qBound(1, s.value(QStringLiteral("lastTree"), 1).toInt(), 2));
+    setTreeMode(TreeMode(qBound(0, s.value(QStringLiteral("tree"), 0).toInt(), 2)));
+    if (m_sharedTree)
+        m_outer->restoreState(s.value(QStringLiteral("outer")).toByteArray());
+    for (int i = 0; i < 2; ++i)
+        m_displays[i]->restoreBodyState(s.value(QStringLiteral("display%1/body").arg(i)).toByteArray());
     updateRoles();
     if (auto *t = sourceTab())
         t->focusView();
