@@ -36,12 +36,15 @@ PY
 FTP_PID=$!
 
 # SSH on port 2222, key login for the current user, host key pre-trusted.
-mkdir -p "$WORK/ssh" "$WORK/sftp" "$HOME/.ssh" /run/sshd
-chmod 700 "$HOME/.ssh"
+# sshd and libssh find ~/.ssh through the account database, not $HOME (they
+# differ in CI containers), so use that.
+SSH_HOME=$(getent passwd "$(id -un)" | cut -d: -f6)
+mkdir -p "$WORK/ssh" "$WORK/sftp" "$SSH_HOME/.ssh" /run/sshd
+chmod 700 "$SSH_HOME/.ssh"
 ssh-keygen -q -t ed25519 -N '' -f "$WORK/ssh/host_key"
-[ -f "$HOME/.ssh/id_ed25519" ] || ssh-keygen -q -t ed25519 -N '' -f "$HOME/.ssh/id_ed25519"
-cat "$HOME/.ssh/id_ed25519.pub" >> "$HOME/.ssh/authorized_keys"
-chmod 600 "$HOME/.ssh/authorized_keys"
+[ -f "$SSH_HOME/.ssh/id_ed25519" ] || ssh-keygen -q -t ed25519 -N '' -f "$SSH_HOME/.ssh/id_ed25519"
+cat "$SSH_HOME/.ssh/id_ed25519.pub" >> "$SSH_HOME/.ssh/authorized_keys"
+chmod 600 "$SSH_HOME/.ssh/authorized_keys"
 cat > "$WORK/ssh/sshd_config" <<CFG
 Port 2222
 ListenAddress 127.0.0.1
@@ -62,7 +65,8 @@ for i in $(seq 1 50); do
     fi
     sleep 0.2
 done
-ssh-keyscan -p 2222 127.0.0.1 2>/dev/null >> "$HOME/.ssh/known_hosts"
+ssh-keyscan -p 2222 127.0.0.1 2>/dev/null >> "$SSH_HOME/.ssh/known_hosts"
+export HOME="$SSH_HOME"
 
 export LINOPUS_TEST_FTP="ftp://deck:steam@127.0.0.1:2121"
 export LINOPUS_TEST_FTP_DIR="$WORK/ftp"
@@ -72,4 +76,22 @@ export QT_QPA_PLATFORM=offscreen
 export XDG_RUNTIME_DIR="$WORK/runtime"
 mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
 
-dbus-run-session -- "$BUILD/${LINOPUS_REMOTE_PROGRAM:-tst_remote}" "${@:2}"
+# No test may wait on a prompt forever.
+export QTEST_FUNCTION_TIMEOUT=60000
+
+# Output goes to a file, not a pipe: KIO's helper daemons outlive the test
+# and would hold a pipe open forever.
+set +e
+dbus-run-session -- "$BUILD/${LINOPUS_REMOTE_PROGRAM:-tst_remote}" "${@:2}" > "$WORK/test.log" 2>&1 < /dev/null
+rc=$?
+set -e
+cat "$WORK/test.log"
+pkill -x kiod6 2>/dev/null || true
+if [ "$rc" -ne 0 ] && [ -n "${GITHUB_ACTIONS:-}" ]; then
+    # Failures as annotations: readable even when the full log is not.
+    grep -E "^(FAIL|QFATAL|QWARN)|Actual|Expected|Loc:" "$WORK/test.log" | head -20 | while IFS= read -r line; do
+        echo "::error::${line}"
+    done
+    tail -5 "$WORK/ssh.log" 2>/dev/null | while IFS= read -r line; do echo "::warning::sshd: ${line}"; done
+fi
+exit "$rc"
