@@ -1,0 +1,8 @@
+/build*/
+/.flatpak-builder/
+/flatpak-build/
+/repo/
+*.flatpak
+CMakeLists.txt.user
+compile_commands.json
+.cache/

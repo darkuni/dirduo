@@ -1,0 +1,51 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Unit tests against the oldest Qt we support (Ubuntu 24.04 ships Qt 6.4).
+  test:
+    name: Tests (Qt from Ubuntu 24.04)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev qt6-base-dev-tools libgl-dev ninja-build
+      - name: Configure
+        run: cmake -S . -B build -G Ninja
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  # One Flatpak per architecture: x86_64 for the Steam Deck, aarch64 for the
+  # Steam Frame. Both build natively on GitHub's own runners.
+  flatpak:
+    name: Flatpak (${{ matrix.variant.arch }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.variant.runner }}
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.10
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: linopus-${{ matrix.variant.arch }}.flatpak
+          manifest-path: flatpak/com.mwcontent.Linopus.yml
+          arch: ${{ matrix.variant.arch }}
+          cache-key: flatpak-builder-${{ matrix.variant.arch }}-${{ github.sha }}

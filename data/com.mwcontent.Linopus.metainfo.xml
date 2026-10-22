@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.mwcontent.Linopus</id>
+  <name>Linopus</name>
+  <summary>Source and destination file manager</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <developer id="com.mwcontent">
+    <name>Shane Monroe</name>
+  </developer>
+  <description>
+    <p>
+      A file manager built around a source and a destination: two displays, and
+      every command acts from one to the other. Queued copies per drive,
+      collision handling with side-by-side comparison, aliases, tabs, and
+      buttons that run commands.
+    </p>
+  </description>
+  <launchable type="desktop-id">com.mwcontent.Linopus.desktop</launchable>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-10-21">
+      <description>
+        <p>Phase 1: listers, dual displays, tabs, breadcrumbs, inline rename, aliases and the queued job manager.</p>
+      </description>
+    </release>
+  </releases>
+</component>
