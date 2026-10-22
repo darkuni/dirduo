@@ -435,6 +435,25 @@ void ListerWindow::buildMenus()
     tools->addAction(commandAction(QStringLiteral("Advanced Rename..."), QStringLiteral("Rename ADVANCED"), {}, QStringLiteral("edit-rename")));
 
     QMenu *window = menuBar()->addMenu(QStringLiteral("&Window"));
+    QMenu *layouts = window->addMenu(QIcon::fromTheme(QStringLiteral("view-split-left-right")), QStringLiteral("Layouts"));
+    connect(layouts, &QMenu::aboutToShow, this, [this, layouts]() {
+        layouts->clear();
+        for (const QString &name : m_app.layoutNames()) {
+            QString q = name;
+            q.remove(QLatin1Char('"'));
+            layouts->addAction(commandAction(name, QStringLiteral("Layout LOAD=\"%1\"").arg(q)));
+        }
+        if (!layouts->isEmpty())
+            layouts->addSeparator();
+        layouts->addAction(commandAction(QStringLiteral("Save This Layout..."), QStringLiteral("Layout SAVE=ask"), {}, QStringLiteral("document-save")));
+        QMenu *del = layouts->addMenu(QStringLiteral("Delete"));
+        del->setEnabled(!m_app.layoutNames().isEmpty());
+        for (const QString &name : m_app.layoutNames()) {
+            QString q = name;
+            q.remove(QLatin1Char('"'));
+            del->addAction(commandAction(name, QStringLiteral("Layout DELETE=\"%1\"").arg(q)));
+        }
+    });
     m_toolbarsMenu = window->addMenu(QIcon::fromTheme(QStringLiteral("configure-toolbars")), QStringLiteral("Toolbars"));
     connect(m_toolbarsMenu, &QMenu::aboutToShow, this, &ListerWindow::rebuildToolbarsMenu);
     QAction *custom = window->addAction(QIcon::fromTheme(QStringLiteral("configure-toolbars")), QStringLiteral("Customize Toolbars..."));
@@ -2063,6 +2082,38 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
         }
         dlg->show();
         return true;
+    }
+    if (cmd.is(QStringLiteral("Layout"))) {
+        if (cmd.hasArg(QStringLiteral("SAVE"))) {
+            QString name = cmd.value(QStringLiteral("SAVE"));
+            bool withFolders = cmd.hasFlag(QStringLiteral("FOLDERS"));
+            if (name.isEmpty() || name.compare(QLatin1String("ask"), Qt::CaseInsensitive) == 0) {
+                name = QStringLiteral("My Layout");
+                if (!promptText(QStringLiteral("Save Layout"), QStringLiteral("Layout name:"), name))
+                    return fail(CommandEngine::kCancelled);
+                withFolders = withFolders
+                    || QMessageBox::question(this, QStringLiteral("Save Layout"),
+                                             QStringLiteral("Keep the folders and tabs in the layout too?\n"
+                                                            "(No: loading it keeps whatever folders are showing.)"))
+                        == QMessageBox::Yes;
+            }
+            QString err;
+            if (!m_app.saveLayout(name, this, withFolders, &err))
+                return fail(err);
+            return true;
+        }
+        if (cmd.hasArg(QStringLiteral("LOAD"))) {
+            QString err;
+            if (!m_app.loadLayout(cmd.value(QStringLiteral("LOAD")), this, &err))
+                return fail(err);
+            return true;
+        }
+        if (cmd.hasArg(QStringLiteral("DELETE"))) {
+            if (!m_app.deleteLayout(cmd.value(QStringLiteral("DELETE"))))
+                return fail(QStringLiteral("There is no layout called %1.").arg(cmd.value(QStringLiteral("DELETE"))));
+            return true;
+        }
+        return fail(QStringLiteral("Layout takes SAVE=, LOAD= or DELETE=."));
     }
     if (cmd.is(QStringLiteral("Favorite"))) {
         Favorites *f = Favorites::instance();

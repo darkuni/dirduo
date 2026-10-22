@@ -65,6 +65,7 @@ Servers and archives (KIO):
 - Find (Tools > Find, Ctrl+Shift+F): by name (text, wildcards or a regular expression), text inside files, size, modified date, files or folders, under any folders. Results open in a tab as the Find Results collection, where every command works on them; searches can be saved and run again. `Find NAME=*.d64 NEWER=30 RUN` from a button
 - Collections (Go > Collections, `/collections`): virtual folders of links to files anywhere. Edit > Add to Collection, or copy into a collection shown in the other display; Delete there only takes the link out; renaming the real file keeps the link. Each is a text file in `~/.config/linopus/collections`
 - Viewer pane (F3, View > Viewer Pane): shows the file in focus beside or below the displays. Pictures fit the pane (click for actual size, photos the right way up), text and code as text, `.nfo` and `.diz` in the DOS code page with their box drawing, other files as hex (the Hex button shows any file's bytes), zips as a list of what is inside, folders as a count. Arrowing through a folder only loads where you stop
+- Layouts (Window > Layouts): save a lister's whole arrangement (single or dual, trees, toolbars and where they sit, viewer pane, views) under a name and switch to it in one click; with or without its folders. `Layout LOAD="ROM sorting"` from a button
 - Preferences (File > Preferences, Ctrl+,): a search box over every setting; Appearance (theme, size); a Theme Editor for every colour, the SOURCE/DEST accents and each file type, live, saved as your own theme (a built-in is never overwritten: edits become "Name (mine)"); Labels; Aliases; Folder Formats; Toolbars. Cancel undoes what you previewed
 - Favourites (Favourites menu, the Favourites toolbar button, Ctrl+D to add): your folders in your order, in groups if you like; Organise Favourites renames, reorders and groups them. Frequent Folders lists the folders you use most, older visits counting for less
 - Self-filling toolbar menus: a button can be a menu of your Favourites, Frequent folders, Aliases or Collections that stays up to date (customize mode, Commands > Favourites)
@@ -84,6 +85,7 @@ Every button, menu item, hotkey, drop and inline rename runs one of these. Butto
 | `CreateFolder` | `NAME="A, B, C"` makes all three; no name asks; `IN=...` |
 | `Clipboard` | `COPY`, `CUT`, `PASTE` (a picture or text pastes as a new file), `AS` |
 | `Print` | `FOLDER`, `AS=text\|csv\|html`, `TO=clipboard\|ask\|<file>`, `SELECTED` |
+| `Layout` | `SAVE=<name>\|ask` (`FOLDERS` to keep folders and tabs), `LOAD=<name>`, `DELETE=<name>` |
 | `Favorite` | `ADD`, `REMOVE`, `PATH=`, `NAME=`, `GROUP=`, `GO=<name>`, `ORGANISE` |
 | `Find` | `NAME=`, `REGEX`, `CASE`, `CONTAINS=`, `MINSIZE=10M`, `MAXSIZE=`, `NEWER=<days or date>`, `OLDER=`, `TYPE=files\|folders\|both`, `IN=...`, `HIDDEN`, `NORECURSE`, `COLLECTION=`, `PRESET=`, `RUN` |
 | `Collection` | `ADD=<name>\|ask`, `REMOVE`, `CREATE=`, `DELETE=`, `OPEN=<name>`, `NEWTAB` |
@@ -186,6 +188,7 @@ A button with `"dynamic": "favorites"` (or `frequent`, `aliases`, `collections`)
 - `~/.config/linopus/find.ini`: saved searches
 - `~/.config/linopus/collections/`: collections, one path per line
 - `~/.config/linopus/favorites.json`, `frequent.ini`: favourites and folder visit counts
+- `~/.config/linopus/layouts/`: saved layouts
 
 Inside the Flatpak these are still the real `~/.config/linopus`, so the configuration copies straight to another machine.
 

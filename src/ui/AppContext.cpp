@@ -22,6 +22,7 @@
 #include "ui/Style.h"
 
 #include <QSettings>
+#include <QTemporaryFile>
 #include <QFile>
 #include <QSaveFile>
 #include <QDirIterator>
@@ -293,4 +294,100 @@ bool AppContext::restoreSettings(const QString &zipFile, QString *error)
         Style::instance()->setTheme(QStringLiteral("Follow Desktop"));
     Style::instance()->setSizeLevel(qMax(0, Style::sizeFromName(m_settings->value(QStringLiteral("Appearance/size")).toString())));
     return true;
+}
+
+namespace {
+QString layoutFile(const QString &name)
+{
+    return Paths::configFile(QStringLiteral("layouts/") + name + QStringLiteral(".ini"));
+}
+} // namespace
+
+QStringList AppContext::layoutNames() const
+{
+    QStringList out;
+    for (const QFileInfo &fi : QDir(Paths::configFile(QStringLiteral("layouts"))).entryInfoList({QStringLiteral("*.ini")}, QDir::Files,
+                                                                                               QDir::Name | QDir::IgnoreCase))
+        out << fi.completeBaseName();
+    return out;
+}
+
+bool AppContext::saveLayout(const QString &name, ListerWindow *from, bool withFolders, QString *error)
+{
+    if (name.trimmed().isEmpty() || name.contains(QLatin1Char('/')) || !from) {
+        if (error)
+            *error = QStringLiteral("A layout needs a name without /.");
+        return false;
+    }
+    QDir().mkpath(Paths::configFile(QStringLiteral("layouts")));
+    QFile::remove(layoutFile(name.trimmed()));
+    QSettings s(layoutFile(name.trimmed()), QSettings::IniFormat);
+    from->saveListerState(s);
+    s.setValue(QStringLiteral("Layout/withFolders"), withFolders);
+    s.sync();
+    if (s.status() != QSettings::NoError) {
+        if (error)
+            *error = QStringLiteral("Could not write %1.").arg(layoutFile(name));
+        return false;
+    }
+    return true;
+}
+
+bool AppContext::deleteLayout(const QString &name)
+{
+    return QFile::remove(layoutFile(name));
+}
+
+ListerWindow *AppContext::loadLayout(const QString &name, ListerWindow *replace, QString *error)
+{
+    if (!QFileInfo::exists(layoutFile(name))) {
+        if (error)
+            *error = QStringLiteral("There is no layout called %1.").arg(name);
+        return nullptr;
+    }
+    // Build what to restore in a scratch file: the layout, with the current
+    // folders (tabs and their views) kept when the layout has none of its own.
+    QTemporaryFile scratch(QDir::tempPath() + QStringLiteral("/linopus-layout-XXXXXX.ini"));
+    if (!scratch.open()) {
+        if (error)
+            *error = QStringLiteral("Could not prepare the layout.");
+        return nullptr;
+    }
+    scratch.close();
+    {
+        QSettings layout(layoutFile(name), QSettings::IniFormat);
+        QSettings out(scratch.fileName(), QSettings::IniFormat);
+        const bool withFolders = layout.value(QStringLiteral("Layout/withFolders"), false).toBool();
+        if (!withFolders && replace)
+            replace->saveListerState(out);
+        static const QStringList folderKeys = {QStringLiteral("tabs"), QStringLiteral("views"), QStringLiteral("current"),
+                                               QStringLiteral("groups"), QStringLiteral("flat"), QStringLiteral("extras"),
+                                               QStringLiteral("columns")};
+        for (const QString &key : layout.allKeys()) {
+            const bool folderKey = key.startsWith(QLatin1String("display")) && folderKeys.contains(key.section(QLatin1Char('/'), 1));
+            if (folderKey && !withFolders && replace)
+                continue;
+            out.setValue(key, layout.value(key));
+        }
+        out.sync();
+    }
+    QSettings in(scratch.fileName(), QSettings::IniFormat);
+    auto *w = new ListerWindow(*this);
+    if (!w->restoreListerState(in)) {
+        delete w;
+        if (error)
+            *error = QStringLiteral("The layout could not be read.");
+        return nullptr;
+    }
+    m_listers.prepend(w);
+    w->show();
+    if (replace) {
+        // The old window goes quietly; the session is saved from the new one.
+        m_listers.removeAll(QPointer<ListerWindow>(replace));
+        replace->setAttribute(Qt::WA_DeleteOnClose);
+        replace->hide();
+        replace->deleteLater();
+    }
+    w->activateWindow();
+    return w;
 }

@@ -83,6 +83,12 @@ QList<CommandInfo> buildCommands()
                       arg("SELECT=", {}, "Select these items once the folder is read")},
                      QStringLiteral("Go /downloads NEWTAB")};
     QList<ArgInfo> moveArgs = copyArgs.mid(1);
+    c << CommandInfo{QStringLiteral("Layout"), QStringLiteral("Save and switch whole lister arrangements"),
+                     {arg("SAVE=", {QStringLiteral("ask")}, "Save this lister's arrangement under a name"),
+                      arg("FOLDERS", {}, "With SAVE: the folders and tabs too (otherwise loading keeps yours)"),
+                      arg("LOAD=", {}, "Switch to a saved layout"),
+                      arg("DELETE=", {}, "Delete a saved layout")},
+                     QStringLiteral("Layout LOAD=\"ROM sorting\"")};
     c << CommandInfo{QStringLiteral("Move"), QStringLiteral("Move the selection to the destination"), moveArgs,
                      QStringLiteral("Move TO=/sdcard")};
     c << CommandInfo{QStringLiteral("Print"), QStringLiteral("A listing of the folder as text, CSV or HTML"),

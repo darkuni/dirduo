@@ -55,6 +55,7 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Ctrl+Shift+F, name `*.d64` (or any type you have), Find: results open in a tab; copy one of them to the other display.
 - [ ] Select a few files, Edit > Add to Collection > New Collection; Go > Collections opens it; Delete there leaves the real files alone.
 - [ ] F3 opens the viewer pane; arrow through a folder of screenshots; View > Viewer Position > Bottom.
+- [ ] Window > Layouts > Save This Layout; change things around; load it back.
 - [ ] Ctrl+, opens Preferences; type "colour" in the search box; change the SOURCE colour in the Theme Editor (it shows at once); Cancel puts it back.
 - [ ] Ctrl+D in a few folders, then the Favourites button: they are listed; Organise Favourites to group them.
 - [ ] Tools > Find Duplicates on a ROM folder: groups show; check copies, then Move Checked to Trash.

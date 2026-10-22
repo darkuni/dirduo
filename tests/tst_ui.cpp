@@ -1372,6 +1372,39 @@ private Q_SLOTS:
         QVERIFY(!v->isVisible());
     }
 
+    void savedLayouts()
+    {
+        QVERIFY(w->runCommand(QStringLiteral("Set DUAL=horizontal\nSet TREE=shared\nSet VIEWER=on")));
+        QVERIFY(w->runCommand(QStringLiteral("Layout SAVE=Sorting")));
+        QVERIFY(w->runCommand(QStringLiteral("Layout SAVE=\"Here too\" FOLDERS")));
+        QCOMPARE(m_app->layoutNames(), (QStringList{QStringLiteral("Here too"), QStringLiteral("Sorting")}));
+
+        // Rearrange and move on, then load: the arrangement comes back, the folder stays.
+        QVERIFY(w->runCommand(QStringLiteral("Set DUAL=vertical\nSet TREE=off\nSet VIEWER=off")));
+        w->display(0)->currentTab()->navigate(root);
+        QVERIFY(w->runCommand(QStringLiteral("Layout LOAD=Sorting")));
+        QApplication::processEvents();
+        ListerWindow *loaded = m_app->activeLister();
+        QVERIFY(loaded && loaded != w);
+        w = loaded;
+        QTRY_VERIFY(w->isVisible());
+        QVERIFY(w->isDual());
+        QVERIFY(!w->display(0)->isHidden());
+        QCOMPARE(w->treeMode(), ListerWindow::TreeMode::Shared);
+        QVERIFY(w->viewer()->isVisible());
+        QCOMPARE(w->display(0)->currentTab()->path(), root);
+        QCOMPARE(m_app->listerCount(), 1); // replaced, not added
+
+        // With folders: back to where it was saved.
+        QVERIFY(w->runCommand(QStringLiteral("Layout LOAD=\"Here too\"")));
+        QApplication::processEvents();
+        w = m_app->activeLister();
+        QCOMPARE(w->display(0)->currentTab()->path(), root + QStringLiteral("/a"));
+        QVERIFY(w->runCommand(QStringLiteral("Layout DELETE=Sorting")));
+        QCOMPARE(m_app->layoutNames(), QStringList{QStringLiteral("Here too")});
+        QVERIFY(!runFailing(QStringLiteral("Layout LOAD=Sorting")));
+    }
+
     void sessionRoundTrip()
     {
         w->runCommand(QStringLiteral("Set DUAL=horizontal\nSet VIEW=list"));

@@ -40,6 +40,14 @@ public:
     // Every file under ~/.config/linopus in one zip, and back. Restoring
     // reloads aliases, toolbars, themes, labels and folder formats at once.
     bool backupSettings(const QString &zipFile, QString *error);
+
+    // Layouts: a lister's whole arrangement under a name, in layouts/<name>.ini.
+    // Without folders, loading keeps the folders the lister shows now.
+    QStringList layoutNames() const;
+    bool saveLayout(const QString &name, ListerWindow *from, bool withFolders, QString *error);
+    // Replaces the lister with one arranged as saved; returns the new one.
+    ListerWindow *loadLayout(const QString &name, ListerWindow *replace, QString *error);
+    bool deleteLayout(const QString &name);
     bool restoreSettings(const QString &zipFile, QString *error);
     ProgressWindows &progress() { return *m_progress; }
 
