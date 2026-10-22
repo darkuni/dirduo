@@ -15,6 +15,7 @@
 #include "ui/AdvancedRenameDialog.h"
 #include "ui/ButtonBar.h"
 #include "ui/PreferencesDialog.h"
+#include "ui/ViewerPane.h"
 #include "ui/DuplicatesDialog.h"
 #include "ui/SyncDialog.h"
 #include "ui/ButtonEditor.h"
@@ -39,6 +40,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QLineEdit>
+#include <QPainter>
 #include <QTabWidget>
 #include <QTreeWidget>
 #include <QTimer>
@@ -387,6 +389,45 @@ int main(int argc, char *argv[])
         QTest::qWait(300);
         dlg.grab().save(out + QStringLiteral("/26-preferences-labels.png"));
         dlg.reject();
+    }
+
+    // Viewer pane: a picture on the right, then an NFO at the bottom.
+    {
+        QImage pic(1280, 720, QImage::Format_RGB32);
+        QPainter pp(&pic);
+        QLinearGradient sky(0, 0, 0, 720);
+        sky.setColorAt(0, QColor::fromRgb(0x0b, 0x1d, 0x51));
+        sky.setColorAt(1, QColor::fromRgb(0xe0, 0x7a, 0x10));
+        pp.fillRect(pic.rect(), sky);
+        pp.setPen(Qt::NoPen);
+        pp.setBrush(QColor::fromRgb(0xff, 0xd2, 0x4a));
+        pp.drawEllipse(QPoint(900, 460), 110, 110);
+        pp.setBrush(QColor::fromRgb(0x10, 0x10, 0x18));
+        pp.drawRect(0, 560, 1280, 160);
+        pp.end();
+        pic.save(root + QStringLiteral("/Pictures/Sunset over Glendale.png"));
+        QFile nfo(root + QStringLiteral("/Documents/DUD-1994.nfo"));
+        if (nfo.open(QIODevice::WriteOnly))
+            nfo.write("\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\r\n"
+                      "\xBA  DARK UNICORN DISPATCH \xBA\r\n"
+                      "\xBA   Issue #1  -  1994    \xBA\r\n"
+                      "\xBA \xB0\xB1\xB2\xDB Tombstone BBS \xDB\xB2\xB1\xB0 \xBA\r\n"
+                      "\xC8\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBC\r\n");
+        nfo.close();
+        w->runCommand(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet DUAL=vertical\nSet VIEWER=on\nSet VIEWERPOS=right"));
+        w->display(0)->currentTab()->navigate(root + QStringLiteral("/Pictures"));
+        QTest::qWait(500);
+        w->runCommand(QStringLiteral("Set VIEW=details"));
+        w->display(0)->currentTab()->selectPaths({root + QStringLiteral("/Pictures/Sunset over Glendale.png")});
+        QTest::qWait(900);
+        shot(w, out, QStringLiteral("27-viewer-picture"));
+        w->runCommand(QStringLiteral("Set VIEWERPOS=bottom"));
+        w->display(0)->currentTab()->navigate(root + QStringLiteral("/Documents"));
+        QTest::qWait(500);
+        w->display(0)->currentTab()->selectPaths({root + QStringLiteral("/Documents/DUD-1994.nfo")});
+        QTest::qWait(900);
+        shot(w, out, QStringLiteral("28-viewer-nfo"));
+        w->runCommand(QStringLiteral("Set VIEWER=off\nSet THEME=\"Linopus Light\""));
     }
 
 #ifdef LINOPUS_HAVE_KIO

@@ -141,6 +141,8 @@ FolderTab::FolderTab(QWidget *parent)
         Q_EMIT selectionChanged();
         Q_EMIT statusChanged();
     });
+    // The item in focus matters too (the viewer shows it).
+    connect(m_selection, &QItemSelectionModel::currentChanged, this, &FolderTab::selectionChanged);
     connect(m_proxy, &QAbstractItemModel::rowsInserted, this, &FolderTab::statusChanged);
     connect(m_proxy, &QAbstractItemModel::rowsRemoved, this, &FolderTab::statusChanged);
     connect(m_proxy, &QAbstractItemModel::modelReset, this, &FolderTab::statusChanged);

@@ -1,0 +1,75 @@
+#pragma once
+
+#include <QDockWidget>
+#include <QFutureWatcher>
+#include <QImage>
+#include <QTimer>
+
+class QLabel;
+class QPlainTextEdit;
+class QStackedWidget;
+class QToolButton;
+class QTreeWidget;
+class ImageView;
+
+// What the viewer made of a file; built off the GUI thread.
+struct Preview
+{
+    enum class Kind { None, Image, Text, Hex, Archive, Folder, Info };
+    Kind kind = Kind::None;
+    QString path;
+    QString title;
+    QString info;      // one line: type, size, date, dimensions
+    QImage image;
+    QString text;
+    bool truncated = false;
+    QStringList entries;      // archive: "path\tsize"
+    QString error;
+
+    // Decides what to show for a path and loads it (call from any thread).
+    static Preview load(const QString &path, int maxImageSide = 2048);
+    // DOS code page 437, for .nfo and .diz files from the BBS days.
+    static QString fromCp437(const QByteArray &bytes);
+    static QString hexDump(const QByteArray &bytes, qint64 offset = 0);
+};
+
+// The viewer pane: a dock beside or below the displays that shows the file
+// in focus in the source display. Images fit the pane (click for 100%),
+// text and code show as text, .nfo/.diz in code page 437, other files as
+// hex, zips as a list of what is inside, folders as a summary.
+class ViewerPane : public QDockWidget
+{
+    Q_OBJECT
+public:
+    explicit ViewerPane(QWidget *parent = nullptr);
+    ~ViewerPane() override;
+
+    void showPath(const QString &path); // debounced, loads in the background
+    void showNow(const QString &path);  // for tests: loads and shows at once
+    QString path() const { return m_path; }
+    Preview::Kind kind() const { return m_current.kind; }
+    QString infoText() const;
+    QString textShown() const;
+    QSize imageSize() const { return m_current.image.size(); }
+    bool isLoading() const { return m_watcher.isRunning(); }
+
+private:
+    void start();
+    void display(const Preview &p);
+
+    QString m_path;
+    QString m_pending;
+    Preview m_current;
+    QTimer m_debounce;
+    QFutureWatcher<Preview> m_watcher;
+
+    QLabel *m_title;
+    QLabel *m_info;
+    QToolButton *m_hexToggle;
+    QStackedWidget *m_stack;
+    ImageView *m_image;
+    QPlainTextEdit *m_text;
+    QTreeWidget *m_archive;
+    QLabel *m_message;
+    bool m_forceHex = false;
+};

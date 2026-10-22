@@ -104,6 +104,7 @@ add_library(linopus_ui STATIC
     src/ui/FindDialog.cpp
     src/ui/FavoritesDialog.cpp
     src/ui/PreferencesDialog.cpp
+    src/ui/ViewerPane.cpp
     src/ui/ListerWindow.cpp
     src/ui/AppContext.cpp
 )

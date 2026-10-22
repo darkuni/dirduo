@@ -12,6 +12,7 @@
 #include "core/Favorites.h"
 #include "ui/FavoritesDialog.h"
 #include "ui/PreferencesDialog.h"
+#include "ui/ViewerPane.h"
 #include "ui/SyncDialog.h"
 #include "ui/CommandConsole.h"
 #include "ui/CustomizeDialog.h"
@@ -1309,6 +1310,66 @@ private Q_SLOTS:
             dlg.reject();
         }
         Style::instance()->setLabels({});
+    }
+
+    void viewerPreviews()
+    {
+        const QString d = root + QStringLiteral("/v");
+        QDir().mkpath(d);
+        QImage img(300, 200, QImage::Format_RGB32);
+        img.fill(Qt::blue);
+        QVERIFY(img.save(d + QStringLiteral("/shot.png")));
+        auto put = [](const QString &p, const QByteArray &b) {
+            QFile f(p);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(b);
+        };
+        put(d + QStringLiteral("/readme.md"), "# Deluxe Galaga\nShoot everything.");
+        put(d + QStringLiteral("/release.nfo"), QByteArray("\xC9\xCD\xCD\xBB\r\n\xBA hi \xBA\r\n\xC8\xCD\xCD\xBC\x1A garbage"));
+        put(d + QStringLiteral("/kick13.rom"), QByteArray("\x11\x14\x4E\xF9\x00\xFC\x00\xD2", 8) + QByteArray(100, '\0'));
+        QVERIFY(Zip::write(d + QStringLiteral("/pack.zip"), {Zip::Entry{QStringLiteral("c64/Galaga.d64"), QByteArray(10, 'g')}}));
+
+        Preview p = Preview::load(d + QStringLiteral("/shot.png"));
+        QCOMPARE(p.kind, Preview::Kind::Image);
+        QCOMPARE(p.image.size(), QSize(300, 200));
+        QVERIFY(p.info.contains(QStringLiteral("300 x 200")));
+        QCOMPARE(Preview::load(d + QStringLiteral("/shot.png"), 100).image.width(), 100); // scaled while loading
+        p = Preview::load(d + QStringLiteral("/readme.md"));
+        QCOMPARE(p.kind, Preview::Kind::Text);
+        QVERIFY(p.text.startsWith(QStringLiteral("# Deluxe Galaga")));
+        p = Preview::load(d + QStringLiteral("/release.nfo"));
+        QCOMPARE(p.kind, Preview::Kind::Text);
+        QVERIFY(p.text.startsWith(QStringLiteral("╔══╗")));
+        QVERIFY(!p.text.contains(QStringLiteral("garbage"))); // stops at the DOS end-of-file mark
+        p = Preview::load(d + QStringLiteral("/kick13.rom"));
+        QCOMPARE(p.kind, Preview::Kind::Hex);
+        QVERIFY(p.text.startsWith(QStringLiteral("00000000  11 14 4e f9")));
+        p = Preview::load(d + QStringLiteral("/pack.zip"));
+        QCOMPARE(p.kind, Preview::Kind::Archive);
+        QCOMPARE(p.entries.first().section(QLatin1Char('\t'), 0, 0), QStringLiteral("c64/Galaga.d64"));
+        p = Preview::load(d);
+        QCOMPARE(p.kind, Preview::Kind::Folder);
+        QVERIFY(p.text.contains(QStringLiteral("5 files")));
+        QCOMPARE(Preview::load(d + QStringLiteral("/missing")).kind, Preview::Kind::None);
+        QCOMPARE(Preview::load(QStringLiteral("sftp://host/x.txt")).kind, Preview::Kind::Info);
+
+        // In the lister: F3's command, following the focus.
+        QVERIFY(w->runCommand(QStringLiteral("Set VIEWER=on")));
+        ViewerPane *v = w->viewer();
+        QVERIFY(v->isVisible());
+        QVERIFY(w->evaluateCondition(QStringLiteral("viewer"), false));
+        FolderTab *t = w->display(0)->currentTab();
+        t->navigate(d);
+        waitListed(t, 5);
+        t->selectPaths({d + QStringLiteral("/readme.md")});
+        QTRY_COMPARE(v->path(), d + QStringLiteral("/readme.md"));
+        QTRY_VERIFY(v->textShown().contains(QStringLiteral("Shoot everything")));
+        t->selectPaths({d + QStringLiteral("/shot.png")});
+        QTRY_COMPARE(v->kind(), Preview::Kind::Image);
+        QVERIFY(w->runCommand(QStringLiteral("Set VIEWERPOS=bottom")));
+        QCOMPARE(w->dockWidgetArea(v), Qt::BottomDockWidgetArea);
+        QVERIFY(w->runCommand(QStringLiteral("Set VIEWER=off")));
+        QVERIFY(!v->isVisible());
     }
 
     void sessionRoundTrip()

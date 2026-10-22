@@ -14,6 +14,7 @@
 #include "core/Favorites.h"
 #include "ui/FavoritesDialog.h"
 #include "ui/PreferencesDialog.h"
+#include "ui/ViewerPane.h"
 #include "ui/SyncDialog.h"
 #include "ui/BreadcrumbBar.h"
 #include "ui/ButtonBar.h"
@@ -103,6 +104,10 @@ ListerWindow::ListerWindow(AppContext &app, QWidget *parent)
         connect(d, &FileDisplay::openFileRequested, this, &ListerWindow::openFile);
         connect(d, &FileDisplay::contextMenuRequested, this, &ListerWindow::onContextMenu);
         connect(d, &FileDisplay::stateChanged, this, &ListerWindow::scheduleButtonStates);
+        connect(d, &FileDisplay::stateChanged, this, [this](FileDisplay *from) {
+            if (from == sourceDisplay())
+                updateViewer();
+        });
         connect(d, &FileDisplay::tabKeyPressed, this, [this](FileDisplay *from) {
             if (!m_dual)
                 return;
@@ -121,6 +126,16 @@ ListerWindow::ListerWindow(AppContext &app, QWidget *parent)
     m_outer->addWidget(m_split);
     m_outer->setChildrenCollapsible(false);
     setCentralWidget(m_outer);
+
+    // The viewer pane starts hidden on the right; F3 or Set VIEWER shows it.
+    m_viewer = new ViewerPane(this);
+    addDockWidget(Qt::RightDockWidgetArea, m_viewer);
+    m_viewer->hide();
+    connect(m_viewer, &QDockWidget::visibilityChanged, this, [this](bool on) {
+        if (on)
+            updateViewer();
+        scheduleButtonStates();
+    });
 
     buildActions();
     buildMenus();
@@ -350,6 +365,12 @@ void ListerWindow::buildMenus()
     m_treeMenu = view->addMenu(QIcon::fromTheme(QStringLiteral("view-list-tree")), QStringLiteral("Folder Tree"));
     m_flatMenu = view->addMenu(QStringLiteral("Flat View"));
     m_groupMenu = view->addMenu(QStringLiteral("Group By"));
+    view->addAction(commandAction(QStringLiteral("Viewer Pane"), QStringLiteral("Set VIEWER=toggle"), QKeySequence(Qt::Key_F3),
+                                  QStringLiteral("view-preview")));
+    QMenu *viewerPos = view->addMenu(QStringLiteral("Viewer Position"));
+    viewerPos->addAction(commandAction(QStringLiteral("Right"), QStringLiteral("Set VIEWERPOS=right")));
+    viewerPos->addAction(commandAction(QStringLiteral("Bottom"), QStringLiteral("Set VIEWERPOS=bottom")));
+    viewerPos->addAction(commandAction(QStringLiteral("Left"), QStringLiteral("Set VIEWERPOS=left")));
     view->addAction(m_actFilterBar);
     view->addAction(m_actChecks);
     view->addAction(m_actFolderSizes);
@@ -607,6 +628,8 @@ std::optional<bool> ListerWindow::conditionAtom(const QString &name, const QStri
         return flag(t && !Location::isLocal(t->path()));
     if (name == QLatin1String("canup"))
         return flag(t && !t->path().isEmpty() && !Location::isRoot(t->path()));
+    if (name == QLatin1String("viewer"))
+        return flag(m_viewer && m_viewer->isVisible());
     if (name == QLatin1String("favorite"))
         return flag(t && Favorites::instance()->contains(t->path()));
     if (name == QLatin1String("back"))
@@ -1289,6 +1312,26 @@ bool ListerWindow::set(const ParsedCommand &cmd, QString *error)
             if (m_sharedTree)
                 m_sharedTree->setShowHidden(on);
             syncViewActions();
+        } else if (key == QLatin1String("VIEWER")) {
+            bool on = m_viewer->isVisible();
+            if (!parseSwitch(value, on, on))
+                return fail(QStringLiteral("VIEWER takes on, off or toggle."));
+            m_viewer->setVisible(on);
+            if (on)
+                updateViewer();
+        } else if (key == QLatin1String("VIEWERPOS")) {
+            Qt::DockWidgetArea area;
+            if (value == QLatin1String("right"))
+                area = Qt::RightDockWidgetArea;
+            else if (value == QLatin1String("left"))
+                area = Qt::LeftDockWidgetArea;
+            else if (value == QLatin1String("bottom"))
+                area = Qt::BottomDockWidgetArea;
+            else
+                return fail(QStringLiteral("VIEWERPOS takes right, left or bottom."));
+            addDockWidget(area, m_viewer);
+            m_viewer->show();
+            updateViewer();
         } else if (key == QLatin1String("THEME")) {
             const QString raw = it.value().value(0);
             const QStringList names = Style::instance()->themeNames();
@@ -2156,4 +2199,12 @@ void ListerWindow::fillDynamicMenu(QMenu *menu, const QString &kind)
             menu->addSeparator();
         goAction(menu, QStringLiteral("All Collections"), QStringLiteral("Collection OPEN"), QString(), QStringLiteral("folder-favorites"));
     }
+}
+
+void ListerWindow::updateViewer()
+{
+    if (!m_viewer || !m_viewer->isVisible())
+        return;
+    FolderTab *t = sourceTab();
+    m_viewer->showPath(t ? t->focusedPath() : QString());
 }

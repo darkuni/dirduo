@@ -22,6 +22,7 @@ class QSettings;
 class QSplitter;
 class QToolBar;
 class ToolbarStrip;
+class ViewerPane;
 
 // A lister: a window with one or two file displays. In dual mode one display
 // is SOURCE and the other DEST, and every command acts source to dest.
@@ -59,6 +60,7 @@ public:
     void showFindResults(const QString &collectionLocation, int count);
     // Favourites, frequent folders, aliases or collections, as menu entries.
     void fillDynamicMenu(QMenu *menu, const QString &kind);
+    ViewerPane *viewer() const { return m_viewer; }
 
     FileDisplay *sourceDisplay() const;
     FileDisplay *destDisplay() const; // null in single mode
@@ -159,6 +161,8 @@ private:
     QStringList m_selectionOverride;
     QString *m_errorSink = nullptr;
     QStringList m_lastFindRoots;
+    ViewerPane *m_viewer = nullptr;
+    void updateViewer();
     DrivesBar *m_drives = nullptr;
     ToolbarStrip *m_strip = nullptr;
     QMenu *m_toolbarsMenu = nullptr;
