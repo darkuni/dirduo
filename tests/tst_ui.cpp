@@ -1871,6 +1871,86 @@ private Q_SLOTS:
         dlg->close();
     }
 
+    void findAsYouType()
+    {
+        FolderTab *t = w->display(0)->currentTab();
+        QAbstractItemView *v = t->view();
+        v->setFocus();
+        // As a keyboard would: the first key to the list, the rest to the field it opens.
+        auto type = [&t](const QString &text) {
+            QTest::keyClicks(t->view(), text.left(1));
+            if (text.size() > 1)
+                QTest::keyClicks(t->typeAheadEdit(), text.mid(1));
+        };
+        // Typing jumps to the first name that starts with it.
+        QTest::keyClicks(v, QStringLiteral("t"));
+        QVERIFY(t->typeAheadOpen());
+        QLineEdit *edit = t->typeAheadEdit();
+        QTest::keyClicks(edit, QStringLiteral("h"));
+        QCOMPARE(t->selectedPaths(), QStringList{root + QStringLiteral("/a/three.txt")});
+        // Down: the next match ("t" alone would also match two.txt).
+        QTest::keyClick(edit, Qt::Key_Backspace);
+        QCOMPARE(edit->text(), QStringLiteral("t"));
+        const QString first = t->selectedPaths().value(0);
+        QTest::keyClick(edit, Qt::Key_Down);
+        QVERIFY(t->selectedPaths().value(0) != first);
+        QTest::keyClick(edit, Qt::Key_Escape);
+        QVERIFY(!t->typeAheadOpen());
+
+        // Contains, when nothing starts with it.
+        type(QStringLiteral("wo"));
+        QCOMPARE(t->selectedPaths(), QStringList{root + QStringLiteral("/a/two.txt")});
+        QTest::keyClick(t->typeAheadEdit(), Qt::Key_Escape);
+
+        // Wildcards select every match.
+        type(QStringLiteral("*e*"));
+        QCOMPARE(t->typeAheadMode(), QStringLiteral("select"));
+        QCOMPARE(t->selectedPaths().size(), 2); // one, three
+        QTest::keyClick(t->typeAheadEdit(), Qt::Key_Return);
+        QVERIFY(!t->typeAheadOpen());
+        QCOMPARE(t->selectedPaths().size(), 2);
+
+        // ">" runs a command.
+        type(QStringLiteral(">Set VIEW=list"));
+        QCOMPARE(t->typeAheadMode(), QStringLiteral("command"));
+        QTest::keyClick(t->typeAheadEdit(), Qt::Key_Return);
+        QCOMPARE(t->viewMode(), FolderTab::ViewMode::List);
+        QVERIFY(w->runCommand(QStringLiteral("Set VIEW=details")));
+        // Tab completes a command name.
+        type(QStringLiteral(">Syn"));
+        QTest::keyClick(t->typeAheadEdit(), Qt::Key_Tab);
+        QVERIFY(t->typeAheadEdit()->text().startsWith(QStringLiteral(">Sync")));
+        QTest::keyClick(t->typeAheadEdit(), Qt::Key_Escape);
+
+        // "/" or "~" goes to an alias or a path.
+        QVERIFY(m_app->aliases().setUserAlias(QStringLiteral("bee"), root + QStringLiteral("/b")));
+        type(QStringLiteral("/bee"));
+        QCOMPARE(t->typeAheadMode(), QStringLiteral("go"));
+        QTest::keyClick(t->typeAheadEdit(), Qt::Key_Return);
+        QTRY_COMPARE(w->display(0)->currentTab()->path(), root + QStringLiteral("/b"));
+        t = w->display(0)->currentTab();
+        t->navigate(root + QStringLiteral("/a"));
+        waitListed(t, 3);
+
+        // Ctrl+F turns it into the filter bar.
+        type(QStringLiteral("one"));
+        QTest::keyClick(t->typeAheadEdit(), Qt::Key_F, Qt::ControlModifier);
+        QVERIFY(!t->typeAheadOpen());
+        QVERIFY(t->filterBarVisible());
+        QCOMPARE(t->filterText(), QStringLiteral("*one*"));
+        QCOMPARE(t->view()->model()->rowCount(), 1);
+        t->setFilterBarVisible(false);
+
+        // Enter opens what was found.
+        touch(root + QStringLiteral("/a/zfolder/inside.txt"));
+        t->refresh();
+        waitListed(t, 4);
+        t->focusView();
+        type(QStringLiteral("zf"));
+        QTest::keyClick(t->typeAheadEdit(), Qt::Key_Return);
+        QTRY_COMPARE(t->path(), root + QStringLiteral("/a/zfolder"));
+    }
+
 private:
     // A failing command shows an error box; close it and report the result.
     bool runFailing(const QString &command)

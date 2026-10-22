@@ -89,6 +89,15 @@ public:
     GroupTreeView *detailsView() const { return m_details; }
     FileListModel *fileModel() const { return m_model; }
 
+    // Find-as-you-type: typing in the list opens a field at the bottom. Plain
+    // text jumps to a name, wildcards select, ">" runs a command, "/" or "~"
+    // goes to an alias or path; Ctrl+F turns it into the filter bar.
+    void openTypeAhead(const QString &text);
+    void closeTypeAhead();
+    bool typeAheadOpen() const;
+    QLineEdit *typeAheadEdit() const { return m_faytEdit; }
+    QString typeAheadMode() const;
+
     // Expandable folders (details view): a folder's contents open under it.
     bool expandFolder(const QString &path);
     void collapseFolder(const QString &path);
@@ -146,6 +155,8 @@ Q_SIGNALS:
     // Shift+wheel or a pinch over the list: steps in (+) or out (-).
     void zoomRequested(int steps);
     void expandFailed(const QString &path, const QString &error);
+    // From the type-ahead field: run this in the lister.
+    void commandRequested(const QString &command);
     void pathChanged(const QString &path);
     void viewStateChanged(); // grouping, filter, columns or modes changed
     void activated();                 // clicked or focused
@@ -198,6 +209,13 @@ private:
     bool m_autoIcons = false;
     int m_zoom = 100;
     QHash<QString, DirLister *> m_children; // one per expanded folder
+    QWidget *m_fayt = nullptr;
+    QLineEdit *m_faytEdit = nullptr;
+    class QLabel *m_faytLabel = nullptr;
+    void updateTypeAhead();
+    void typeAheadStep(int delta); // next or previous match
+    bool typeAheadKey(QKeyEvent *ke);
+    QList<QModelIndex> typeAheadMatches() const;
     void updateExpandable();
     bool expanderHit(const QPoint &viewportPos, QModelIndex *index) const;
     int m_wheelZoom = 0;     // wheel units towards the next step (trackpads send small ones)

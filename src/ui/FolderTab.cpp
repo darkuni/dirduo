@@ -1,4 +1,5 @@
 #include "ui/FolderTab.h"
+#include "core/CommandCatalog.h"
 
 #include "core/Collections.h"
 #include "core/Favorites.h"
@@ -28,6 +29,8 @@
 #include <QKeyEvent>
 #include <QApplication>
 #include <QListView>
+#include <QToolTip>
+#include <QLabel>
 #include <QNativeGestureEvent>
 #include <QGestureEvent>
 #include <QWheelEvent>
@@ -94,6 +97,41 @@ FolderTab::FolderTab(QWidget *parent)
     connect(m_filterScope, &QComboBox::currentIndexChanged, this, applyFilter);
     connect(closeFilter, &QToolButton::clicked, this, [this]() { setFilterBarVisible(false); });
     m_filterEdit->installEventFilter(this);
+
+    // Find-as-you-type field, under the list.
+    m_fayt = new QWidget(this);
+    auto *tl = new QHBoxLayout(m_fayt);
+    tl->setContentsMargins(4, 3, 4, 3);
+    tl->setSpacing(6);
+    m_faytLabel = new QLabel(m_fayt);
+    m_faytLabel->setMinimumWidth(fontMetrics().horizontalAdvance(QStringLiteral("Command (99)")));
+    m_faytEdit = new QLineEdit(m_fayt);
+    m_faytEdit->setToolTip(QStringLiteral("Find: Up/Down for the next match, Enter opens\n"
+                                          "Wildcards (*.d64) select what matches\n"
+                                          ">command runs it (Tab completes)\n"
+                                          "/alias or ~/path goes there\n"
+                                          "Ctrl+F makes it a filter; Esc closes"));
+    auto *toFilter = new QToolButton(m_fayt);
+    toFilter->setAutoRaise(true);
+    toFilter->setIcon(QIcon::fromTheme(QStringLiteral("view-filter")));
+    toFilter->setToolTip(QStringLiteral("Filter by this instead (Ctrl+F)"));
+    auto *closeFayt = new QToolButton(m_fayt);
+    closeFayt->setAutoRaise(true);
+    closeFayt->setIcon(QIcon::fromTheme(QStringLiteral("window-close")));
+    closeFayt->setToolTip(QStringLiteral("Close (Esc)"));
+    tl->addWidget(m_faytLabel);
+    tl->addWidget(m_faytEdit, 1);
+    tl->addWidget(toFilter);
+    tl->addWidget(closeFayt);
+    m_fayt->hide();
+    outer->addWidget(m_fayt);
+    m_faytEdit->installEventFilter(this);
+    connect(m_faytEdit, &QLineEdit::textChanged, this, &FolderTab::updateTypeAhead);
+    connect(closeFayt, &QToolButton::clicked, this, &FolderTab::closeTypeAhead);
+    connect(toFilter, &QToolButton::clicked, this, [this]() {
+        QKeyEvent ctrlF(QEvent::KeyPress, Qt::Key_F, Qt::ControlModifier);
+        typeAheadKey(&ctrlF);
+    });
 
     // Details
     m_details->setRootIsDecorated(false);
@@ -741,6 +779,27 @@ bool FolderTab::isFolder(const QString &path) const
 
 bool FolderTab::eventFilter(QObject *watched, QEvent *event)
 {
+    if (watched == m_faytEdit) {
+        if (event->type() == QEvent::KeyPress && typeAheadKey(static_cast<QKeyEvent *>(event)))
+            return true;
+        if (event->type() == QEvent::ShortcutOverride) {
+            // Keep window shortcuts (Ctrl+F, arrows, Tab) for the field.
+            auto *ke = static_cast<QKeyEvent *>(event);
+            if (ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Up || ke->key() == Qt::Key_Down
+                || (ke->key() == Qt::Key_F && ke->modifiers() == Qt::ControlModifier) || ke->key() == Qt::Key_Escape) {
+                event->accept();
+                return true;
+            }
+        }
+        if (event->type() == QEvent::FocusOut) {
+            // Clicking elsewhere closes it (after the click has landed).
+            QTimer::singleShot(0, this, [this]() {
+                if (m_fayt->isVisible() && !m_faytEdit->hasFocus())
+                    closeTypeAhead();
+            });
+        }
+        return QWidget::eventFilter(watched, event);
+    }
     if (watched == m_filterEdit && event->type() == QEvent::KeyPress) {
         auto *ke = static_cast<QKeyEvent *>(event);
         if (ke->key() == Qt::Key_Escape) {
@@ -869,6 +928,15 @@ bool FolderTab::eventFilter(QObject *watched, QEvent *event)
         if (!isView || isRenaming())
             break;
         auto *ke = static_cast<QKeyEvent *>(event);
+        {
+            // A printable key opens find-as-you-type with it.
+            const QString text = ke->text();
+            const Qt::KeyboardModifiers mods = ke->modifiers() & ~(Qt::ShiftModifier | Qt::KeypadModifier);
+            if (mods == Qt::NoModifier && text.size() == 1 && text.at(0).isPrint() && !text.at(0).isSpace()) {
+                openTypeAhead(text);
+                return true;
+            }
+        }
         if (ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab) {
             Q_EMIT tabKeyPressed(ke->key() == Qt::Key_Backtab);
             return true;
@@ -1506,4 +1574,195 @@ QString FolderTab::exportListing(ExportFormat format, bool selectedOnly) const
     }
     out << QString() << summary;
     return out.join(QLatin1Char('\n')) + QLatin1Char('\n');
+}
+
+// ---- Find-as-you-type --------------------------------------------------------
+
+bool FolderTab::typeAheadOpen() const
+{
+    return m_fayt && m_fayt->isVisible();
+}
+
+QString FolderTab::typeAheadMode() const
+{
+    const QString t = m_faytEdit->text();
+    if (t.startsWith(QLatin1Char('>')))
+        return QStringLiteral("command");
+    if (t.startsWith(QLatin1Char('/')) || t.startsWith(QLatin1Char('~')))
+        return QStringLiteral("go");
+    if (t.contains(QLatin1Char('*')) || t.contains(QLatin1Char('?')))
+        return QStringLiteral("select");
+    return QStringLiteral("find");
+}
+
+void FolderTab::openTypeAhead(const QString &text)
+{
+    m_fayt->show();
+    m_faytEdit->setText(text);
+    m_faytEdit->setFocus(Qt::OtherFocusReason);
+    m_faytEdit->end(false);
+    updateTypeAhead();
+}
+
+void FolderTab::closeTypeAhead()
+{
+    if (!m_fayt->isVisible())
+        return;
+    const bool hadFocus = m_faytEdit->hasFocus();
+    m_fayt->hide();
+    {
+        const QSignalBlocker block(m_faytEdit);
+        m_faytEdit->clear();
+    }
+    if (hadFocus)
+        focusView();
+}
+
+QList<QModelIndex> FolderTab::typeAheadMatches() const
+{
+    // Names that start with the text first, then names that contain it.
+    const QString t = m_faytEdit->text();
+    QList<QModelIndex> starts, contains;
+    if (t.isEmpty())
+        return {};
+    for (int r = 0; r < m_proxy->rowCount(); ++r) {
+        const QModelIndex idx = m_proxy->index(r, 0);
+        const QString name = idx.data(Qt::DisplayRole).toString();
+        if (name.startsWith(t, Qt::CaseInsensitive))
+            starts << idx;
+        else if (name.contains(t, Qt::CaseInsensitive))
+            contains << idx;
+    }
+    return starts + contains;
+}
+
+void FolderTab::updateTypeAhead()
+{
+    if (m_faytEdit->text().isEmpty()) {
+        closeTypeAhead();
+        return;
+    }
+    const QString mode = typeAheadMode();
+    QPalette pal = m_faytEdit->palette();
+    pal.setColor(QPalette::Text, palette().color(QPalette::Text));
+    if (mode == QLatin1String("command")) {
+        m_faytLabel->setText(QStringLiteral("Command"));
+    } else if (mode == QLatin1String("go")) {
+        m_faytLabel->setText(QStringLiteral("Go to"));
+    } else if (mode == QLatin1String("select")) {
+        const int n = selectPattern(m_faytEdit->text());
+        m_faytLabel->setText(QStringLiteral("Select (%1)").arg(n));
+        if (n == 0)
+            pal.setColor(QPalette::Text, QColor(0xc8, 0x38, 0x38));
+    } else {
+        const QList<QModelIndex> hits = typeAheadMatches();
+        m_faytLabel->setText(hits.isEmpty() ? QStringLiteral("Find") : QStringLiteral("Find (%1)").arg(hits.size()));
+        if (hits.isEmpty()) {
+            pal.setColor(QPalette::Text, QColor(0xc8, 0x38, 0x38)); // nothing by that name
+        } else {
+            m_selection->setCurrentIndex(hits.first(), QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+            view()->scrollTo(hits.first());
+        }
+    }
+    m_faytEdit->setPalette(pal);
+}
+
+void FolderTab::typeAheadStep(int delta)
+{
+    const QList<QModelIndex> hits = typeAheadMatches();
+    if (hits.isEmpty())
+        return;
+    // In list order, from the one in focus.
+    QList<QModelIndex> ordered = hits;
+    std::sort(ordered.begin(), ordered.end(), [](const QModelIndex &a, const QModelIndex &b) { return a.row() < b.row(); });
+    const int cur = m_selection->currentIndex().row();
+    QModelIndex next;
+    if (delta > 0) {
+        for (const QModelIndex &i : std::as_const(ordered)) {
+            if (i.row() > cur) {
+                next = i;
+                break;
+            }
+        }
+        if (!next.isValid())
+            next = ordered.first();
+    } else {
+        for (auto it = ordered.crbegin(); it != ordered.crend(); ++it) {
+            if (it->row() < cur) {
+                next = *it;
+                break;
+            }
+        }
+        if (!next.isValid())
+            next = ordered.last();
+    }
+    m_selection->setCurrentIndex(next, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    view()->scrollTo(next);
+}
+
+bool FolderTab::typeAheadKey(QKeyEvent *ke)
+{
+    const QString mode = typeAheadMode();
+    switch (ke->key()) {
+    case Qt::Key_Escape:
+        closeTypeAhead();
+        return true;
+    case Qt::Key_Up:
+        typeAheadStep(-1);
+        return true;
+    case Qt::Key_Down:
+        typeAheadStep(1);
+        return true;
+    case Qt::Key_Backspace:
+        if (m_faytEdit->text().size() <= 1) {
+            closeTypeAhead();
+            return true;
+        }
+        return false;
+    case Qt::Key_Tab:
+        if (mode == QLatin1String("command")) {
+            const QStringList options = CommandCatalog::complete(m_faytEdit->text().mid(1));
+            if (options.size() == 1)
+                m_faytEdit->setText(QLatin1Char('>') + options.first());
+            else if (!options.isEmpty())
+                QToolTip::showText(m_faytEdit->mapToGlobal(QPoint(0, -m_faytEdit->height() * 2)),
+                                   options.mid(0, 12).join(QLatin1Char('\n')), m_faytEdit);
+        }
+        return true;
+    case Qt::Key_F:
+        if (ke->modifiers() == Qt::ControlModifier) {
+            // The text becomes a filter (wildcards as they are, plain text as "contains").
+            QString text = m_faytEdit->text();
+            if (!text.contains(QLatin1Char('*')) && !text.contains(QLatin1Char('?')))
+                text = QLatin1Char('*') + text + QLatin1Char('*');
+            closeTypeAhead();
+            setFilter(text, false, FileSortProxy::FilterScope::Both);
+            setFilterBarVisible(true);
+            m_filterEdit->deselect();
+            m_filterEdit->end(false);
+            return true;
+        }
+        return false;
+    case Qt::Key_Return:
+    case Qt::Key_Enter: {
+        const QString text = m_faytEdit->text();
+        if (mode == QLatin1String("command")) {
+            closeTypeAhead();
+            Q_EMIT commandRequested(text.mid(1).trimmed());
+        } else if (mode == QLatin1String("go")) {
+            closeTypeAhead();
+            Q_EMIT commandRequested(QStringLiteral("Go \"%1\"").arg(text.trimmed()));
+        } else if (mode == QLatin1String("select")) {
+            closeTypeAhead(); // the selection stays
+        } else {
+            const QModelIndex cur = m_selection->currentIndex();
+            closeTypeAhead();
+            if (cur.isValid())
+                activateIndex(cur);
+        }
+        return true;
+    }
+    default:
+        return false;
+    }
 }

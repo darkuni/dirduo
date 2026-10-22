@@ -65,6 +65,7 @@ Q_SIGNALS:
     void contextMenuRequested(FileDisplay *display, const QPoint &globalPos, bool onItem);
     void tabKeyPressed(FileDisplay *display);
     void zoomRequested(FileDisplay *display, int steps);
+    void commandRequested(FileDisplay *display, const QString &command);
     // Selection, view or folder changed: buttons may need to update.
     void stateChanged(FileDisplay *display);
 

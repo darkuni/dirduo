@@ -282,6 +282,7 @@ void FileDisplay::wireTab(FolderTab *t)
     });
     connect(t, &FolderTab::tabKeyPressed, this, [this](bool) { Q_EMIT tabKeyPressed(this); });
     connect(t, &FolderTab::zoomRequested, this, [this](int steps) { Q_EMIT zoomRequested(this, steps); });
+    connect(t, &FolderTab::commandRequested, this, [this](const QString &c) { Q_EMIT commandRequested(this, c); });
 }
 
 void FileDisplay::updateTabText(FolderTab *t)

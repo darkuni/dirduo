@@ -118,6 +118,10 @@ ListerWindow::ListerWindow(AppContext &app, QWidget *parent)
                 updateViewer();
         });
         connect(d, &FileDisplay::zoomRequested, this, [this](FileDisplay *, int steps) { zoomBy(steps, true); });
+        connect(d, &FileDisplay::commandRequested, this, [this](FileDisplay *from, const QString &c) {
+            makeSource(from);
+            runCommand(c);
+        });
         connect(d, &FileDisplay::tabKeyPressed, this, [this](FileDisplay *from) {
             if (!m_dual)
                 return;
