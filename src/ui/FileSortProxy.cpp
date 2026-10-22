@@ -96,6 +96,29 @@ bool FileSortProxy::lessThan(const QModelIndex &left, const QModelIndex &right) 
         }
     }
 
+    if (a.depth > 0 || b.depth > 0) {
+        // Expanded folders: everything stays under its folder. Compare the
+        // two at the level where their folders part.
+        const QList<int> ca = model->chain(left.row());
+        const QList<int> cb = model->chain(right.row());
+        int i = 0;
+        while (i < ca.size() && i < cb.size() && ca.at(i) == cb.at(i))
+            ++i;
+        const bool ascending = sortOrder() == Qt::AscendingOrder;
+        if (i >= ca.size())
+            return ascending; // left holds right: it comes first either way
+        if (i >= cb.size())
+            return !ascending;
+        return siblingLess(sourceModel()->index(ca.at(i), left.column()), sourceModel()->index(cb.at(i), right.column()));
+    }
+    return siblingLess(left, right);
+}
+
+bool FileSortProxy::siblingLess(const QModelIndex &left, const QModelIndex &right) const
+{
+    const auto *model = static_cast<const FileListModel *>(sourceModel());
+    const FileItem &a = model->item(left.row());
+    const FileItem &b = model->item(right.row());
     if (a.isDir != b.isDir) {
         // Keep folders on top whichever way the column is sorted.
         const bool ascending = sortOrder() == Qt::AscendingOrder;

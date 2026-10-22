@@ -31,6 +31,8 @@ protected:
 
 private:
     bool nameLess(const QModelIndex &left, const QModelIndex &right) const;
+    // Two items in the same folder, by the sort column.
+    bool siblingLess(const QModelIndex &left, const QModelIndex &right) const;
 
     void refilter();
 

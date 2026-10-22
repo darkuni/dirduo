@@ -116,11 +116,41 @@ QRect RenameDelegate::checkRect(const QStyleOptionViewItem &option) const
     return QRect(option.rect.left() + 4, option.rect.center().y() - h / 2, w, h);
 }
 
+int RenameDelegate::treeUnit(const QStyleOptionViewItem &option) const
+{
+    return qMax(12, option.decorationSize.width() > 0 ? option.decorationSize.width() : 16);
+}
+
+int RenameDelegate::treeIndent(const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
+    if (!m_tree || index.column() != FileListModel::NameColumn)
+        return 0;
+    if (index.data(FileListModel::ExpandRole).toInt() < -1)
+        return 0; // nothing in this list can expand: no room kept
+    const int depth = index.data(FileListModel::DepthRole).toInt();
+    return (depth + 1) * treeUnit(option);
+}
+
+QRect RenameDelegate::expanderRect(const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
+    if (treeIndent(option, index) == 0 || index.data(FileListModel::ExpandRole).toInt() < 0)
+        return {};
+    QStyleOptionViewItem opt = option;
+    opt.rect = contentRect(option, index);
+    int left = opt.rect.left();
+    if (m_checkMode)
+        left = checkRect(opt).right() + 6;
+    const int unit = treeUnit(opt);
+    const int depth = index.data(FileListModel::DepthRole).toInt();
+    return QRect(left + depth * unit, opt.rect.center().y() - unit / 2, unit, unit);
+}
+
 QSize RenameDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
     QSize s = QStyledItemDelegate::sizeHint(option, index);
     if (m_checkMode && index.column() == FileListModel::NameColumn)
         s.rwidth() += 24;
+    s.rwidth() += treeIndent(option, index);
     if (isLeader(index)) {
         if (m_groupView->isCollapsed(index))
             return QSize(s.width(), m_groupView->bandHeight()); // heading only
@@ -165,6 +195,39 @@ void RenameDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option
         (w ? w->style() : QApplication::style())->drawPrimitive(QStyle::PE_IndicatorItemViewItemCheck, &box, painter, w);
         opt.rect.setLeft(box.rect.right() + 6);
     }
+    if (const int indent = treeIndent(opt, index)) {
+        if (!m_checkMode) {
+            // The row background across the indent too.
+            QStyleOptionViewItem bg = opt;
+            bg.text.clear();
+            bg.icon = QIcon();
+            const QWidget *w = opt.widget;
+            (w ? w->style() : QApplication::style())->drawControl(QStyle::CE_ItemViewItem, &bg, painter, w);
+        }
+        const int state = index.data(FileListModel::ExpandRole).toInt();
+        if (state >= 0) {
+            const int unit = treeUnit(opt);
+            const int depth = index.data(FileListModel::DepthRole).toInt();
+            const QRectF box(opt.rect.left() + depth * unit, opt.rect.center().y() - unit / 2.0, unit, unit);
+            const qreal s = unit * 0.22;
+            const QPointF c = box.center();
+            QPolygonF tri;
+            if (state == 1) // open: pointing down
+                tri << QPointF(c.x() - s, c.y() - s * 0.6) << QPointF(c.x() + s, c.y() - s * 0.6) << QPointF(c.x(), c.y() + s * 0.8);
+            else
+                tri << QPointF(c.x() - s * 0.6, c.y() - s) << QPointF(c.x() - s * 0.6, c.y() + s) << QPointF(c.x() + s * 0.8, c.y());
+            QColor col = (opt.state & QStyle::State_Selected) ? opt.palette.color(QPalette::HighlightedText)
+                                                                : opt.palette.color(QPalette::Text);
+            col.setAlphaF(state == 1 ? 0.85 : 0.6);
+            painter->save();
+            painter->setRenderHint(QPainter::Antialiasing);
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(col);
+            painter->drawPolygon(tri);
+            painter->restore();
+        }
+        opt.rect.setLeft(opt.rect.left() + indent);
+    }
     QStyledItemDelegate::paint(painter, opt, index);
 }
 
@@ -174,12 +237,23 @@ void RenameDelegate::updateEditorGeometry(QWidget *editor, const QStyleOptionVie
     opt.rect = contentRect(option, index);
     if (m_checkMode && index.column() == FileListModel::NameColumn)
         opt.rect.setLeft(checkRect(opt).right() + 6);
+    opt.rect.setLeft(opt.rect.left() + treeIndent(opt, index));
     QStyledItemDelegate::updateEditorGeometry(editor, opt, index);
 }
 
 bool RenameDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, const QStyleOptionViewItem &option,
                                  const QModelIndex &index)
 {
+    if (m_tree && index.column() == FileListModel::NameColumn
+        && (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease
+            || event->type() == QEvent::MouseButtonDblClick)) {
+        auto *me = static_cast<QMouseEvent *>(event);
+        if (expanderRect(option, index).adjusted(-2, -2, 2, 2).contains(me->position().toPoint())) {
+            if (event->type() == QEvent::MouseButtonPress && me->button() == Qt::LeftButton)
+                Q_EMIT expandToggled(index);
+            return true; // the triangle takes the click; it neither selects nor opens
+        }
+    }
     if (m_checkMode && m_selection && index.column() == FileListModel::NameColumn
         && (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease
             || event->type() == QEvent::MouseButtonDblClick)) {

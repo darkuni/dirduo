@@ -8,6 +8,7 @@
 
 #include <QStringList>
 #include <QUrl>
+#include <QHash>
 #include <QWidget>
 
 class GroupTreeView;
@@ -82,6 +83,14 @@ public:
     GroupTreeView *detailsView() const { return m_details; }
     FileListModel *fileModel() const { return m_model; }
 
+    // Expandable folders (details view): a folder's contents open under it.
+    bool expandFolder(const QString &path);
+    void collapseFolder(const QString &path);
+    void toggleFolder(const QString &path);
+    void collapseAllFolders();
+    bool isFolderExpanded(const QString &path) const { return m_children.contains(path); }
+    QStringList expandedFolders() const { return m_children.keys(); }
+
     // The lister's zoom, in percent of the normal text and icon size.
     void setZoom(int percent);
     int zoom() const { return m_zoom; }
@@ -130,6 +139,7 @@ public:
 Q_SIGNALS:
     // Shift+wheel or a pinch over the list: steps in (+) or out (-).
     void zoomRequested(int steps);
+    void expandFailed(const QString &path, const QString &error);
     void pathChanged(const QString &path);
     void viewStateChanged(); // grouping, filter, columns or modes changed
     void activated();                 // clicked or focused
@@ -181,6 +191,9 @@ private:
     FolderFormat m_baseFormat;
     bool m_autoIcons = false;
     int m_zoom = 100;
+    QHash<QString, DirLister *> m_children; // one per expanded folder
+    void updateExpandable();
+    bool expanderHit(const QPoint &viewportPos, QModelIndex *index) const;
     int m_wheelZoom = 0;     // wheel units towards the next step (trackpads send small ones)
     qreal m_pinchZoom = 1.0; // pinch scale towards the next step
     ViewMode m_modeBeforeAuto = ViewMode::Details;

@@ -21,6 +21,7 @@
 #include <QStyle>
 #include <QTimer>
 
+#include <algorithm>
 #include <climits>
 #include <utility>
 
@@ -235,6 +236,12 @@ QString FileListModel::folderSizeText(int row) const
 
 QPair<QString, QString> FileListModel::groupFor(int row) const
 {
+    if (m_items.at(row).depth > 0) {
+        // Inside an expanded folder: in that folder's group.
+        const QList<int> c = chain(row);
+        if (!c.isEmpty() && c.first() != row)
+            return groupFor(c.first());
+    }
     const FileItem &it = m_items.at(row);
     switch (m_groupBy) {
     case GroupBy::None:
@@ -517,6 +524,7 @@ void FileListModel::setListing(const QString &dir, const FileItemList &items)
     m_items = items;
     m_mimeNames = QVector<QString>(m_items.size());
     m_thumbIcons.clear();
+    m_expanded.clear();
     rebuildIndex();
     endResetModel();
     if (m_liveSizes)
@@ -536,32 +544,40 @@ void FileListModel::updateListing(const FileItemList &items)
         incoming.insert(items.at(i).path, i);
 
     // A wholesale change (a folder that was emptied and refilled) is cheaper
-    // as a reset.
+    // as a reset; not with folders expanded, whose contents would go too.
     int kept = 0;
-    for (const FileItem &it : std::as_const(m_items))
+    int top = 0;
+    for (const FileItem &it : std::as_const(m_items)) {
+        if (it.depth > 0)
+            continue;
+        ++top;
         kept += incoming.contains(it.path) ? 1 : 0;
-    if (m_items.size() > 50 && kept < m_items.size() / 2) {
+    }
+    if (m_expanded.isEmpty() && top > 50 && kept < top / 2) {
         setListing(m_dir, items);
         return;
     }
 
-    // Removals, from the bottom so row numbers stay valid.
-    for (int row = m_items.size() - 1; row >= 0; --row) {
-        if (incoming.contains(m_items.at(row).path))
-            continue;
-        int first = row;
-        while (first > 0 && !incoming.contains(m_items.at(first - 1).path))
-            --first;
-        beginRemoveRows({}, first, row);
-        m_items.remove(first, row - first + 1);
-        m_mimeNames.remove(first, row - first + 1);
-        endRemoveRows();
-        row = first;
+    // Removals: top-level items that went, and whatever was under them.
+    QSet<int> gone;
+    QSet<QString> goneFolders;
+    for (int row = 0; row < m_items.size(); ++row) {
+        const FileItem &it = m_items.at(row);
+        if (it.depth == 0 && !incoming.contains(it.path)) {
+            gone.insert(row);
+            if (it.isDir)
+                goneFolders.insert(it.path);
+        }
     }
-    rebuildIndex();
+    gone += descendantRows(goneFolders);
+    for (const QString &f : std::as_const(goneFolders))
+        m_expanded.remove(f);
+    dropRows(gone);
 
     // Changes in place.
     for (int row = 0; row < m_items.size(); ++row) {
+        if (m_items.at(row).depth > 0)
+            continue;
         const FileItem &fresh = items.at(incoming.value(m_items.at(row).path));
         if (!m_items.at(row).sameContentAs(fresh)) {
             const bool kindChanged = m_items.at(row).isDir != fresh.isDir || m_items.at(row).name != fresh.name;
@@ -578,6 +594,174 @@ void FileListModel::updateListing(const FileItemList &items)
     for (const FileItem &it : items) {
         if (!m_rowByPath.contains(it.path))
             added.append(it);
+    }
+    if (!added.isEmpty()) {
+        const int first = m_items.size();
+        beginInsertRows({}, first, first + added.size() - 1);
+        m_items += added;
+        m_mimeNames.resize(m_items.size());
+        rebuildIndex();
+        endInsertRows();
+        if (m_liveSizes)
+            requestAllFolderSizes();
+    }
+}
+
+// ---- Expandable folders -----------------------------------------------------
+
+void FileListModel::setExpandable(bool on)
+{
+    if (m_expandable == on)
+        return;
+    m_expandable = on;
+    if (!m_items.isEmpty())
+        Q_EMIT dataChanged(index(0, NameColumn), index(m_items.size() - 1, NameColumn), {ExpandRole});
+}
+
+bool FileListModel::canExpand(int row) const
+{
+    if (!m_expandable || row < 0 || row >= m_items.size())
+        return false;
+    const FileItem &it = m_items.at(row);
+    return it.isDir && !it.path.startsWith(QLatin1String("coll:"));
+}
+
+void FileListModel::setExpanded(const QString &path, bool expanded)
+{
+    if (expanded)
+        m_expanded.insert(path);
+    else
+        m_expanded.remove(path);
+    const int row = rowForPath(path);
+    if (row >= 0)
+        Q_EMIT dataChanged(index(row, NameColumn), index(row, NameColumn), {ExpandRole});
+}
+
+int FileListModel::parentRow(int row) const
+{
+    if (row < 0 || row >= m_items.size() || m_items.at(row).depth == 0)
+        return -1;
+    return rowForPath(m_items.at(row).parentPath);
+}
+
+QList<int> FileListModel::chain(int row) const
+{
+    QList<int> out;
+    for (int r = row; r >= 0 && out.size() < 64; r = parentRow(r))
+        out.prepend(r);
+    return out;
+}
+
+QSet<int> FileListModel::descendantRows(const QSet<QString> &parents) const
+{
+    QSet<int> out;
+    if (parents.isEmpty())
+        return out;
+    QSet<QString> folders = parents;
+    // Children were appended after their parents, but a refresh can append
+    // more later: go round until nothing new turns up.
+    bool grew = true;
+    while (grew) {
+        grew = false;
+        for (int row = 0; row < m_items.size(); ++row) {
+            const FileItem &it = m_items.at(row);
+            if (it.depth == 0 || out.contains(row) || !folders.contains(it.parentPath))
+                continue;
+            out.insert(row);
+            if (it.isDir)
+                folders.insert(it.path);
+            grew = true;
+        }
+    }
+    return out;
+}
+
+void FileListModel::dropRows(QSet<int> rows)
+{
+    if (rows.isEmpty())
+        return;
+    QList<int> sorted(rows.cbegin(), rows.cend());
+    std::sort(sorted.begin(), sorted.end());
+    // From the bottom, a run of neighbouring rows at a time.
+    int i = int(sorted.size()) - 1;
+    while (i >= 0) {
+        const int last = sorted.at(i);
+        int first = last;
+        while (i > 0 && sorted.at(i - 1) == first - 1) {
+            --i;
+            --first;
+        }
+        --i;
+        for (int r = first; r <= last; ++r) {
+            const QString &p = m_items.at(r).path;
+            m_thumbIcons.remove(p);
+            if (m_items.at(r).isDir)
+                m_expanded.remove(p);
+        }
+        beginRemoveRows({}, first, last);
+        m_items.remove(first, last - first + 1);
+        m_mimeNames.remove(first, last - first + 1);
+        endRemoveRows();
+    }
+    rebuildIndex();
+}
+
+void FileListModel::removeDescendants(const QString &parentPath)
+{
+    dropRows(descendantRows({parentPath}));
+}
+
+void FileListModel::setChildren(const QString &parentPath, const FileItemList &items)
+{
+    const int prow = rowForPath(parentPath);
+    if (prow < 0 || !m_expanded.contains(parentPath))
+        return;
+    const int depth = m_items.at(prow).depth + 1;
+    QHash<QString, int> incoming;
+    for (int i = 0; i < items.size(); ++i)
+        incoming.insert(items.at(i).path, i);
+
+    // Children that went, and anything under them.
+    QSet<int> gone;
+    QSet<QString> goneFolders;
+    for (int row = 0; row < m_items.size(); ++row) {
+        const FileItem &it = m_items.at(row);
+        if (it.depth > 0 && it.parentPath == parentPath && !incoming.contains(it.path)) {
+            gone.insert(row);
+            if (it.isDir)
+                goneFolders.insert(it.path);
+        }
+    }
+    gone += descendantRows(goneFolders);
+    dropRows(gone);
+
+    // Changed ones in place.
+    for (int row = 0; row < m_items.size(); ++row) {
+        FileItem &it = m_items[row];
+        if (it.depth == 0 || it.parentPath != parentPath)
+            continue;
+        FileItem fresh = items.at(incoming.value(it.path));
+        fresh.parentPath = parentPath;
+        fresh.depth = depth;
+        if (!it.sameContentAs(fresh)) {
+            const bool kindChanged = it.isDir != fresh.isDir || it.name != fresh.name;
+            it = fresh;
+            m_thumbIcons.remove(fresh.path);
+            if (kindChanged)
+                m_mimeNames[row].clear();
+            Q_EMIT dataChanged(index(row, 0), index(row, ColumnCount - 1));
+        }
+    }
+
+    // New ones at the end; the proxy puts them under their folder.
+    FileItemList added;
+    for (const FileItem &item : items) {
+        if (m_rowByPath.contains(item.path))
+            continue;
+        FileItem child = item;
+        child.parentPath = parentPath;
+        child.depth = depth;
+        added.append(child);
     }
     if (!added.isEmpty()) {
         const int first = m_items.size();
@@ -838,6 +1022,14 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
         return it.isDir;
     case RelPathRole:
         return it.relPath;
+    case DepthRole:
+        return it.depth;
+    case ExpandRole:
+        if (!m_expandable)
+            return -2; // no triangles in this list at all
+        if (!canExpand(index.row()))
+            return -1;
+        return m_expanded.contains(it.path) ? 1 : 0;
     case FolderBarRole:
         if (m_liveSizes && it.isDir && m_maxFolderBytes > 0 && FolderSizes::instance()->has(it.path))
             return static_cast<double>(FolderSizes::instance()->result(it.path).bytes) / static_cast<double>(m_maxFolderBytes);

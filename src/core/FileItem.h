@@ -17,6 +17,8 @@ struct FileItem
     QString owner;
     QString group;
     QString relPath; // flat view: folder relative to the flat root ("" at the top)
+    QString parentPath; // inside an expanded folder: that folder ("" at the top)
+    int depth = 0;      // how many expanded folders deep
     QDateTime modified;
     QDateTime created;
     QDateTime accessed;

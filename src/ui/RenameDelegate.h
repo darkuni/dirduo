@@ -26,6 +26,10 @@ public:
     // Check box mode: a box in front of each name mirrors the selection.
     void setCheckMode(bool on, QItemSelectionModel *selection);
     bool checkMode() const { return m_checkMode; }
+    // Details view: indent expanded folders' contents and draw the triangles.
+    void setTreeMode(bool on) { m_tree = on; }
+    // The triangle of a folder row, for clicks (option as the view gives it).
+    QRect expanderRect(const QStyleOptionViewItem &option, const QModelIndex &index) const;
 
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
     QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
@@ -35,6 +39,7 @@ public:
 
 Q_SIGNALS:
     void travelRequested(int delta);
+    void expandToggled(const QModelIndex &index);
 
 protected:
     bool eventFilter(QObject *object, QEvent *event) override;
@@ -47,5 +52,9 @@ private:
     mutable int m_open = 0;
     QPointer<GroupTreeView> m_groupView;
     bool m_checkMode = false;
+    bool m_tree = false;
+    // Room for the indent and the triangle (0 when there is none).
+    int treeIndent(const QStyleOptionViewItem &option, const QModelIndex &index) const;
+    int treeUnit(const QStyleOptionViewItem &option) const;
     QPointer<QItemSelectionModel> m_selection;
 };

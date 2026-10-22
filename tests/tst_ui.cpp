@@ -1662,6 +1662,106 @@ private Q_SLOTS:
         QVERIFY(w->runCommand(QStringLiteral("Set SIZE=normal\nSet TREE=off")));
     }
 
+    void expandableFolders()
+    {
+        const QString a = root + QStringLiteral("/a");
+        touch(a + QStringLiteral("/sub/x.txt"));
+        touch(a + QStringLiteral("/sub/deep/y.txt"));
+        FolderTab *t = w->display(0)->currentTab();
+        t->refresh();
+        waitListed(t, 4);
+        QAbstractItemModel *m = t->view()->model();
+        auto names = [m]() {
+            QStringList out;
+            for (int r = 0; r < m->rowCount(); ++r)
+                out << m->index(r, 0).data().toString();
+            return out;
+        };
+        auto rowOf = [m](const QString &name) {
+            for (int r = 0; r < m->rowCount(); ++r) {
+                if (m->index(r, 0).data().toString() == name)
+                    return m->index(r, 0);
+            }
+            return QModelIndex();
+        };
+        QCOMPARE(rowOf(QStringLiteral("sub")).data(FileListModel::ExpandRole).toInt(), 0);
+        QCOMPARE(rowOf(QStringLiteral("one.txt")).data(FileListModel::ExpandRole).toInt(), -1);
+
+        // Open in place: the contents sit under the folder, indented.
+        t->selectPaths({a + QStringLiteral("/sub")});
+        QVERIFY(w->runCommand(QStringLiteral("Set EXPAND=toggle")));
+        QTRY_COMPARE(m->rowCount(), 6);
+        QCOMPARE(names(), (QStringList{QStringLiteral("sub"), QStringLiteral("deep"), QStringLiteral("x.txt"),
+                                       QStringLiteral("one.txt"), QStringLiteral("three.txt"), QStringLiteral("two.txt")}));
+        QCOMPARE(rowOf(QStringLiteral("x.txt")).data(FileListModel::DepthRole).toInt(), 1);
+        QCOMPARE(rowOf(QStringLiteral("sub")).data(FileListModel::ExpandRole).toInt(), 1);
+        QVERIFY(t->expandFolder(a + QStringLiteral("/sub/deep")));
+        QTRY_COMPARE(m->rowCount(), 7);
+        QCOMPARE(rowOf(QStringLiteral("y.txt")).data(FileListModel::DepthRole).toInt(), 2);
+
+        // Sorting the other way keeps everything under its folder.
+        auto *details = t->detailsView();
+        details->sortByColumn(FileListModel::NameColumn, Qt::DescendingOrder);
+        QCOMPARE(names(), (QStringList{QStringLiteral("sub"), QStringLiteral("deep"), QStringLiteral("y.txt"), QStringLiteral("x.txt"),
+                                       QStringLiteral("two.txt"), QStringLiteral("three.txt"), QStringLiteral("one.txt")}));
+        details->sortByColumn(FileListModel::NameColumn, Qt::AscendingOrder);
+
+        // Changes on disk inside an opened folder show up.
+        touch(a + QStringLiteral("/sub/new.txt"));
+        QTRY_VERIFY(rowOf(QStringLiteral("new.txt")).isValid());
+        QCOMPARE(rowOf(QStringLiteral("new.txt")).data(FileListModel::DepthRole).toInt(), 1);
+        // A refresh of the folder itself keeps them open.
+        touch(a + QStringLiteral("/four.txt"));
+        QTRY_VERIFY(rowOf(QStringLiteral("four.txt")).isValid());
+        QVERIFY(rowOf(QStringLiteral("y.txt")).isValid());
+        // Commands see the real paths.
+        t->selectPaths({a + QStringLiteral("/sub/deep/y.txt")});
+        QCOMPARE(t->selectedPaths(), QStringList{a + QStringLiteral("/sub/deep/y.txt")});
+
+        // Left goes to the folder an item is in, then closes it.
+        details->setFocus();
+        QTest::keyClick(details, Qt::Key_Left);
+        QCOMPARE(t->selectedPaths(), QStringList{a + QStringLiteral("/sub/deep")});
+        QTest::keyClick(details, Qt::Key_Left);
+        QTRY_VERIFY(!rowOf(QStringLiteral("y.txt")).isValid());
+        QVERIFY(!t->isFolderExpanded(a + QStringLiteral("/sub/deep")));
+        QTest::keyClick(details, Qt::Key_Right);
+        QTRY_VERIFY(rowOf(QStringLiteral("y.txt")).isValid());
+
+        // The triangle: opens and closes, without opening the folder.
+        const QModelIndex sub = rowOf(QStringLiteral("sub"));
+        const QRect r = details->visualRect(sub);
+        const QPoint tri(r.left() + details->iconSize().width() / 2, r.center().y());
+        QTest::mouseClick(details->viewport(), Qt::LeftButton, {}, tri);
+        QTRY_COMPARE(m->rowCount(), 5); // sub closed (with deep inside it)
+        QVERIFY(!t->isFolderExpanded(a + QStringLiteral("/sub/deep")));
+        QTest::mouseDClick(details->viewport(), Qt::LeftButton, {}, tri);
+        QCOMPARE(t->path(), a); // a double-click on the triangle does not go in
+        QVERIFY(!t->isFolderExpanded(a + QStringLiteral("/sub"))); // two clicks: open, then closed again
+        QTest::mouseClick(details->viewport(), Qt::LeftButton, {}, tri);
+        QTRY_VERIFY(t->isFolderExpanded(a + QStringLiteral("/sub")));
+
+        // Grouped: contents stay with their folder.
+        QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=type")));
+        QTRY_VERIFY(rowOf(QStringLiteral("x.txt")).isValid());
+        QCOMPARE(rowOf(QStringLiteral("x.txt")).data(FileListModel::GroupLabelRole).toString(),
+                 rowOf(QStringLiteral("sub")).data(FileListModel::GroupLabelRole).toString());
+        QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=none")));
+
+        // Other views, flat view and a new folder close them all.
+        QVERIFY(w->runCommand(QStringLiteral("Set VIEW=list")));
+        QVERIFY(t->expandedFolders().isEmpty());
+        QCOMPARE(m->rowCount(), 5);
+        QVERIFY(w->runCommand(QStringLiteral("Set VIEW=details")));
+        QVERIFY(!runFailing(QStringLiteral("Set EXPAND=toggle"))); // nothing selected that is a folder? one.txt
+        t->selectPaths({a + QStringLiteral("/sub")});
+        QVERIFY(w->runCommand(QStringLiteral("Set EXPAND=on")));
+        QTRY_VERIFY(rowOf(QStringLiteral("x.txt")).isValid());
+        t->navigate(root + QStringLiteral("/b"));
+        waitListed(t, 1);
+        QVERIFY(t->expandedFolders().isEmpty());
+    }
+
 private:
     // A failing command shows an error box; close it and report the result.
     bool runFailing(const QString &command)

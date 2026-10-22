@@ -723,6 +723,18 @@ int main(int argc, char *argv[])
     shot(w, QStringLiteral("14-dark-zoom-160"), 900);
     run(QStringLiteral("Set ZOOM=reset"));
 
+    // 15. Folders opened in place (the triangles), Linopus Light.
+    run(QStringLiteral("Set THEME=\"Linopus Light\"\nSet DUAL=vertical\nSet TREE=off\nSet VIEW=details"));
+    go(r + QStringLiteral("/Emulation/roms"), r + QStringLiteral("/Music"));
+    left->expandFolder(r + QStringLiteral("/Emulation/roms/amiga"));
+    left->expandFolder(r + QStringLiteral("/Emulation/roms/c64"));
+    QTest::qWait(600);
+    left->selectPaths({r + QStringLiteral("/Emulation/roms/amiga/Turrican II.adf")});
+    right->expandFolder(r + QStringLiteral("/Music/C64 SIDs"));
+    shot(w, QStringLiteral("15-light-expanded-folders"), 900);
+    left->collapseAllFolders();
+    right->collapseAllFolders();
+
     // 12. One view, four themes.
     QStringList themeShots, themeNames;
     run(QStringLiteral("Set DUAL=vertical\nSet TREE=shared\nSet VIEW=details"));

@@ -122,6 +122,7 @@ FolderTab::FolderTab(QWidget *parent)
     resetColumns();
     m_details->setSelectionModel(m_selection);
     m_delegate->setGroupView(m_details);
+    m_delegate->setTreeMode(true); // the details view's triangles
     connect(m_details, &GroupTreeView::collapsedChanged, this, &FolderTab::viewStateChanged);
 
     // List and icons share one QListView.
@@ -263,9 +264,11 @@ void FolderTab::navigate(const QString &rawPath, bool addToHistory)
     m_pendingSelection.clear();
     if (addToHistory)
         Favorites::instance()->visit(path); // frequent folders (history moves are not new visits)
+    collapseAllFolders();
     m_model->clear(path);
     applyFormatFor(path);
     updateLocationColumn();
+    updateExpandable();
     m_lister->open(path);
     Q_EMIT pathChanged(m_path);
     Q_EMIT statusChanged();
@@ -305,6 +308,101 @@ bool FolderTab::up()
 void FolderTab::refresh()
 {
     m_lister->refresh();
+    for (DirLister *l : std::as_const(m_children))
+        l->refresh();
+}
+
+// ---- Expandable folders -----------------------------------------------------
+
+void FolderTab::updateExpandable()
+{
+    const bool on = m_mode == ViewMode::Details && m_lister->flatMode() == DirLister::FlatMode::Off
+        && !Collections::isCollectionLocation(m_path);
+    if (!on)
+        collapseAllFolders();
+    m_model->setExpandable(on);
+}
+
+bool FolderTab::expandFolder(const QString &path)
+{
+    const int row = m_model->rowForPath(path);
+    if (!m_model->canExpand(row) || m_children.contains(path))
+        return false;
+    auto *l = new DirLister(this);
+    m_children.insert(path, l);
+    m_model->setExpanded(path, true);
+    connect(l, &DirLister::listed, this, [this, path](const QString &, const FileItemList &items, bool) {
+        if (!m_children.contains(path))
+            return;
+        m_model->setChildren(path, items);
+        Q_EMIT statusChanged();
+    });
+    connect(l, &DirLister::failed, this, [this, path](const QString &, const QString &error) {
+        collapseFolder(path);
+        m_error.clear();
+        Q_EMIT statusChanged();
+        Q_EMIT expandFailed(path, error);
+    });
+    l->open(path);
+    return true;
+}
+
+void FolderTab::collapseFolder(const QString &path)
+{
+    if (!m_children.contains(path) && !m_model->isExpanded(path))
+        return;
+    // It and every folder open inside it.
+    for (auto it = m_children.begin(); it != m_children.end();) {
+        if (Location::isSameOrInside(it.key(), path)) {
+            it.value()->deleteLater();
+            it = m_children.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    m_model->removeDescendants(path);
+    m_model->setExpanded(path, false);
+    Q_EMIT statusChanged();
+}
+
+void FolderTab::toggleFolder(const QString &path)
+{
+    if (m_children.contains(path))
+        collapseFolder(path);
+    else
+        expandFolder(path);
+}
+
+void FolderTab::collapseAllFolders()
+{
+    if (m_children.isEmpty())
+        return;
+    const QStringList tops = m_children.keys();
+    for (const QString &p : tops) {
+        if (m_children.contains(p))
+            collapseFolder(p);
+    }
+}
+
+bool FolderTab::expanderHit(const QPoint &pos, QModelIndex *index) const
+{
+    if (m_mode != ViewMode::Details)
+        return false;
+    QModelIndex idx = m_details->indexAt(pos);
+    if (!idx.isValid())
+        return false;
+    idx = idx.siblingAtColumn(FileListModel::NameColumn);
+    QStyleOptionViewItem opt;
+    opt.initFrom(m_details);
+    opt.rect = m_details->visualRect(idx);
+    opt.decorationSize = m_details->iconSize();
+    opt.widget = m_details;
+    const QRect r = m_delegate->expanderRect(opt, idx);
+    if (!r.isValid() || !r.adjusted(-2, -2, 2, 2).contains(pos))
+        return false;
+    if (index)
+        *index = idx;
+    return true;
 }
 
 void FolderTab::onListed(const QString &path, const FileItemList &items, bool isRefresh)
@@ -524,6 +622,7 @@ void FolderTab::setViewMode(ViewMode mode)
     }
     // Pictures show as themselves in both icon views.
     m_model->setThumbnails(mode == ViewMode::Icons || mode == ViewMode::Thumbnails);
+    updateExpandable();
     const QModelIndex cur = m_selection->currentIndex();
     if (cur.isValid())
         view()->scrollTo(cur);
@@ -633,6 +732,24 @@ bool FolderTab::eventFilter(QObject *watched, QEvent *event)
     if (!isView && !isViewport)
         return QWidget::eventFilter(watched, event);
 
+    if (watched == m_details->viewport()
+        && (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonDblClick
+            || event->type() == QEvent::MouseButtonRelease)) {
+        // A folder's triangle opens or closes it, and does nothing else.
+        auto *me = static_cast<QMouseEvent *>(event);
+        QModelIndex idx;
+        if (me->button() == Qt::LeftButton && expanderHit(me->position().toPoint(), &idx)) {
+            // Each click toggles (a double-click brings two presses: open,
+            // then closed again); the double-click event itself is eaten so
+            // the folder is not opened.
+            if (event->type() == QEvent::MouseButtonPress) {
+                Q_EMIT activated();
+                toggleFolder(idx.data(FileListModel::PathRole).toString());
+            }
+            return true;
+        }
+    }
+
     switch (event->type()) {
     case QEvent::FocusIn:
     case QEvent::MouseButtonPress:
@@ -733,6 +850,34 @@ bool FolderTab::eventFilter(QObject *watched, QEvent *event)
         if (ke->key() == Qt::Key_Backspace && ke->modifiers() == Qt::NoModifier) {
             up();
             return true;
+        }
+        if (m_mode == ViewMode::Details && m_model->expandable() && ke->modifiers() == Qt::NoModifier
+            && (ke->key() == Qt::Key_Right || ke->key() == Qt::Key_Left)) {
+            // Right opens a folder in place, Left closes it or goes to the
+            // folder an item is in. A folded group's heading keeps its keys.
+            const QModelIndex cur = m_selection->currentIndex();
+            if (cur.isValid() && !m_details->isCollapsed(cur)) {
+                const int row = m_proxy->mapToSource(cur).row();
+                const QString p = cur.data(FileListModel::PathRole).toString();
+                if (ke->key() == Qt::Key_Right && m_model->canExpand(row)) {
+                    if (!m_children.contains(p))
+                        expandFolder(p);
+                    return true;
+                }
+                if (ke->key() == Qt::Key_Left) {
+                    if (m_children.contains(p)) {
+                        collapseFolder(p);
+                        return true;
+                    }
+                    const int parent = m_model->parentRow(row);
+                    if (parent >= 0) {
+                        const QModelIndex pi = m_proxy->mapFromSource(m_model->index(parent, 0));
+                        m_selection->setCurrentIndex(pi, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+                        m_details->scrollTo(pi);
+                        return true;
+                    }
+                }
+            }
         }
         if ((ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter) && ke->modifiers() == Qt::NoModifier) {
             const QStringList sel = selectedPaths();
@@ -910,6 +1055,9 @@ void FolderTab::showHeaderMenu(const QPoint &globalPos)
     collapse->setEnabled(groupBy() != G::None);
     expand->setEnabled(groupBy() != G::None);
     connect(collapse, &QAction::triggered, this, &FolderTab::collapseAllGroups);
+    QAction *closeFolders = menu.addAction(QStringLiteral("Close All Opened Folders"));
+    closeFolders->setEnabled(!m_children.isEmpty());
+    connect(closeFolders, &QAction::triggered, this, &FolderTab::collapseAllFolders);
     connect(expand, &QAction::triggered, this, &FolderTab::expandAllGroups);
     menu.addSeparator();
     QAction *sizes = menu.addAction(QStringLiteral("Calculate All Folder Sizes"));
@@ -1048,9 +1196,11 @@ void FolderTab::setFlatMode(DirLister::FlatMode mode)
     } else if (old == DirLister::FlatMode::Grouped) {
         setGroupBy(m_groupBeforeFlat);
     }
+    collapseAllFolders();
     m_model->clear(m_path);
     m_lister->setFlatMode(mode);
     updateLocationColumn();
+    updateExpandable();
     Q_EMIT statusChanged();
     Q_EMIT viewStateChanged();
 }

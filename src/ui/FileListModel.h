@@ -54,6 +54,8 @@ public:
         FolderBytesRole, // qint64, -1 while unknown
         RelPathRole,
         FolderBarRole,   // 0..1 share of the biggest folder (live sizes), -1 for none
+        DepthRole,       // int: 0 at the top, 1 inside an expanded folder, ...
+        ExpandRole,      // int: -1 cannot expand, 0 collapsed, 1 expanded
     };
     enum class GroupBy { None, Type, Name, Size, Modified, Extension, Folder, Artist, Album, Genre, Year, Camera, Taken };
     static QList<GroupBy> allGroupings();
@@ -86,6 +88,20 @@ public:
     int folderCount() const;
 
     QString typeName(int row) const;
+    // Expandable folders: a folder's contents shown under it, indented.
+    void setExpandable(bool on); // off in flat view and collections
+    bool expandable() const { return m_expandable; }
+    bool canExpand(int row) const;
+    bool isExpanded(const QString &path) const { return m_expanded.contains(path); }
+    void setExpanded(const QString &path, bool expanded);
+    QStringList expandedPaths() const { return QStringList(m_expanded.cbegin(), m_expanded.cend()); }
+    // A listing of an expanded folder came in (the first time or again).
+    void setChildren(const QString &parentPath, const FileItemList &items);
+    void removeDescendants(const QString &parentPath);
+    int parentRow(int row) const;
+    // row's ancestors, outermost first, then row itself.
+    QList<int> chain(int row) const;
+
     // Icon and thumbnail views: pictures (and anything with a cached
     // thumbnail) show as themselves.
     void setThumbnails(bool on);
@@ -142,6 +158,10 @@ private:
     QSet<int> m_metaRows; // rows whose details came in, announced together
     bool m_metaPending = false;
     bool m_thumbs = false;
+    bool m_expandable = true;
+    QSet<QString> m_expanded;
+    void dropRows(QSet<int> rows); // and keeps the index up to date
+    QSet<int> descendantRows(const QSet<QString> &parents) const;
     mutable QHash<QString, QIcon> m_thumbIcons; // framed, ready to paint
     QSet<int> m_thumbRows;
     bool m_thumbPending = false;

@@ -1402,6 +1402,31 @@ bool ListerWindow::set(const ParsedCommand &cmd, QString *error)
                 return fail(QStringLiteral("SIZE takes normal, large, larger, bigger or smaller."));
             Style::instance()->setSizeLevel(level);
             m_app.settings().setValue(QStringLiteral("Appearance/size"), Style::sizeName(level));
+        } else if (key == QLatin1String("EXPAND")) {
+            // The selected folders (or the one in focus) open in place.
+            FolderTab *t = sourceTab();
+            if (value == QLatin1String("none") || value == QLatin1String("collapseall")) {
+                t->collapseAllFolders();
+                continue;
+            }
+            if (value != QLatin1String("toggle") && value != QLatin1String("on") && value != QLatin1String("off"))
+                return fail(QStringLiteral("EXPAND takes toggle, on, off or none."));
+            if (t->viewMode() != FolderTab::ViewMode::Details || t->flatMode() != DirLister::FlatMode::Off)
+                return fail(QStringLiteral("Folders open in place in the Details view, with flat view off."));
+            QStringList folders;
+            for (const QString &p : t->selectedPaths()) {
+                if (t->isFolder(p))
+                    folders << p;
+            }
+            if (folders.isEmpty())
+                return fail(QStringLiteral("Select a folder to open in place."));
+            for (const QString &p : std::as_const(folders)) {
+                const bool open = t->isFolderExpanded(p);
+                if (value == QLatin1String("on") || (value == QLatin1String("toggle") && !open))
+                    t->expandFolder(p);
+                else
+                    t->collapseFolder(p);
+            }
         } else if (key == QLatin1String("ZOOM")) {
             QString v = value;
             v.remove(QLatin1Char('%'));
