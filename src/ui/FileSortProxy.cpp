@@ -139,6 +139,45 @@ bool FileSortProxy::lessThan(const QModelIndex &left, const QModelIndex &right) 
             return c < 0;
         break;
     }
+    case FileListModel::TitleColumn:
+    case FileListModel::ArtistColumn:
+    case FileListModel::AlbumColumn:
+    case FileListModel::GenreColumn:
+    case FileListModel::CameraColumn: {
+        const QString sa = left.data(FileListModel::SortRole).toString();
+        const QString sb = right.data(FileListModel::SortRole).toString();
+        if (sa.isEmpty() != sb.isEmpty())
+            return sb.isEmpty(); // files without one go after those with
+        const int c = FileOps::naturalCompare(sa, sb);
+        if (c != 0)
+            return c < 0;
+        // Same album: in track order.
+        if (left.column() == FileListModel::AlbumColumn) {
+            const int ta = left.siblingAtColumn(FileListModel::TrackColumn).data(FileListModel::SortRole).toInt();
+            const int tb = right.siblingAtColumn(FileListModel::TrackColumn).data(FileListModel::SortRole).toInt();
+            if (ta != tb)
+                return ta < tb;
+        }
+        break;
+    }
+    case FileListModel::TrackColumn:
+    case FileListModel::YearColumn:
+    case FileListModel::DurationColumn:
+    case FileListModel::BitrateColumn:
+    case FileListModel::DimensionsColumn: {
+        const qint64 va = left.data(FileListModel::SortRole).toLongLong();
+        const qint64 vb = right.data(FileListModel::SortRole).toLongLong();
+        if (va != vb)
+            return va < vb;
+        break;
+    }
+    case FileListModel::TakenColumn: {
+        const QDateTime da = left.data(FileListModel::SortRole).toDateTime();
+        const QDateTime db = right.data(FileListModel::SortRole).toDateTime();
+        if (da != db)
+            return da < db;
+        break;
+    }
     case FileListModel::PermissionsColumn:
         if (a.permissions != b.permissions)
             return static_cast<int>(a.permissions) < static_cast<int>(b.permissions);

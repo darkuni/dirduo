@@ -59,6 +59,8 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Ctrl+, opens Preferences; type "colour" in the search box; change the SOURCE colour in the Theme Editor (it shows at once); Cancel puts it back.
 - [ ] Ctrl+D in a few folders, then the Favourites button: they are listed; Organise Favourites to group them.
 - [ ] Tools > Find Duplicates on a ROM folder: groups show; check copies, then Move Checked to Trash.
+- [ ] A music folder: right-click the column header > Music > Artist and Album; they fill in. Group By > Artist. F3 on a song shows its tags.
+- [ ] A folder of phone or camera photos: Pictures > Date Taken and Camera fill in; Group By > Date Taken.
 - [ ] Select a few Steam screenshots, Tools > Convert Images: JPEG, Width 1280, Destination; Convert. The JPEGs land in the other display.
 
 ## Report back

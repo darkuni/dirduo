@@ -655,15 +655,41 @@ bool FolderTab::eventFilter(QObject *watched, QEvent *event)
     return QWidget::eventFilter(watched, event);
 }
 
+// Saved header states start with how many columns there were, so a layout
+// saved before a column existed keeps that column hidden. States saved before
+// this tag was added had FileListModel::ColumnsBeforeMetadata columns.
+static const QByteArray kHeaderTag = QByteArrayLiteral("LNH1");
+
 QByteArray FolderTab::headerState() const
 {
-    return m_details->header()->saveState();
+    QByteArray out = kHeaderTag;
+    out += QByteArray::number(FileListModel::ColumnCount);
+    out += ':';
+    out += m_details->header()->saveState();
+    return out;
 }
 
-void FolderTab::restoreHeaderState(const QByteArray &state)
+void FolderTab::restoreHeaderState(const QByteArray &saved)
 {
-    if (!state.isEmpty())
-        m_details->header()->restoreState(state);
+    if (saved.isEmpty())
+        return;
+    QByteArray state = saved;
+    int columns = FileListModel::ColumnsBeforeMetadata;
+    if (state.startsWith(kHeaderTag)) {
+        const int colon = state.indexOf(':', kHeaderTag.size());
+        if (colon < 0)
+            return;
+        columns = state.mid(kHeaderTag.size(), colon - kHeaderTag.size()).toInt();
+        state = state.mid(colon + 1);
+    }
+    QHeaderView *h = m_details->header();
+    if (!h->restoreState(state))
+        return;
+    for (int c = qMax(1, columns); c < FileListModel::ColumnCount; ++c) {
+        h->setSectionHidden(c, true);
+        h->resizeSection(c, 120);
+    }
+    updateLocationColumn();
 }
 
 QString FolderTab::viewModeName(ViewMode mode)
@@ -743,18 +769,28 @@ void FolderTab::showHeaderMenu(const QPoint &globalPos)
 {
     QMenu menu(this);
     menu.addSection(QStringLiteral("Columns"));
-    for (int c = FileListModel::SizeColumn; c < FileListModel::ColumnCount; ++c) {
-        QAction *a = menu.addAction(FileListModel::columnName(c));
+    auto addColumn = [this](QMenu *m, int c) {
+        QAction *a = m->addAction(FileListModel::columnName(c));
         a->setCheckable(true);
         a->setChecked(isColumnVisible(c));
         connect(a, &QAction::toggled, this, [this, c](bool on) { setColumnVisible(c, on); });
-    }
+    };
+    for (int c = FileListModel::SizeColumn; c < FileListModel::ColumnsBeforeMetadata; ++c)
+        addColumn(&menu, c);
+    using M = FileListModel;
+    QMenu *music = menu.addMenu(QIcon::fromTheme(QStringLiteral("audio-x-generic")), QStringLiteral("Music"));
+    for (int c : {M::TitleColumn, M::ArtistColumn, M::AlbumColumn, M::TrackColumn, M::YearColumn, M::GenreColumn,
+                  M::DurationColumn, M::BitrateColumn})
+        addColumn(music, c);
+    QMenu *pictures = menu.addMenu(QIcon::fromTheme(QStringLiteral("image-x-generic")), QStringLiteral("Pictures"));
+    for (int c : {M::DimensionsColumn, M::TakenColumn, M::CameraColumn})
+        addColumn(pictures, c);
     QMenu *group = menu.addMenu(QStringLiteral("Group By"));
     using G = FileListModel::GroupBy;
-    for (G g : {G::None, G::Type, G::Name, G::Size, G::Modified, G::Extension, G::Folder}) {
-        QString label = FileListModel::groupByName(g);
-        label[0] = label[0].toUpper();
-        QAction *a = group->addAction(g == G::None ? QStringLiteral("No Grouping") : label);
+    for (G g : FileListModel::allGroupings()) {
+        if (g == G::Artist)
+            group->addSection(QStringLiteral("From the Files"));
+        QAction *a = group->addAction(FileListModel::groupByLabel(g));
         a->setCheckable(true);
         a->setChecked(groupBy() == g);
         connect(a, &QAction::triggered, this, [this, g]() { setGroupBy(g); });

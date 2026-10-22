@@ -237,12 +237,8 @@ void ListerWindow::fillViewMenus()
          t ? FolderTab::flatModeName(t->flatMode()) : QString());
     using G = FileListModel::GroupBy;
     QList<QPair<QString, QString>> groups;
-    for (G g : {G::None, G::Type, G::Name, G::Size, G::Modified, G::Extension, G::Folder}) {
-        QString label = FileListModel::groupByName(g);
-        label[0] = label[0].toUpper();
-        groups << qMakePair(g == G::None ? QStringLiteral("No Grouping") : label,
-                            QStringLiteral("Set GROUPBY=%1").arg(FileListModel::groupByName(g)));
-    }
+    for (G g : FileListModel::allGroupings())
+        groups << qMakePair(FileListModel::groupByLabel(g), QStringLiteral("Set GROUPBY=%1").arg(FileListModel::groupByName(g)));
     fill(m_groupMenu, groups, t ? FileListModel::groupByName(t->groupBy()) : QString());
     m_groupMenu->addSeparator();
     const bool grouped = t && t->groupBy() != FileListModel::GroupBy::None;

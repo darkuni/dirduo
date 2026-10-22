@@ -1,11 +1,13 @@
 #pragma once
 
 #include "core/FileItem.h"
+#include "core/Metadata.h"
 
 #include <QAbstractTableModel>
 #include <QHash>
 #include <QIcon>
 #include <QMimeDatabase>
+#include <QSet>
 #include <QUrl>
 
 // The rows of one folder. Updates are applied as a diff so selection, scroll
@@ -26,8 +28,23 @@ public:
         OwnerColumn,
         GroupColumn,
         LocationColumn, // flat view: the folder an item is in
+        // From the files themselves, read in the background (Metadata).
+        TitleColumn,
+        ArtistColumn,
+        AlbumColumn,
+        TrackColumn,
+        YearColumn,
+        GenreColumn,
+        DurationColumn,
+        BitrateColumn,
+        DimensionsColumn,
+        TakenColumn,
+        CameraColumn,
         ColumnCount
     };
+    // Saved column layouts from before the metadata columns had this many.
+    static constexpr int ColumnsBeforeMetadata = TitleColumn;
+    static bool isMetadataColumn(int column) { return column >= TitleColumn && column < ColumnCount; }
     enum Role {
         PathRole = Qt::UserRole + 1,
         IsDirRole,
@@ -38,7 +55,10 @@ public:
         RelPathRole,
         FolderBarRole,   // 0..1 share of the biggest folder (live sizes), -1 for none
     };
-    enum class GroupBy { None, Type, Name, Size, Modified, Extension, Folder };
+    enum class GroupBy { None, Type, Name, Size, Modified, Extension, Folder, Artist, Album, Genre, Year, Camera, Taken };
+    static QList<GroupBy> allGroupings();
+    static QString groupByLabel(GroupBy g); // for menus: "No Grouping", "Date Taken"
+    static bool isMetadataGrouping(GroupBy g) { return g >= GroupBy::Artist; }
 
     void setGroupBy(GroupBy g);
     GroupBy groupBy() const { return m_groupBy; }
@@ -66,6 +86,8 @@ public:
     int folderCount() const;
 
     QString typeName(int row) const;
+    // Tags and photo details of a row, if read; starts reading otherwise.
+    bool mediaInfo(int row, MediaInfo *out) const;
 
     int rowCount(const QModelIndex &parent = {}) const override;
     int columnCount(const QModelIndex &parent = {}) const override;
@@ -93,6 +115,8 @@ private:
     void rebuildIndex();
     void requestAllFolderSizes();
     void onFolderSizeReady(const QString &path);
+    void onMetadataReady(const QString &path);
+    QVariant metadataValue(int row, int column, bool forSorting) const;
     QPair<QString, QString> groupFor(int row) const;
     QString folderSizeText(int row) const;
     QIcon iconFor(int row) const;
@@ -108,4 +132,6 @@ private:
     GroupBy m_groupBy = GroupBy::None;
     bool m_liveSizes = false;
     qint64 m_maxFolderBytes = 0;
+    QSet<int> m_metaRows; // rows whose details came in, announced together
+    bool m_metaPending = false;
 };

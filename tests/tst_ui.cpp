@@ -1495,6 +1495,76 @@ private Q_SLOTS:
         QVERIFY(saved.destFolder.isEmpty());
     }
 
+    void metadataColumns()
+    {
+        // SID tunes carry their own name, author and year: no library needed.
+        const QString music = root + QStringLiteral("/music");
+        QDir().mkpath(music);
+        auto sid = [&music](const char *file, const QByteArray &name, const QByteArray &author, const QByteArray &released) {
+            QByteArray h(0x7c, '\0');
+            h.replace(0, 4, "PSID");
+            h[5] = 2;
+            h[0x0f] = 1;
+            h[0x11] = 1;
+            h.replace(0x16, name.size(), name);
+            h.replace(0x36, author.size(), author);
+            h.replace(0x56, released.size(), released);
+            QFile f(music + QLatin1Char('/') + QLatin1String(file));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(h);
+        };
+        sid("commando.sid", "Commando", "Rob Hubbard", "1985 Elite");
+        sid("monty.sid", "Monty on the Run", "Rob Hubbard", "1985 Gremlin");
+        sid("lastninja.sid", "The Last Ninja", "Ben Daglish", "1987 System 3");
+        touch(music + QStringLiteral("/readme.txt"));
+        FolderTab *t = w->display(0)->currentTab();
+        t->navigate(music);
+        waitListed(t, 4);
+
+        // Hidden until asked for; they fill in once read.
+        QVERIFY(!t->isColumnVisible(FileListModel::ArtistColumn));
+        QVERIFY(w->runCommand(QStringLiteral("Set COLUMNSTOGGLE=artist\nSet COLUMNSTOGGLE=year")));
+        QVERIFY(t->isColumnVisible(FileListModel::ArtistColumn));
+        QAbstractItemModel *m = t->view()->model();
+        auto cell = [m](const QString &name, int column) {
+            for (int r = 0; r < m->rowCount(); ++r) {
+                if (m->index(r, 0).data().toString() == name)
+                    return m->index(r, column).data().toString();
+            }
+            return QStringLiteral("(missing)");
+        };
+        QTRY_COMPARE(cell(QStringLiteral("lastninja.sid"), FileListModel::ArtistColumn), QStringLiteral("Ben Daglish"));
+        QTRY_COMPARE(cell(QStringLiteral("commando.sid"), FileListModel::YearColumn), QStringLiteral("1985"));
+        QCOMPARE(cell(QStringLiteral("readme.txt"), FileListModel::ArtistColumn), QString());
+
+        // Grouped by artist.
+        QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=artist")));
+        QVERIFY(w->evaluateCondition(QStringLiteral("groupby=artist"), false));
+        QTRY_COMPARE(labels(t), (QStringList{QStringLiteral("Ben Daglish"), QStringLiteral("Rob Hubbard"), QStringLiteral("No artist")}));
+        QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=year")));
+        QTRY_COMPARE(labels(t), (QStringList{QStringLiteral("1985"), QStringLiteral("1987"), QStringLiteral("No year")}));
+        QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=none")));
+
+        // Sorted by artist, files with one first.
+        auto *details = qobject_cast<QTreeView *>(t->view());
+        QVERIFY(details);
+        details->sortByColumn(FileListModel::ArtistColumn, Qt::AscendingOrder);
+        QTRY_COMPARE(m->index(0, 0).data().toString(), QStringLiteral("lastninja.sid"));
+        QCOMPARE(m->index(3, 0).data().toString(), QStringLiteral("readme.txt"));
+
+        // A layout saved before these columns existed keeps them hidden;
+        // one saved now keeps them as they were.
+        const QByteArray now = t->headerState();
+        QVERIFY(now.startsWith("LNH1"));
+        const QByteArray old = now.mid(now.indexOf(':') + 1); // no tag: saved by an older Linopus
+        t->restoreHeaderState(old);
+        QVERIFY(!t->isColumnVisible(FileListModel::ArtistColumn));
+        QVERIFY(t->isColumnVisible(FileListModel::SizeColumn));
+        t->restoreHeaderState(now);
+        QVERIFY(t->isColumnVisible(FileListModel::ArtistColumn));
+        QVERIFY(t->isColumnVisible(FileListModel::YearColumn));
+    }
+
 private:
     // A failing command shows an error box; close it and report the result.
     bool runFailing(const QString &command)

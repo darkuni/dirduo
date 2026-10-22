@@ -453,6 +453,51 @@ int main(int argc, char *argv[])
         dlg.reject();
     }
 
+    // Music columns on a folder of C64 SID tunes, grouped by composer, with
+    // the viewer pane showing one tune's details.
+    {
+        const QString sids = root + QStringLiteral("/Music/C64");
+        QDir().mkpath(sids);
+        struct Tune { const char *file, *name, *author, *released; int songs; };
+        const Tune tunes[] = {
+            {"Commando.sid", "Commando", "Rob Hubbard", "1985 Elite", 3},
+            {"Monty_on_the_Run.sid", "Monty on the Run", "Rob Hubbard", "1985 Gremlin Graphics", 2},
+            {"Sanxion.sid", "Sanxion", "Rob Hubbard", "1986 Thalamus", 2},
+            {"Last_Ninja.sid", "The Last Ninja", "Ben Daglish", "1987 System 3", 9},
+            {"Deflektor.sid", "Deflektor", "Ben Daglish", "1987 Gremlin Graphics", 1},
+            {"Cybernoid_II.sid", "Cybernoid II", "Jeroen Tel", "1988 Hewson", 3},
+            {"Turrican.sid", "Turrican", "Chris Huelsbeck", "1990 Rainbow Arts", 9},
+            {"Dark_Unicorn_Theme.sid", "Dark Unicorn Theme", "Darkuni", "1994 Dark Unicorn", 1},
+        };
+        for (const Tune &t : tunes) {
+            QByteArray h(0x7c, '\0');
+            h.replace(0, 4, "PSID");
+            h[5] = 2;
+            h[0x0f] = char(t.songs);
+            h[0x11] = 1;
+            h.replace(0x16, int(qstrlen(t.name)), t.name);
+            h.replace(0x36, int(qstrlen(t.author)), t.author);
+            h.replace(0x56, int(qstrlen(t.released)), t.released);
+            QFile f(sids + QLatin1Char('/') + QLatin1String(t.file));
+            if (f.open(QIODevice::WriteOnly)) {
+                f.write(h);
+                f.write(QByteArray(2048 + 997 * int(qstrlen(t.name)), '\x60'));
+            }
+        }
+        w->runCommand(QStringLiteral("Set THEME=Workbench\nSet DUAL=off\nSet VIEWER=on\nSet VIEWERPOS=right"));
+        FolderTab *tab = w->display(0)->currentTab();
+        tab->navigate(sids);
+        QTest::qWait(500);
+        w->runCommand(QStringLiteral("Set VIEW=details\nSet COLUMNSTOGGLE=type\nSet COLUMNSTOGGLE=modified\n"
+                                     "Set COLUMNSTOGGLE=title\nSet COLUMNSTOGGLE=year\nSet COLUMNSTOGGLE=album\n"
+                                     "Set GROUPBY=artist"));
+        QTest::qWait(600);
+        tab->selectPaths({sids + QStringLiteral("/Last_Ninja.sid")});
+        QTest::qWait(900);
+        shot(w, out, QStringLiteral("30-music-columns-sid"));
+        w->runCommand(QStringLiteral("Set GROUPBY=none\nSet VIEWER=off\nSet THEME=\"Linopus Light\"\nSet DUAL=vertical"));
+    }
+
 #ifdef LINOPUS_HAVE_KIO
     // Servers and archives, when run through tests/remote/run-remote-tests.sh.
     const QString ftp = qEnvironmentVariable("LINOPUS_TEST_FTP");

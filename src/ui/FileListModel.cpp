@@ -4,6 +4,7 @@
 #include "core/FileOps.h"
 #include "core/FolderSizes.h"
 #include "core/Location.h"
+#include "core/Metadata.h"
 #include "ui/Style.h"
 
 #include <QApplication>
@@ -14,11 +15,16 @@
 #include <QPalette>
 #include <QSet>
 #include <QStyle>
+#include <QTimer>
+
+#include <climits>
+#include <utility>
 
 FileListModel::FileListModel(QObject *parent)
     : QAbstractTableModel(parent)
 {
     connect(FolderSizes::instance(), &FolderSizes::ready, this, &FileListModel::onFolderSizeReady);
+    connect(MetadataCache::instance(), &MetadataCache::ready, this, &FileListModel::onMetadataReady);
     connect(Style::instance(), &Style::changed, this, [this]() {
         if (!m_items.isEmpty())
             Q_EMIT dataChanged(index(0, 0), index(m_items.size() - 1, ColumnCount - 1));
@@ -50,8 +56,48 @@ QString FileListModel::columnName(int column)
         return QStringLiteral("Group");
     case LocationColumn:
         return QStringLiteral("Location");
+    case TitleColumn:
+        return QStringLiteral("Title");
+    case ArtistColumn:
+        return QStringLiteral("Artist");
+    case AlbumColumn:
+        return QStringLiteral("Album");
+    case TrackColumn:
+        return QStringLiteral("Track");
+    case YearColumn:
+        return QStringLiteral("Year");
+    case GenreColumn:
+        return QStringLiteral("Genre");
+    case DurationColumn:
+        return QStringLiteral("Length");
+    case BitrateColumn:
+        return QStringLiteral("Bitrate");
+    case DimensionsColumn:
+        return QStringLiteral("Dimensions");
+    case TakenColumn:
+        return QStringLiteral("Date Taken");
+    case CameraColumn:
+        return QStringLiteral("Camera");
     }
     return {};
+}
+
+QString FileListModel::groupByLabel(GroupBy g)
+{
+    if (g == GroupBy::None)
+        return QStringLiteral("No Grouping");
+    if (g == GroupBy::Taken)
+        return QStringLiteral("Date Taken");
+    QString label = groupByName(g);
+    label[0] = label[0].toUpper();
+    return label;
+}
+
+QList<FileListModel::GroupBy> FileListModel::allGroupings()
+{
+    return {GroupBy::None,   GroupBy::Type,   GroupBy::Name,  GroupBy::Size, GroupBy::Modified,
+            GroupBy::Extension, GroupBy::Folder, GroupBy::Artist, GroupBy::Album, GroupBy::Genre,
+            GroupBy::Year,   GroupBy::Camera, GroupBy::Taken};
 }
 
 QString FileListModel::groupByName(GroupBy g)
@@ -71,6 +117,18 @@ QString FileListModel::groupByName(GroupBy g)
         return QStringLiteral("extension");
     case GroupBy::Folder:
         return QStringLiteral("folder");
+    case GroupBy::Artist:
+        return QStringLiteral("artist");
+    case GroupBy::Album:
+        return QStringLiteral("album");
+    case GroupBy::Genre:
+        return QStringLiteral("genre");
+    case GroupBy::Year:
+        return QStringLiteral("year");
+    case GroupBy::Camera:
+        return QStringLiteral("camera");
+    case GroupBy::Taken:
+        return QStringLiteral("taken");
     }
     return QStringLiteral("none");
 }
@@ -78,8 +136,7 @@ QString FileListModel::groupByName(GroupBy g)
 bool FileListModel::groupByFromName(const QString &name, GroupBy &out)
 {
     const QString n = name.toLower();
-    for (GroupBy g : {GroupBy::None, GroupBy::Type, GroupBy::Name, GroupBy::Size, GroupBy::Modified, GroupBy::Extension,
-                      GroupBy::Folder}) {
+    for (GroupBy g : allGroupings()) {
         if (groupByName(g) == n) {
             out = g;
             return true;
@@ -243,6 +300,127 @@ QPair<QString, QString> FileListModel::groupFor(int row) const
     }
     case GroupBy::Folder:
         return {it.relPath, it.relPath.isEmpty() ? QStringLiteral("(this folder)") : it.relPath};
+    case GroupBy::Artist:
+    case GroupBy::Album:
+    case GroupBy::Genre:
+    case GroupBy::Year:
+    case GroupBy::Camera:
+    case GroupBy::Taken: {
+        if (it.isDir)
+            return {QStringLiteral("0"), QStringLiteral("Folders")};
+        static const QHash<GroupBy, QString> none = {
+            {GroupBy::Artist, QStringLiteral("No artist")}, {GroupBy::Album, QStringLiteral("No album")},
+            {GroupBy::Genre, QStringLiteral("No genre")},   {GroupBy::Year, QStringLiteral("No year")},
+            {GroupBy::Camera, QStringLiteral("No camera")}, {GroupBy::Taken, QStringLiteral("No date taken")}};
+        const QPair<QString, QString> nothing{QStringLiteral("9"), none.value(m_groupBy)};
+        MediaInfo info;
+        if (Metadata::kindFor(it.name) == MediaInfo::Kind::None)
+            return nothing;
+        if (!mediaInfo(row, &info))
+            return {QStringLiteral("8"), QStringLiteral("Reading\u2026")};
+        auto named = [&nothing](const QString &value) -> QPair<QString, QString> {
+            if (value.isEmpty())
+                return nothing;
+            return {QStringLiteral("5:") + value.toLower(), value};
+        };
+        switch (m_groupBy) {
+        case GroupBy::Artist:
+            return named(info.albumArtist.isEmpty() ? info.artist : info.albumArtist);
+        case GroupBy::Album:
+            return named(info.album);
+        case GroupBy::Genre:
+            return named(info.genre);
+        case GroupBy::Year:
+            return info.year > 0 ? QPair<QString, QString>{QStringLiteral("5:%1").arg(info.year), QString::number(info.year)} : nothing;
+        case GroupBy::Camera:
+            return named(info.camera);
+        case GroupBy::Taken:
+            if (!info.taken.isValid())
+                return nothing;
+            return {QStringLiteral("5:") + info.taken.toString(QStringLiteral("yyyy-MM")),
+                    QLocale().standaloneMonthName(info.taken.date().month()) + QLatin1Char(' ')
+                        + QString::number(info.taken.date().year())};
+        default:
+            return nothing;
+        }
+    }
+    }
+    return {};
+}
+
+bool FileListModel::mediaInfo(int row, MediaInfo *out) const
+{
+    if (row < 0 || row >= m_items.size())
+        return false;
+    const FileItem &it = m_items.at(row);
+    if (it.isDir || !Location::isLocal(it.path) || Metadata::kindFor(it.name) == MediaInfo::Kind::None)
+        return false;
+    return MetadataCache::instance()->lookup(it.path, it.size, it.modified, out);
+}
+
+void FileListModel::onMetadataReady(const QString &path)
+{
+    const int row = m_rowByPath.value(path, -1);
+    if (row < 0)
+        return;
+    m_metaRows.insert(row);
+    if (m_metaPending)
+        return;
+    // A folder of a thousand songs comes in a few at a time; one update per
+    // batch keeps the list from re-sorting a thousand times.
+    m_metaPending = true;
+    QTimer::singleShot(120, this, [this]() {
+        m_metaPending = false;
+        const QSet<int> rows = std::exchange(m_metaRows, {});
+        if (rows.isEmpty())
+            return;
+        int lo = INT_MAX, hi = -1;
+        for (int r : rows) {
+            if (r < m_items.size()) {
+                lo = qMin(lo, r);
+                hi = qMax(hi, r);
+            }
+        }
+        if (hi >= 0)
+            Q_EMIT dataChanged(index(lo, 0), index(hi, ColumnCount - 1));
+    });
+}
+
+QVariant FileListModel::metadataValue(int row, int column, bool forSorting) const
+{
+    MediaInfo info;
+    if (!mediaInfo(row, &info))
+        return forSorting ? QVariant(QString()) : QVariant();
+    auto number = [forSorting](int v) -> QVariant {
+        if (forSorting)
+            return v;
+        return v > 0 ? QVariant(QString::number(v)) : QVariant();
+    };
+    switch (column) {
+    case TitleColumn:
+        return info.title;
+    case ArtistColumn:
+        return info.artist;
+    case AlbumColumn:
+        return info.album;
+    case TrackColumn:
+        return number(info.track);
+    case YearColumn:
+        return number(info.year);
+    case GenreColumn:
+        return info.genre;
+    case DurationColumn:
+        return forSorting ? QVariant(info.seconds) : QVariant(info.durationText());
+    case BitrateColumn:
+        if (forSorting)
+            return info.bitrate;
+        return info.bitrate > 0 ? QVariant(QStringLiteral("%1 kbit/s").arg(info.bitrate)) : QVariant();
+    case DimensionsColumn:
+        return forSorting ? QVariant(qint64(info.width) * info.height) : QVariant(info.dimensionsText());
+    case TakenColumn:
+        return forSorting ? QVariant(info.taken) : QVariant(info.taken.isValid() ? QLocale().toString(info.taken, QLocale::ShortFormat) : QString());
+    case CameraColumn:
+        return info.camera;
     }
     return {};
 }
@@ -494,6 +672,9 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
             return it.group;
         case LocationColumn:
             return it.relPath;
+        default:
+            if (isMetadataColumn(col))
+                return metadataValue(index.row(), col, false);
         }
         break;
     case Qt::EditRole:
@@ -505,6 +686,11 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
             return iconFor(index.row());
         break;
     case Qt::ToolTipRole:
+        if (isMetadataColumn(col) || col == NameColumn) {
+            MediaInfo info;
+            if (!it.isSymlink && mediaInfo(index.row(), &info) && !info.isEmpty())
+                return info.summary();
+        }
         if (col == NameColumn && it.isSymlink)
             return QStringLiteral("Link to %1").arg(it.symlinkTarget);
         if (col == SizeColumn && it.isDir && FolderSizes::instance()->has(it.path)) {
@@ -548,7 +734,7 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
         break;
     }
     case Qt::TextAlignmentRole:
-        if (col == SizeColumn)
+        if (col == SizeColumn || col == TrackColumn || col == YearColumn || col == DurationColumn || col == BitrateColumn)
             return QVariant(Qt::AlignRight | Qt::AlignVCenter);
         break;
     case PathRole:
@@ -594,6 +780,8 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
         case LocationColumn:
             return it.relPath;
         default:
+            if (isMetadataColumn(col))
+                return metadataValue(index.row(), col, true);
             return it.name;
         }
     }

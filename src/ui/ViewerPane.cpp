@@ -1,5 +1,7 @@
 #include "ui/ViewerPane.h"
 
+#include "core/Metadata.h"
+
 #include "core/FileKind.h"
 #include "core/FileOps.h"
 #include "core/FolderSizes.h"
@@ -180,6 +182,34 @@ Preview Preview::load(const QString &path, int maxImageSide)
                          .arg(full.isValid() ? full.width() : p.image.width())
                          .arg(full.isValid() ? full.height() : p.image.height())
                          .arg(FileOps::formatSize(fi.size()), when);
+            if (Metadata::kindFor(path) == MediaInfo::Kind::Image) {
+                // One more line from the camera, when it left one.
+                const MediaInfo m = Metadata::read(path);
+                QStringList bits;
+                if (!m.camera.isEmpty())
+                    bits << m.camera;
+                if (m.fNumber > 0)
+                    bits << QStringLiteral("f/%1").arg(m.fNumber, 0, 'g', 3);
+                if (!m.exposure.isEmpty())
+                    bits << m.exposure;
+                if (m.iso > 0)
+                    bits << QStringLiteral("ISO %1").arg(m.iso);
+                if (m.taken.isValid())
+                    bits << QStringLiteral("taken %1").arg(QLocale().toString(m.taken, QLocale::ShortFormat));
+                if (!bits.isEmpty())
+                    p.info += QLatin1Char('\n') + bits.join(QStringLiteral(", "));
+            }
+            return p;
+        }
+    }
+
+    // Music and video: what the tags say.
+    const MediaInfo::Kind media = Metadata::kindFor(path);
+    if (media == MediaInfo::Kind::Audio || media == MediaInfo::Kind::Video) {
+        const MediaInfo m = Metadata::read(path);
+        if (!m.isEmpty()) {
+            p.kind = Kind::Info;
+            p.text = m.summary();
             return p;
         }
     }
@@ -369,7 +399,9 @@ void ViewerPane::display(const Preview &p)
         m_stack->setCurrentWidget(m_message);
         break;
     case Preview::Kind::Info:
-        m_message->setText(p.error.isEmpty() ? QStringLiteral("No preview for this kind of file.") : p.error);
+        m_message->setText(!p.error.isEmpty() ? p.error
+                           : !p.text.isEmpty() ? p.text
+                                               : QStringLiteral("No preview for this kind of file."));
         m_stack->setCurrentWidget(m_message);
         break;
     case Preview::Kind::None:

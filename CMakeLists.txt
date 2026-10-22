@@ -59,6 +59,7 @@ add_library(linopus_core STATIC
     src/core/Favorites.cpp
     src/core/CommandCatalog.cpp
     src/core/ImageConvert.cpp
+    src/core/Metadata.cpp
     src/core/Condition.cpp
     src/core/DriveList.cpp
     src/core/FileKind.cpp
@@ -74,6 +75,31 @@ find_package(ZLIB QUIET)
 if(ZLIB_FOUND)
     target_link_libraries(linopus_core PRIVATE ZLIB::ZLIB)
     target_compile_definitions(linopus_core PRIVATE LINOPUS_HAVE_ZLIB)
+endif()
+
+# Music tags and photo details. Both optional: without them the columns stay
+# empty (photos still get their size in pixels).
+option(LINOPUS_WITH_METADATA "Read music tags (TagLib) and photo details (Exiv2) when found" ON)
+if(LINOPUS_WITH_METADATA)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(TAGLIB QUIET IMPORTED_TARGET taglib)
+        pkg_check_modules(EXIV2 QUIET IMPORTED_TARGET exiv2)
+    endif()
+    if(TAGLIB_FOUND)
+        target_link_libraries(linopus_core PRIVATE PkgConfig::TAGLIB)
+        target_compile_definitions(linopus_core PRIVATE LINOPUS_HAVE_TAGLIB)
+        message(STATUS "TagLib ${TAGLIB_VERSION}: music tags on")
+    else()
+        message(WARNING "TagLib not found: no music tags")
+    endif()
+    if(EXIV2_FOUND)
+        target_link_libraries(linopus_core PRIVATE PkgConfig::EXIV2)
+        target_compile_definitions(linopus_core PRIVATE LINOPUS_HAVE_EXIV2)
+        message(STATUS "Exiv2 ${EXIV2_VERSION}: photo details on")
+    else()
+        message(WARNING "Exiv2 not found: no camera details")
+    endif()
 endif()
 
 option(LINOPUS_BUILD_UI "Build the application (off: core library and its tests only)" ON)
@@ -135,12 +161,22 @@ endif()
 if(LINOPUS_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS Test)
     enable_testing()
-    foreach(t aliases commandparser fileops trash jobmanager commandengine drives location listing condition rename foldersync find imageconvert)
+    foreach(t aliases commandparser fileops trash jobmanager commandengine drives location listing condition rename foldersync find imageconvert metadata)
         add_executable(tst_${t} tests/tst_${t}.cpp)
         target_link_libraries(tst_${t} PRIVATE linopus_core Qt6::Test)
         add_test(NAME ${t} COMMAND tst_${t})
         set_tests_properties(${t} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     endforeach()
+
+    # The metadata test writes tags and EXIF with the libraries themselves.
+    if(TAGLIB_FOUND)
+        target_link_libraries(tst_metadata PRIVATE PkgConfig::TAGLIB)
+        target_compile_definitions(tst_metadata PRIVATE LINOPUS_HAVE_TAGLIB)
+    endif()
+    if(EXIV2_FOUND)
+        target_link_libraries(tst_metadata PRIVATE PkgConfig::EXIV2)
+        target_compile_definitions(tst_metadata PRIVATE LINOPUS_HAVE_EXIV2)
+    endif()
 
     if(LINOPUS_BUILD_UI)
         if(LINOPUS_WITH_KIO)
