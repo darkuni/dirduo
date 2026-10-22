@@ -20,11 +20,16 @@
 #include "ui/FolderTree.h"
 #include "ui/GroupTreeView.h"
 #include "ui/ImageConvertDialog.h"
+#include "ui/HistoryDialog.h"
+#include "ui/SelectDialog.h"
 #include "ui/ListerWindow.h"
 #include "ui/Style.h"
 #include "ui/SyncDialog.h"
 
 #include <QApplication>
+#include <QComboBox>
+#include "core/JobManager.h"
+#include "core/CommandEngine.h"
 #include <QDir>
 #include <QFile>
 #include <QLineEdit>
@@ -734,6 +739,44 @@ int main(int argc, char *argv[])
     shot(w, QStringLiteral("15-light-expanded-folders"), 900);
     left->collapseAllFolders();
     right->collapseAllFolders();
+
+    // 16. Find-as-you-type in a big ROM folder, dark.
+    run(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet DUAL=vertical\nSet VIEW=details"));
+    go(r + QStringLiteral("/Emulation/roms/amiga"), media + QStringLiteral("/Games/roms/amiga"));
+    source(0);
+    left->focusView();
+    left->openTypeAhead(QStringLiteral("t"));
+    QTest::keyClicks(left->typeAheadEdit(), QStringLiteral("urr"));
+    shot(w, QStringLiteral("16-dark-find-as-you-type"), 700);
+    left->closeTypeAhead();
+
+    // 17. Select by comparing, with the Select window, light.
+    run(QStringLiteral("Set THEME=\"Linopus Light\""));
+    go(r + QStringLiteral("/Emulation/roms/c64"), media + QStringLiteral("/Games/roms/c64"));
+    source(0);
+    run(QStringLiteral("Select COMPARE=newerormissing"));
+    {
+        SelectDialog dlg(w);
+        dlg.compareBox()->setCurrentIndex(dlg.compareBox()->findData(QStringLiteral("newerormissing")));
+        dlg.kindBox()->setCurrentIndex(dlg.kindBox()->findData(QStringLiteral("diskimage")));
+        dlg.show();
+        shotWithDialog(w, &dlg, QStringLiteral("17-light-select-by-comparing"), QPoint(0, 140));
+    }
+
+    // 18. Undo list and file log, Workbench: copy, rename, then look.
+    run(QStringLiteral("Set THEME=Workbench"));
+    run(QStringLiteral("Copy WHENEXISTS=skip"));
+    context.jobs().waitForIdle(5000);
+    QTest::qWait(300);
+    run(QStringLiteral("CreateFolder NAME=\"Disk 2 saves\""));
+    run(QStringLiteral("Rename FROM=\"%1\" TO=\"Paradroid (1985).d64\"").arg(r + QStringLiteral("/Emulation/roms/c64/Paradroid.d64")));
+    {
+        HistoryDialog dlg(context.engine(), HistoryDialog::Page::Undo, w);
+        dlg.show();
+        shotWithDialog(w, &dlg, QStringLiteral("18-workbench-undo-list"));
+        dlg.showPage(HistoryDialog::Page::Log);
+        shotWithDialog(w, &dlg, QStringLiteral("19-workbench-file-log"));
+    }
 
     // 12. One view, four themes.
     QStringList themeShots, themeNames;
