@@ -10,6 +10,9 @@
 #include "ui/AppContext.h"
 #include "ui/DuplicatesDialog.h"
 #include "ui/FindDialog.h"
+#include "ui/SelectDialog.h"
+#include "core/SelectRules.h"
+#include "core/FindEngine.h"
 #include "ui/HistoryDialog.h"
 #include "ui/ImageConvertDialog.h"
 #include "core/FileKind.h"
@@ -371,6 +374,17 @@ void ListerWindow::buildMenus()
     edit->addAction(commandAction(QStringLiteral("Select All"), QStringLiteral("Select ALL"), QKeySequence::SelectAll));
     edit->addAction(commandAction(QStringLiteral("Select None"), QStringLiteral("Select NONE"), QKeySequence(QStringLiteral("Ctrl+Shift+A"))));
     edit->addAction(commandAction(QStringLiteral("Invert Selection"), QStringLiteral("Select INVERT"), QKeySequence(QStringLiteral("Ctrl+I"))));
+    edit->addAction(commandAction(QStringLiteral("Select..."), QStringLiteral("Select DIALOG"), QKeySequence(QStringLiteral("Ctrl+Shift+S")),
+                                  QStringLiteral("edit-select")));
+    {
+        QMenu *cmp = edit->addMenu(QStringLiteral("Select by Comparing"));
+        cmp->addAction(commandAction(QStringLiteral("Newer Here, or Not There"), QStringLiteral("Select COMPARE=newerormissing")));
+        cmp->addAction(commandAction(QStringLiteral("Not in the Other Display"), QStringLiteral("Select COMPARE=missing")));
+        cmp->addAction(commandAction(QStringLiteral("Newer Than the Other Display"), QStringLiteral("Select COMPARE=newer")));
+        cmp->addAction(commandAction(QStringLiteral("Older Than the Other Display"), QStringLiteral("Select COMPARE=older")));
+        cmp->addAction(commandAction(QStringLiteral("Same in Both (both displays)"), QStringLiteral("Select COMPARE=same BOTH")));
+        cmp->addAction(commandAction(QStringLiteral("Different Size, Same Date (both displays)"), QStringLiteral("Select COMPARE=different BOTH")));
+    }
     QAction *pattern = edit->addAction(QStringLiteral("Select by Pattern..."));
     pattern->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+S")));
     connect(pattern, &QAction::triggered, this, [this]() { runCommand(QStringLiteral("Select PATTERN={dlgstring|Select files matching (for example *.mp3):}")); });
@@ -1568,9 +1582,86 @@ bool ListerWindow::set(const ParsedCommand &cmd, QString *error)
 
 bool ListerWindow::select(const ParsedCommand &cmd, QString *error)
 {
+    auto fail = [error](const QString &msg) {
+        if (error)
+            *error = msg;
+        return false;
+    };
     FolderTab *t = sourceTab();
-    if (cmd.hasArg(QStringLiteral("PATTERN"))) {
-        t->selectPattern(cmd.value(QStringLiteral("PATTERN")));
+    if (cmd.hasFlag(QStringLiteral("DIALOG")) || cmd.hasFlag(QStringLiteral("ASK"))) {
+        auto *dlg = new SelectDialog(this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        connect(dlg, &SelectDialog::commandRequested, this, [this](const QString &c) { runCommand(c); });
+        dlg->show();
+        return true;
+    }
+    // Anything besides ALL/NONE/INVERT is a rule: by name, kind, size, age,
+    // or against the other display.
+    const QStringList ruleKeys = {QStringLiteral("COMPARE"), QStringLiteral("KIND"), QStringLiteral("TYPE"),
+                                  QStringLiteral("MINSIZE"), QStringLiteral("MAXSIZE"), QStringLiteral("NEWER"),
+                                  QStringLiteral("OLDER"), QStringLiteral("PATTERN")};
+    bool rules = false;
+    for (const QString &k : ruleKeys)
+        rules = rules || cmd.hasArg(k);
+    if (rules) {
+        SelectRules r;
+        r.pattern = cmd.values(QStringLiteral("PATTERN")).join(QLatin1Char(';'));
+        if (cmd.hasArg(QStringLiteral("KIND"))) {
+            if (!FileKind::categoryFromKey(cmd.value(QStringLiteral("KIND")).toLower(), r.kind))
+                return fail(QStringLiteral("KIND takes image, audio, video, archive, diskimage, document, code, program or folder."));
+            r.hasKind = true;
+        }
+        const QString type = cmd.value(QStringLiteral("TYPE")).toLower();
+        if (type == QLatin1String("files"))
+            r.type = SelectRules::Type::Files;
+        else if (type == QLatin1String("folders") || type == QLatin1String("dirs"))
+            r.type = SelectRules::Type::Folders;
+        else if (!type.isEmpty() && type != QLatin1String("both"))
+            return fail(QStringLiteral("TYPE takes files, folders or both."));
+        auto size = [&](const char *key, qint64 &out) {
+            if (!cmd.hasArg(QLatin1String(key)))
+                return true;
+            out = FindCriteria::parseSize(cmd.value(QLatin1String(key)));
+            return out >= 0;
+        };
+        if (!size("MINSIZE", r.minSize) || !size("MAXSIZE", r.maxSize))
+            return fail(QStringLiteral("Sizes look like 500, 700K, 10M or 2G."));
+        auto when = [&](const char *key, QDateTime &out) {
+            if (!cmd.hasArg(QLatin1String(key)))
+                return true;
+            out = FindCriteria::parseWhen(cmd.value(QLatin1String(key)));
+            return out.isValid();
+        };
+        if (!when("NEWER", r.newerThan) || !when("OLDER", r.olderThan))
+            return fail(QStringLiteral("NEWER and OLDER take a number of days or a date like 2024-01-31."));
+        if (cmd.hasArg(QStringLiteral("COMPARE"))) {
+            if (!SelectRules::compareFromName(cmd.value(QStringLiteral("COMPARE")), r.compare))
+                return fail(QStringLiteral("COMPARE takes newer, older, missing, same, different or newerormissing."));
+            FolderTab *other = destDisplay() && destDisplay() != sourceDisplay() ? destDisplay()->currentTab() : nullptr;
+            if (!other)
+                return fail(QStringLiteral("Comparing needs the other display open (dual display)."));
+            if (!Location::isLocal(t->path()) || !Location::isLocal(other->path())
+                || Collections::isCollectionLocation(t->path()))
+                return fail(QStringLiteral("Comparing works between local folders (SD cards and drives included) for now."));
+            r.thisRoot = t->path();
+            r.otherRoot = other->path();
+        }
+        const FolderTab::SelectMode mode = cmd.hasFlag(QStringLiteral("DESELECT")) ? FolderTab::SelectMode::Remove
+            : cmd.hasFlag(QStringLiteral("ADD"))                                 ? FolderTab::SelectMode::Add
+                                                                                 : FolderTab::SelectMode::Replace;
+        const int n = t->selectWhere([&r](const FileItem &it) { return r.matches(it); }, mode);
+        // BOTH: the same items in the other display too (what matched there).
+        if (cmd.hasFlag(QStringLiteral("BOTH")) && r.compare != SelectRules::Compare::None) {
+            QStringList there;
+            for (const QString &p : t->selectedPaths()) {
+                const QString c = r.counterpart(p);
+                if (!c.isEmpty())
+                    there << c;
+            }
+            destDisplay()->currentTab()->selectPaths(there);
+        }
+        Q_UNUSED(n)
+        scheduleButtonStates();
         return true;
     }
     if (cmd.hasFlag(QStringLiteral("ALL")))
@@ -1581,7 +1672,7 @@ bool ListerWindow::select(const ParsedCommand &cmd, QString *error)
         t->invertSelection();
     else {
         if (error)
-            *error = QStringLiteral("Select takes ALL, NONE, INVERT or PATTERN=.");
+            *error = QStringLiteral("Select takes ALL, NONE, INVERT, DIALOG, PATTERN=, COMPARE=, KIND=, TYPE=, MINSIZE=, MAXSIZE=, NEWER= or OLDER=.");
         return false;
     }
     return true;

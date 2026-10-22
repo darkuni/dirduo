@@ -11,6 +11,8 @@
 #include <QHash>
 #include <QWidget>
 
+#include <functional>
+
 class GroupTreeView;
 class QCheckBox;
 class QComboBox;
@@ -54,6 +56,10 @@ public:
     void selectNone();
     void invertSelection();
     int selectPattern(const QString &wildcard); // returns how many matched
+    // Selects (or adds, or takes out) every listed item that passes; returns
+    // how many passed.
+    enum class SelectMode { Replace, Add, Remove };
+    int selectWhere(const std::function<bool(const FileItem &)> &test, SelectMode mode = SelectMode::Replace);
 
     void setViewMode(ViewMode mode);
     ViewMode viewMode() const { return m_mode; }

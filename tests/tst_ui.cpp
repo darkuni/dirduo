@@ -9,6 +9,7 @@
 #include "ui/DuplicatesDialog.h"
 #include "ui/ImageConvertDialog.h"
 #include "ui/HistoryDialog.h"
+#include "ui/SelectDialog.h"
 #include <QImageReader>
 #include "ui/FindDialog.h"
 #include "core/Collections.h"
@@ -1809,6 +1810,64 @@ private Q_SLOTS:
                 b->click();
         }
         QTRY_VERIFY(QFile::exists(root + QStringLiteral("/a/uno.txt")));
+        dlg->close();
+    }
+
+    void selectByComparing()
+    {
+        // a: one, two, three. b: keep, plus an older two and the same three.
+        const QString a = root + QStringLiteral("/a"), b = root + QStringLiteral("/b");
+        auto age = [](const QString &p, int days) {
+            QFile f(p);
+            QVERIFY(f.open(QIODevice::ReadWrite));
+            QVERIFY(f.setFileTime(QDateTime::currentDateTime().addDays(-days), QFileDevice::FileModificationTime));
+        };
+        touch(b + QStringLiteral("/two.txt"));
+        QVERIFY(QFile::copy(a + QStringLiteral("/three.txt"), b + QStringLiteral("/three.txt")));
+        age(b + QStringLiteral("/two.txt"), 5);
+        age(a + QStringLiteral("/three.txt"), 3);
+        age(b + QStringLiteral("/three.txt"), 3);
+        FolderTab *t = w->display(0)->currentTab();
+        FolderTab *other = w->display(1)->currentTab();
+        t->refresh();
+        other->refresh();
+        waitListed(other, 3);
+        auto names = [](const QStringList &paths) {
+            QStringList out;
+            for (const QString &p : paths)
+                out << QFileInfo(p).fileName();
+            out.sort();
+            return out;
+        };
+        QVERIFY(w->runCommand(QStringLiteral("Select COMPARE=newerormissing")));
+        QCOMPARE(names(t->selectedPaths()), (QStringList{QStringLiteral("one.txt"), QStringLiteral("two.txt")}));
+        QVERIFY(w->runCommand(QStringLiteral("Select COMPARE=missing")));
+        QCOMPARE(names(t->selectedPaths()), QStringList{QStringLiteral("one.txt")});
+        QVERIFY(w->runCommand(QStringLiteral("Select COMPARE=same BOTH")));
+        QCOMPARE(names(t->selectedPaths()), QStringList{QStringLiteral("three.txt")});
+        QCOMPARE(names(other->selectedPaths()), QStringList{QStringLiteral("three.txt")});
+        // Add and deselect.
+        QVERIFY(w->runCommand(QStringLiteral("Select PATTERN=one* ADD")));
+        QCOMPARE(names(t->selectedPaths()), (QStringList{QStringLiteral("one.txt"), QStringLiteral("three.txt")}));
+        QVERIFY(w->runCommand(QStringLiteral("Select PATTERN=three* DESELECT")));
+        QCOMPARE(names(t->selectedPaths()), QStringList{QStringLiteral("one.txt")});
+        QVERIFY(w->runCommand(QStringLiteral("Select OLDER=2")));
+        QCOMPARE(names(t->selectedPaths()), QStringList{QStringLiteral("three.txt")});
+        QVERIFY(!runFailing(QStringLiteral("Select COMPARE=bigger")));
+        QVERIFY(!runFailing(QStringLiteral("Select KIND=spaceship")));
+        // Not without the other display.
+        QVERIFY(w->runCommand(QStringLiteral("Set DUAL=off")));
+        QVERIFY(!runFailing(QStringLiteral("Select COMPARE=newer")));
+        QVERIFY(w->runCommand(QStringLiteral("Set DUAL=on")));
+
+        // The window builds the same commands.
+        QVERIFY(w->runCommand(QStringLiteral("Select DIALOG")));
+        SelectDialog *dlg = w->findChild<SelectDialog *>();
+        QVERIFY(dlg);
+        dlg->patternEdit()->setText(QStringLiteral("*.txt; my file*"));
+        dlg->compareBox()->setCurrentIndex(dlg->compareBox()->findData(QStringLiteral("newer")));
+        dlg->bothBox()->setChecked(true);
+        QCOMPARE(dlg->command(QStringLiteral("ADD")), QStringLiteral("Select PATTERN=\"*.txt; my file*\" COMPARE=newer BOTH ADD"));
         dlg->close();
     }
 

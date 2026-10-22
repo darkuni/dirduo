@@ -561,6 +561,32 @@ void FolderTab::invertSelection()
     m_selection->select(all, QItemSelectionModel::Toggle);
 }
 
+int FolderTab::selectWhere(const std::function<bool(const FileItem &)> &test, SelectMode mode)
+{
+    QItemSelection selection;
+    int count = 0;
+    for (int r = 0; r < m_proxy->rowCount(); ++r) {
+        const QModelIndex idx = m_proxy->index(r, 0);
+        if (test(m_model->item(m_proxy->mapToSource(idx).row()))) {
+            selection.select(idx, idx);
+            ++count;
+        }
+    }
+    const QItemSelectionModel::SelectionFlags how = mode == SelectMode::Replace ? QItemSelectionModel::ClearAndSelect
+        : mode == SelectMode::Add                                               ? QItemSelectionModel::Select
+                                                                                : QItemSelectionModel::Deselect;
+    if (mode == SelectMode::Replace && selection.isEmpty())
+        m_selection->clearSelection();
+    else
+        m_selection->select(selection, how | QItemSelectionModel::Rows);
+    if (count > 0 && mode != SelectMode::Remove) {
+        const QModelIndex first = selection.first().topLeft();
+        m_selection->setCurrentIndex(first, QItemSelectionModel::NoUpdate);
+        view()->scrollTo(first);
+    }
+    return count;
+}
+
 int FolderTab::selectPattern(const QString &wildcard)
 {
     const QRegularExpression re(QRegularExpression::wildcardToRegularExpression(wildcard),
