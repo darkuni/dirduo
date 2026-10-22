@@ -10,7 +10,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE RelWithDebInfo)
 endif()
 
-set(LINOPUS_APP_ID "com.mwcontent.Linopus")
+set(LINOPUS_APP_ID "com.monroeworld.Linopus")
 
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Concurrent)
 
@@ -55,7 +55,7 @@ add_library(linopus_ui STATIC
     src/ui/FileDisplay.cpp
     src/ui/ButtonBar.cpp
     src/ui/CollisionDialog.cpp
-    src/ui/JobsPanel.cpp
+    src/ui/ProgressWindow.cpp
     src/ui/ListerWindow.cpp
     src/ui/AppContext.cpp
 )

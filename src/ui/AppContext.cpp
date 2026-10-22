@@ -6,6 +6,7 @@
 #include "core/Paths.h"
 #include "ui/CollisionDialog.h"
 #include "ui/ListerWindow.h"
+#include "ui/ProgressWindow.h"
 
 #include <QApplication>
 #include <QDir>
@@ -24,6 +25,7 @@ AppContext::AppContext(QObject *parent)
     , m_aliases(std::make_unique<AliasManager>())
     , m_jobs(std::make_unique<JobManager>())
     , m_engine(std::make_unique<CommandEngine>(*m_aliases, *m_jobs))
+    , m_progress(std::make_unique<ProgressWindows>(*m_jobs))
 {
     g_instance = this;
     connect(m_jobs.get(), &JobManager::collisionRequested, this, &AppContext::onCollision);
@@ -100,6 +102,7 @@ void AppContext::listerActivated(ListerWindow *lister)
 {
     m_listers.removeAll(QPointer<ListerWindow>(lister));
     m_listers.prepend(lister);
+    m_progress->setAnchor(lister);
 }
 
 void AppContext::listerClosing(ListerWindow *lister)
@@ -175,7 +178,10 @@ void AppContext::saveSession(const QList<ListerWindow *> &listers)
 
 void AppContext::onCollision(const CollisionRequest &request)
 {
-    ListerWindow *parent = activeLister();
+    // Ask over the job's own progress window when it has one.
+    QWidget *parent = m_progress->windowFor(request.jobId);
+    if (!parent || !parent->isVisible())
+        parent = activeLister();
     CollisionDialog dlg(request, 0, parent);
     dlg.exec();
     CollisionDecision d = dlg.decision();

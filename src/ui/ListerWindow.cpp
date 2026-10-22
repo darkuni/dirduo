@@ -9,7 +9,7 @@
 #include "ui/ButtonBar.h"
 #include "ui/FileDisplay.h"
 #include "ui/FolderTab.h"
-#include "ui/JobsPanel.h"
+#include "ui/ProgressWindow.h"
 
 #include <QAbstractItemView>
 #include <QAction>
@@ -19,7 +19,6 @@
 #include <QCloseEvent>
 #include <QDesktopServices>
 #include <QDir>
-#include <QDockWidget>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QGuiApplication>
@@ -92,7 +91,6 @@ ListerWindow::ListerWindow(AppContext &app, QWidget *parent)
     buildActions();
     buildMenus();
     buildToolbar();
-    buildJobsDock();
     updateRoles();
 }
 
@@ -116,8 +114,11 @@ void ListerWindow::buildActions()
 {
     auto *layoutGroup = new QActionGroup(this);
     m_actSingle = commandAction(QStringLiteral("Single Display"), QStringLiteral("Set DUAL=off"));
-    m_actDualSide = commandAction(QStringLiteral("Dual, Side by Side"), QStringLiteral("Set DUAL=vertical"));
-    m_actDualStacked = commandAction(QStringLiteral("Dual, Stacked"), QStringLiteral("Set DUAL=horizontal"));
+    m_actDualSide = commandAction(QStringLiteral("Dual Vertical (side by side)"), QStringLiteral("Set DUAL=vertical"),
+                                  QKeySequence(QStringLiteral("Ctrl+Shift+V")), QStringLiteral("view-split-left-right"));
+    m_actDualStacked = commandAction(QStringLiteral("Dual Horizontal (top and bottom)"), QStringLiteral("Set DUAL=horizontal"),
+                                     QKeySequence(QStringLiteral("Ctrl+Shift+H")), QStringLiteral("view-split-top-bottom"));
+    m_actSingle->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+1")));
     for (QAction *a : {m_actSingle, m_actDualSide, m_actDualStacked}) {
         a->setCheckable(true);
         layoutGroup->addAction(a);
@@ -228,15 +229,10 @@ void ListerWindow::buildMenus()
     connect(m_aliasMenu, &QMenu::aboutToShow, this, &ListerWindow::rebuildAliasMenu);
 
     QMenu *window = menuBar()->addMenu(QStringLiteral("&Window"));
-    QAction *jobs = window->addAction(QStringLiteral("Jobs"));
-    jobs->setCheckable(true);
-    connect(window, &QMenu::aboutToShow, this, [this, jobs]() { jobs->setChecked(m_jobsDock && m_jobsDock->isVisible()); });
-    connect(jobs, &QAction::triggered, this, [this](bool on) {
-        if (m_jobsDock) {
-            m_jobsDock->setVisible(on);
-            m_jobsAutoShown = false;
-        }
-    });
+    QAction *jobs = window->addAction(QIcon::fromTheme(QStringLiteral("view-process-all")), QStringLiteral("File Operations"));
+    jobs->setShortcut(QKeySequence(QStringLiteral("Ctrl+J")));
+    connect(window, &QMenu::aboutToShow, this, [this, jobs]() { jobs->setEnabled(m_app.progress().count() > 0); });
+    connect(jobs, &QAction::triggered, this, [this]() { m_app.progress().showAll(); });
 
     QMenu *help = menuBar()->addMenu(QStringLiteral("&Help"));
     QAction *about = help->addAction(QStringLiteral("About Linopus"));
@@ -257,28 +253,6 @@ void ListerWindow::buildToolbar()
     m_buttons = new ButtonBar(QStringLiteral("Buttons"), defs, this);
     connect(m_buttons, &ButtonBar::commandTriggered, this, [this](const QString &cmd) { runCommand(cmd); });
     addToolBar(Qt::TopToolBarArea, m_buttons);
-}
-
-void ListerWindow::buildJobsDock()
-{
-    m_jobsDock = new QDockWidget(QStringLiteral("Jobs"), this);
-    m_jobsDock->setObjectName(QStringLiteral("jobs-dock"));
-    m_jobsPanel = new JobsPanel(m_app.jobs(), m_jobsDock);
-    m_jobsPanel->setMinimumHeight(150);
-    m_jobsDock->setWidget(m_jobsPanel);
-    addDockWidget(Qt::BottomDockWidgetArea, m_jobsDock);
-    m_jobsDock->hide();
-    connect(m_jobsPanel, &JobsPanel::attentionWanted, this, [this]() {
-        if (!m_jobsDock->isVisible() && isActiveWindow()) {
-            m_jobsDock->show();
-            m_jobsAutoShown = true;
-        }
-    });
-    connect(m_jobsPanel, &JobsPanel::becameEmpty, this, [this]() {
-        if (m_jobsAutoShown)
-            m_jobsDock->hide();
-        m_jobsAutoShown = false;
-    });
 }
 
 // ---------------------------------------------------------------- layout & roles
@@ -870,7 +844,6 @@ bool ListerWindow::restoreListerState(QSettings &s)
     }
     restoreGeometry(s.value(QStringLiteral("geometry")).toByteArray());
     QMainWindow::restoreState(s.value(QStringLiteral("windowState")).toByteArray());
-    m_jobsDock->hide();
     m_split->restoreState(s.value(QStringLiteral("splitter")).toByteArray());
     updateRoles();
     if (auto *t = sourceTab())

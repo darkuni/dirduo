@@ -86,6 +86,11 @@ JobSnapshot Job::snapshot() const
     s.state = m_state;
     s.title = describe(m_spec);
     s.currentItem = m_current;
+    s.currentSize = m_currentSize;
+    s.currentDone = m_currentDone;
+    if (!m_spec.sources.isEmpty())
+        s.fromFolder = QFileInfo(m_spec.sources.first()).absolutePath();
+    s.toFolder = m_spec.destDir;
     s.totalBytes = m_totalBytes;
     s.doneBytes = m_doneBytes;
     s.totalItems = m_totalItems;
@@ -180,16 +185,19 @@ void Job::addError(const QString &message)
     m_errors << message;
 }
 
-void Job::setCurrent(const QString &item)
+void Job::setCurrent(const QString &item, qint64 size)
 {
     QMutexLocker lock(&m_mutex);
     m_current = item;
+    m_currentSize = size;
+    m_currentDone = 0;
 }
 
 void Job::addDone(qint64 bytes, int items)
 {
     QMutexLocker lock(&m_mutex);
     m_doneBytes += bytes;
+    m_currentDone += bytes;
     m_doneItems += items;
 }
 
@@ -397,7 +405,7 @@ void Job::runCopyMove()
         }
         const QString parentTarget = e.parent < 0 ? dest : targetPath[static_cast<size_t>(e.parent)];
         QString target = parentTarget + QLatin1Char('/') + e.name;
-        setCurrent(e.src);
+        setCurrent(e.src, e.size);
 
         // Copying into the folder the item already lives in: pick a free name.
         if (target == e.src && !move)

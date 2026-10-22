@@ -9,10 +9,8 @@ class AppContext;
 class ButtonBar;
 class FileDisplay;
 class FolderTab;
-class JobsPanel;
 class QAction;
 class QActionGroup;
-class QDockWidget;
 class QMenu;
 class QSettings;
 class QSplitter;
@@ -60,7 +58,6 @@ private:
     void buildActions();
     void buildMenus();
     void buildToolbar();
-    void buildJobsDock();
 
     void setDual(bool on);
     void setSideBySide(bool sideBySide);
@@ -92,9 +89,6 @@ private:
     QString m_lastPath[2]; // for navigation lock
 
     ButtonBar *m_buttons = nullptr;
-    QDockWidget *m_jobsDock = nullptr;
-    JobsPanel *m_jobsPanel = nullptr;
-    bool m_jobsAutoShown = false;
 
     QPointer<FolderTab> m_changeTarget; // tab that afterLocalChange refers to
 

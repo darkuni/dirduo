@@ -60,7 +60,11 @@ struct JobSnapshot
     JobType type = JobType::Copy;
     JobState state = JobState::Queued;
     QString title;
+    QString fromFolder; // folder of the first source
+    QString toFolder;   // destination (Copy and Move)
     QString currentItem;
+    qint64 currentSize = 0; // bytes of the file being copied right now
+    qint64 currentDone = 0;
     qint64 totalBytes = 0;
     qint64 doneBytes = 0;
     int totalItems = 0;
@@ -125,7 +129,7 @@ private:
     void setState(JobState s);
     bool checkpoint(); // honours pause; false once cancelled
     void addError(const QString &message);
-    void setCurrent(const QString &item);
+    void setCurrent(const QString &item, qint64 size = 0);
     void addDone(qint64 bytes, int items);
 
     bool scan(const QString &path, const QString &name, int parent, std::vector<Entry> &out);
@@ -156,6 +160,8 @@ private:
     CollisionDecision m_stickyDecision;
 
     QString m_current;
+    qint64 m_currentSize = 0;
+    qint64 m_currentDone = 0;
     qint64 m_totalBytes = 0;
     qint64 m_doneBytes = 0;
     int m_totalItems = 0;

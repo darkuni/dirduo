@@ -6,7 +6,7 @@ Targets: SteamOS Desktop Mode on the Steam Deck (x86_64) and Steam Frame (aarch6
 
 ## Phase 1 (this build)
 
-- Listers: any number of windows, each single or dual (side by side or stacked), switchable live
+- Listers: any number of windows, each single, dual vertical (side by side) or dual horizontal (top and bottom), switchable live from the toolbar (Vertical / Horizontal; right-click either for a single display), the View menu, or Ctrl+Shift+V / Ctrl+Shift+H / Ctrl+Shift+1
 - SOURCE and DEST badges; Tab moves to the other display and makes it the source; the destination can be locked
 - Navigation lock: the other display follows you into and out of folders (dev and staging trees side by side)
 - Tabs per display with back/forward/up history; middle-click a folder to open it in a new tab
@@ -14,7 +14,7 @@ Targets: SteamOS Desktop Mode on the Steam Deck (x86_64) and Steam Frame (aarch6
 - Details, list and icon views; folders first; natural sort (audio2 before audio10)
 - Inline rename: F2, name selected up to the extension; Up/Down/Tab commit and keep renaming the next item
 - Aliases: `/downloads`, `/music`, `/sdcard`, `/steam` and the rest, usable anywhere a path is; add your own from Go > Aliases
-- Job manager: copy, move, trash and delete run in the background, queued per drive, with pause, resume, cancel, start-now, speed and time left
+- File operations run on their own threads, each in its own pop-up progress window (Opus style): current file and total progress, speed, time left, pause/resume, cancel, and Start Now for a job waiting behind another on the same drive. Jobs to the same drive queue; different drives run at once. Windows close themselves when a job finishes cleanly and stay open listing anything that failed. Closing a window mid-job keeps it running; Window > File Operations (Ctrl+J) brings it back.
 - Collision dialog with both files side by side: Replace, Replace if Newer, Skip, Rename, Cancel, and apply-to-all
 - Freedesktop trash (shared with Dolphin and the desktop), including per-device trash on SD cards and USB drives
 - Clipboard cut/copy/paste of files, interoperable with Dolphin and Nautilus
@@ -85,6 +85,8 @@ pods=/downloads/podcasts
 | Ctrl+Shift+S | Select by pattern |
 | F5 | Refresh |
 | Ctrl+N | New lister |
+| Ctrl+Shift+V / H / 1 | Dual vertical / dual horizontal / single |
+| Ctrl+J | Show file operation windows |
 
 ## Toolbar file
 
@@ -125,20 +127,22 @@ ctest --test-dir build
 ./build/linopus
 ```
 
-### Flatpak
+### Flatpak on the Deck
 
-CI builds `linopus-x86_64.flatpak` and `linopus-aarch64.flatpak` on every push (Actions > the run > Artifacts). On the Deck, in Desktop Mode:
+Two ways to get a test build.
+
+**Build it on the Deck** (no GitHub needed). Copy this folder to the Deck, then in Desktop Mode open Konsole in it and run:
+
+```sh
+sh scripts/build-flatpak-on-deck.sh
+```
+
+It installs Flathub's own Flatpak builder and the KDE 6.10 SDK as user Flatpaks (nothing touches the read-only system), builds Linopus, and installs it. The first run downloads about 1 GB. Linopus then appears in the application menu; it also runs as `flatpak run com.monroeworld.Linopus`.
+
+**From CI.** Every push to GitHub builds `linopus-x86_64.flatpak` and `linopus-aarch64.flatpak` (Actions > the run > Artifacts). Download the x86_64 one on the Deck, unzip it, then:
 
 ```sh
 flatpak install --user linopus-x86_64.flatpak
-flatpak run com.mwcontent.Linopus
-```
-
-Building the Flatpak locally:
-
-```sh
-flatpak install --user flathub org.kde.Sdk//6.10 org.kde.Platform//6.10
-flatpak-builder --user --install --force-clean flatpak-build flatpak/com.mwcontent.Linopus.yml
 ```
 
 ### Tests and screenshots

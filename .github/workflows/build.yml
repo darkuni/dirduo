@@ -46,6 +46,6 @@ jobs:
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: linopus-${{ matrix.variant.arch }}.flatpak
-          manifest-path: flatpak/com.mwcontent.Linopus.yml
+          manifest-path: flatpak/com.monroeworld.Linopus.yml
           arch: ${{ matrix.variant.arch }}
           cache-key: flatpak-builder-${{ matrix.variant.arch }}-${{ github.sha }}

@@ -10,11 +10,11 @@
 #include "ui/FileDisplay.h"
 #include "ui/FolderTab.h"
 #include "ui/ListerWindow.h"
+#include "ui/ProgressWindow.h"
 
 #include <QAbstractItemView>
 #include <QApplication>
 #include <QDir>
-#include <QDockWidget>
 #include <QFile>
 #include <QIcon>
 #include <QTemporaryDir>
@@ -104,25 +104,29 @@ int main(int argc, char *argv[])
     dlg.grab().save(out + QStringLiteral("/07-collision.png"));
     dlg.hide();
 
-    // A paused 40 MB copy and a second job queued behind it on the same drive.
-    writeFile(root + QStringLiteral("/Videos/episode.mkv"), 40 * 1024 * 1024);
+    // A 200 MB copy paused partway, plus a second job queued behind it on the
+    // same drive. Each gets its own progress window.
+    w->runCommand(QStringLiteral("Set DESTLOCK=off"));
+    writeFile(root + QStringLiteral("/Videos/episode.mkv"), 200 * 1024 * 1024);
     JobSpec big;
     big.type = JobType::Copy;
     big.sources = {root + QStringLiteral("/Videos/episode.mkv")};
     big.destDir = root + QStringLiteral("/Backup");
     const int first = context.jobs().enqueue(big);
+    QTest::qWait(60);
     context.jobs().pause(first);
     JobSpec small = big;
     small.sources = {root + QStringLiteral("/Documents/notes.md")};
-    context.jobs().enqueue(small);
+    const int second = context.jobs().enqueue(small);
     QTest::qWait(900);
-    w->runCommand(QStringLiteral("Set DESTLOCK=off"));
-    if (auto *dock = w->findChild<QDockWidget *>())
-        dock->show();
-    shot(w, out, QStringLiteral("08-jobs"));
+    if (ProgressWindow *pw = context.progress().windowFor(first))
+        pw->grab().save(out + QStringLiteral("/08-progress-paused.png"));
+    if (ProgressWindow *pw = context.progress().windowFor(second))
+        pw->grab().save(out + QStringLiteral("/09-progress-queued.png"));
     for (int id : context.jobs().jobIds())
         context.jobs().cancel(id);
     context.jobs().waitForIdle(5000);
+    QTest::qWait(200);
 
     w->close();
     return 0;

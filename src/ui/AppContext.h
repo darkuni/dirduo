@@ -12,6 +12,7 @@ class AliasManager;
 class CommandEngine;
 class JobManager;
 class ListerWindow;
+class ProgressWindows;
 class QSettings;
 
 // Application-wide services shared by every lister: aliases, the job queue,
@@ -33,6 +34,7 @@ public:
     JobManager &jobs() { return *m_jobs; }
     CommandEngine &engine() { return *m_engine; }
     QSettings &settings() { return *m_settings; }
+    ProgressWindows &progress() { return *m_progress; }
 
     ListerWindow *newLister(const QString &startPath = {});
     // The lister used as destination when the active one shows a single display.
@@ -58,6 +60,7 @@ private:
     std::unique_ptr<AliasManager> m_aliases;
     std::unique_ptr<JobManager> m_jobs;
     std::unique_ptr<CommandEngine> m_engine;
+    std::unique_ptr<ProgressWindows> m_progress;
     QList<QPointer<ListerWindow>> m_listers; // most recently active first
     bool m_quitting = false;
 };

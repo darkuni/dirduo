@@ -118,8 +118,10 @@ QList<ButtonDef> ButtonBar::defaultButtons()
         sep,
         b("Swap", "view-split-left-right", "Swap the folders in the two displays", "Go SWAP"),
         b("Same", "go-jump", "Open the source folder in the destination", "Go {sourcepath} OPENINDEST"),
-        b("Dual", "view-split-left-right", "Single or dual display (right-click: side by side or stacked)",
-          "Set DUAL=toggle", "Set DUAL=flip"),
+        b("Vertical", "view-split-left-right", "Dual vertical: displays side by side (right-click: single display)",
+          "Set DUAL=vertical", "Set DUAL=off"),
+        b("Horizontal", "view-split-top-bottom", "Dual horizontal: displays top and bottom (right-click: single display)",
+          "Set DUAL=horizontal", "Set DUAL=off"),
         b("Lock Dest", "object-locked", "Keep the destination where it is", "Set DESTLOCK=toggle"),
         b("Hidden", "view-hidden", "Show or hide hidden files", "Set HIDDEN=toggle"),
     };
