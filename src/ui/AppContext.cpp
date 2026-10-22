@@ -16,6 +16,7 @@
 #include <QFileInfo>
 #include <QIcon>
 #include <QMessageBox>
+#include "ui/ButtonBar.h"
 #include "ui/Style.h"
 
 #include <QSettings>
@@ -27,6 +28,7 @@ AppContext *g_instance = nullptr;
 AppContext::AppContext(QObject *parent)
     : QObject(parent)
     , m_settings(std::make_unique<QSettings>(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat))
+    , m_toolbars(std::make_unique<ToolbarStore>(Paths::configFile(QStringLiteral("toolbars"))))
     , m_aliases(std::make_unique<AliasManager>())
     , m_jobs(std::make_unique<JobManager>())
     , m_engine(std::make_unique<CommandEngine>(*m_aliases, *m_jobs))

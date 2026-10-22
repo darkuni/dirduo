@@ -4,6 +4,10 @@
 #include "ui/AppContext.h"
 #include "ui/BreadcrumbBar.h"
 #include "ui/ButtonBar.h"
+#include "ui/ButtonEditor.h"
+#include "ui/CommandConsole.h"
+#include "ui/CustomizeDialog.h"
+#include "core/CommandCatalog.h"
 #include "ui/DrivesBar.h"
 #include "ui/ToolbarStrip.h"
 #include "ui/FileDisplay.h"
@@ -17,6 +21,14 @@
 #include <QAbstractItemView>
 #include <QApplication>
 #include <QDir>
+#include <QCheckBox>
+#include <QJsonDocument>
+#include <QKeySequenceEdit>
+#include <QListWidget>
+#include <QMenu>
+#include <QMimeData>
+#include <QPlainTextEdit>
+#include <QUrl>
 #include <QStandardPaths>
 #include <QHeaderView>
 #include <QTreeView>
@@ -580,6 +592,242 @@ private Q_SLOTS:
         QVERIFY(l.last() == QStringLiteral("Last year") || l.last() == QStringLiteral("Older"));
         QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=size")));
         QCOMPARE(labels(t), (QStringList{QStringLiteral("Tiny (under 16 KB)")}));
+    }
+
+    void buttonStatesFollowConditions()
+    {
+        ToolbarStore &store = m_app->toolbars();
+        ButtonDef d;
+        d.label = QStringLiteral("Needs Selection");
+        d.left = QStringLiteral("Set VIEW=list");
+        d.enableWhen = QStringLiteral("selection && dest");
+        d.checkWhen = QStringLiteral("layout=vertical");
+        store.insertButton(QStringLiteral("buttons"), 0, d);
+        ButtonBar *bar = w->buttonBar(QStringLiteral("buttons"));
+        QTRY_VERIFY(bar->buttonAt(0) && bar->buttonAt(0)->text() == QStringLiteral("Needs Selection"));
+        FolderTab *t = w->display(0)->currentTab();
+        t->selectNone();
+        QTRY_VERIFY(!bar->buttonAt(0)->isEnabled());
+        t->selectAll();
+        QTRY_VERIFY(bar->buttonAt(0)->isEnabled());
+        QVERIFY(bar->buttonAt(0)->isChecked());
+        QVERIFY(w->runCommand(QStringLiteral("Set DUAL=horizontal")));
+        QTRY_VERIFY(!bar->buttonAt(0)->isChecked());
+        QVERIFY(w->runCommand(QStringLiteral("Set DUAL=off")));
+        QTRY_VERIFY(!bar->buttonAt(0)->isEnabled()); // no destination
+        // A broken condition leaves the button usable.
+        QString err;
+        QVERIFY(w->evaluateCondition(QStringLiteral("selection &&"), true, &err));
+        QVERIFY(!err.isEmpty());
+        QVERIFY(w->evaluateCondition(QStringLiteral("files && !folders && view=details"), false));
+    }
+
+    void menuButtonsRunTheirItems()
+    {
+        ButtonDef menu;
+        menu.label = QStringLiteral("Views");
+        ButtonDef a;
+        a.label = QStringLiteral("As List");
+        a.left = QStringLiteral("Set VIEW=list");
+        ButtonDef b;
+        b.label = QStringLiteral("As Icons");
+        b.left = QStringLiteral("Set VIEW=icons");
+        b.checkWhen = QStringLiteral("view=icons");
+        menu.children = {a, ButtonDef::makeSeparator(), b};
+        m_app->toolbars().insertButton(QStringLiteral("buttons"), 0, menu);
+        ButtonBar *bar = w->buttonBar(QStringLiteral("buttons"));
+        QTRY_VERIFY(bar->buttonAt(0) && bar->buttonAt(0)->menu());
+        QMenu *m = bar->buttonAt(0)->menu();
+        QCOMPARE(m->actions().size(), 3);
+        m->actions().at(2)->trigger();
+        QCOMPARE(w->display(0)->currentTab()->viewMode(), FolderTab::ViewMode::Icons);
+        Q_EMIT m->aboutToShow();
+        QVERIFY(m->actions().at(2)->isChecked());
+    }
+
+    void filesDroppedOnAButton()
+    {
+        ButtonBar *bar = w->buttonBar(QStringLiteral("buttons"));
+        ThreeButton *copy = bar->buttonAt(0);
+        QCOMPARE(copy->text(), QStringLiteral("Copy"));
+        w->display(0)->currentTab()->selectNone();
+        w->updateButtonStates();
+        auto *mime = new QMimeData;
+        mime->setUrls({QUrl::fromLocalFile(root + QStringLiteral("/a/two.txt"))});
+        QVERIFY(!copy->isEnabled()); // nothing selected, yet it takes dropped files
+        const QPoint at = copy->geometry().center();
+        QDragEnterEvent enter(at, Qt::CopyAction, mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(bar, &enter);
+        QDragMoveEvent move(at, Qt::CopyAction, mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(bar, &move);
+        QVERIFY(move.isAccepted());
+        QDropEvent drop(QPointF(at), Qt::CopyAction, mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(bar, &drop);
+        m_app->jobs().waitForIdle(5000);
+        QTRY_VERIFY(QFile::exists(root + QStringLiteral("/b/two.txt")));
+        QVERIFY(!QFile::exists(root + QStringLiteral("/b/one.txt"))); // only what was dropped
+        delete mime;
+    }
+
+    void buttonHotkeys()
+    {
+        ButtonDef d;
+        d.label = QStringLiteral("Icons");
+        d.left = QStringLiteral("Set VIEW=icons");
+        d.key = QStringLiteral("Ctrl+Alt+K");
+        m_app->toolbars().insertButton(QStringLiteral("buttons"), 0, d);
+        QTRY_VERIFY(w->buttonBar(QStringLiteral("buttons"))->buttonAt(0)->text() == QStringLiteral("Icons"));
+        w->activateWindow();
+        QTest::keyClick(w, Qt::Key_K, Qt::ControlModifier | Qt::AltModifier);
+        QTRY_COMPARE(w->display(0)->currentTab()->viewMode(), FolderTab::ViewMode::Icons);
+    }
+
+    void customizeModeMovesButtons()
+    {
+        ToolbarStore &store = m_app->toolbars();
+        QVERIFY(w->runCommand(QStringLiteral("Toolbar CUSTOMIZE")));
+        QVERIFY(w->isCustomizing());
+        ButtonBar *main = w->buttonBar(QStringLiteral("buttons"));
+        QVERIFY(main->editMode());
+        // A click in customize mode does not run the button.
+        const QString before = w->display(0)->currentTab()->path();
+        QTest::mouseClick(main->buttonAt(0), Qt::LeftButton);
+        m_app->jobs().waitForIdle(2000);
+        QVERIFY(!QFile::exists(root + QStringLiteral("/b/one.txt")));
+        QCOMPARE(w->display(0)->currentTab()->path(), before);
+
+        auto dropOn = [](ButtonBar *bar, const QJsonObject &payload, int beforeIndex, Qt::KeyboardModifiers mods = {}) {
+            auto *mime = new QMimeData;
+            mime->setData(QLatin1String(ButtonBar::kMime), QJsonDocument(payload).toJson());
+            QPointF pos(4, 4);
+            if (beforeIndex < bar->items().size())
+                pos = QPointF(bar->items().at(beforeIndex)->geometry().left() + 1, bar->items().at(beforeIndex)->geometry().center().y());
+            else if (!bar->items().isEmpty())
+                pos = QPointF(bar->items().last()->geometry().right() - 1, bar->items().last()->geometry().center().y());
+            // A real drop always follows a drag entering the widget.
+            QDragEnterEvent enter(pos.toPoint(), Qt::MoveAction | Qt::CopyAction, mime, Qt::LeftButton, mods);
+            QApplication::sendEvent(bar, &enter);
+            QDropEvent drop(pos, Qt::MoveAction | Qt::CopyAction, mime, Qt::LeftButton, mods);
+            QApplication::sendEvent(bar, &drop);
+            delete mime;
+        };
+        auto labels = [&store](const QString &id) {
+            QStringList l;
+            for (const ButtonDef &d : store.toolbar(id).buttons)
+                l << (d.separator ? QStringLiteral("|") : d.label);
+            return l;
+        };
+        // Move Copy to after Move within the main bar.
+        QJsonObject p;
+        p.insert(QStringLiteral("toolbar"), QStringLiteral("buttons"));
+        p.insert(QStringLiteral("index"), 0);
+        p.insert(QStringLiteral("button"), store.toolbar(QStringLiteral("buttons")).buttons.at(0).toJson());
+        dropOn(main, p, 2);
+        QCOMPARE(labels(QStringLiteral("buttons")).mid(0, 3), (QStringList{QStringLiteral("Move"), QStringLiteral("Copy"), QStringLiteral("Delete")}));
+
+        // A new toolbar, shown here; move Delete onto it, copy Rename with Ctrl.
+        const QString id = store.create(QStringLiteral("My Buttons"));
+        ButtonBar *mine = w->buttonBar(id);
+        QVERIFY(mine && w->isButtonBarVisible(id) && mine->editMode());
+        p.insert(QStringLiteral("index"), 2);
+        p.insert(QStringLiteral("button"), store.toolbar(QStringLiteral("buttons")).buttons.at(2).toJson());
+        dropOn(mine, p, 0);
+        QCOMPARE(labels(id), QStringList{QStringLiteral("Delete")});
+        QVERIFY(!labels(QStringLiteral("buttons")).contains(QStringLiteral("Delete")));
+        QApplication::processEvents();
+        p.insert(QStringLiteral("index"), 2);
+        p.insert(QStringLiteral("button"), store.toolbar(QStringLiteral("buttons")).buttons.at(2).toJson());
+        QCOMPARE(store.toolbar(QStringLiteral("buttons")).buttons.at(2).label, QStringLiteral("Rename"));
+        dropOn(mine, p, 1, Qt::ControlModifier);
+        QCOMPARE(labels(id), (QStringList{QStringLiteral("Delete"), QStringLiteral("Rename")}));
+        QVERIFY(labels(QStringLiteral("buttons")).contains(QStringLiteral("Rename")));
+
+        // A ready-made button from the dialog's command list.
+        CustomizeDialog *dlg = w->customizeDialog();
+        QVERIFY(dlg);
+        int theme = -1;
+        for (int i = 0; i < CommandCatalog::buttons().size(); ++i) {
+            if (CommandCatalog::buttons().at(i).label == QLatin1String("Theme"))
+                theme = i;
+        }
+        dlg->toolbarList()->setCurrentRow(1);
+        QCOMPARE(dlg->currentToolbar(), id);
+        dlg->addCatalogButton(theme);
+        QCOMPARE(labels(id).last(), QStringLiteral("Theme"));
+
+        // Hiding a toolbar from the list.
+        dlg->toolbarList()->item(1)->setCheckState(Qt::Unchecked);
+        QVERIFY(!w->isButtonBarVisible(id));
+
+        // Saved: a fresh store reads the same thing.
+        ToolbarStore again(store.fileFor(id).section(QLatin1Char('/'), 0, -2));
+        QCOMPARE(again.toolbar(id).name, QStringLiteral("My Buttons"));
+        QCOMPARE(again.toolbar(id).buttons.size(), 3);
+        QVERIFY(again.isCustomized(QStringLiteral("buttons")));
+
+        dlg->close();
+        QApplication::processEvents();
+        QTRY_VERIFY(!w->isCustomizing());
+        QVERIFY(!main->editMode());
+
+        // Removing it takes it out of the lister; reset brings the standard bar back.
+        QVERIFY(store.remove(id));
+        QVERIFY(!w->buttonBar(id));
+        store.resetToDefault(QStringLiteral("buttons"));
+        QCOMPARE(labels(QStringLiteral("buttons")).mid(0, 3), (QStringList{QStringLiteral("Copy"), QStringLiteral("Move"), QStringLiteral("Delete")}));
+        QVERIFY(!store.isCustomized(QStringLiteral("buttons")));
+    }
+
+    void buttonEditorValidates()
+    {
+        ButtonDef d;
+        d.label = QStringLiteral("Mine");
+        d.left = QStringLiteral("Go ~");
+        ButtonEditor e(d, w);
+        QVERIFY(e.validationError().isEmpty());
+        e.labelEdit()->clear();
+        QVERIFY(e.validationError().contains(QStringLiteral("label")));
+        e.labelEdit()->setText(QStringLiteral("Mine"));
+        e.leftEdit()->setPlainText(QStringLiteral("Bogus thing"));
+        QVERIFY(e.validationError().contains(QStringLiteral("Bogus")));
+        e.leftEdit()->setPlainText(QStringLiteral("Go ~\nSet VIEW=list"));
+        e.enableEdit()->setText(QStringLiteral("selection && sellection"));
+        QVERIFY(e.validationError().contains(QStringLiteral("sellection")));
+        e.enableEdit()->setText(QStringLiteral("selection && !remote"));
+        QVERIFY(e.validationError().isEmpty());
+        e.menuCheck()->setChecked(true);
+        QVERIFY(e.validationError().contains(QStringLiteral("menu")));
+        e.menuCheck()->setChecked(false);
+        const ButtonDef out = e.button();
+        QCOMPARE(out.left, QStringLiteral("Go ~\nSet VIEW=list"));
+        QCOMPARE(out.enableWhen, QStringLiteral("selection && !remote"));
+        // Round trip through JSON keeps everything.
+        ButtonDef menu = out;
+        menu.left.clear();
+        menu.children = {out, ButtonDef::makeSeparator()};
+        menu.key = QStringLiteral("Ctrl+Shift+M");
+        QCOMPARE(ButtonDef::fromJson(menu.toJson()), menu);
+    }
+
+    void commandConsole()
+    {
+        w->showConsole();
+        CommandConsole *c = w->console();
+        QVERIFY(c);
+        QVERIFY(c->submit(QStringLiteral("Set VIEW=list")));
+        QCOMPARE(w->display(0)->currentTab()->viewMode(), FolderTab::ViewMode::List);
+        QVERIFY(!c->submit(QStringLiteral("Set BOGUS=1"))); // no error box: it prints
+        QVERIFY(c->output().contains(QStringLiteral("Set does not know BOGUS")));
+        QVERIFY(c->submit(QStringLiteral("help Set")));
+        QVERIFY(c->output().contains(QStringLiteral("GROUPBY=")));
+        // Tab completes; Up brings back the last command.
+        c->input()->setText(QStringLiteral("Set GROUPB"));
+        QTest::keyClick(c->input(), Qt::Key_Tab);
+        QCOMPARE(c->input()->text(), QStringLiteral("Set GROUPBY="));
+        c->input()->clear();
+        QTest::keyClick(c->input(), Qt::Key_Up);
+        QCOMPARE(c->input()->text(), QStringLiteral("help Set"));
+        c->close();
     }
 
     void sessionRoundTrip()

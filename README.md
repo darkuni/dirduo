@@ -4,7 +4,7 @@ A source/destination file manager for Linux in the spirit of Windows Directory O
 
 Targets: SteamOS Desktop Mode on the Steam Deck (x86_64) and Steam Frame (aarch64), and any Linux desktop after that. Qt 6 Widgets, C++20, shipped as a Flatpak on the KDE runtime.
 
-## Phase 1 (this build)
+## Phase 1
 
 - Listers: any number of windows, each single, dual vertical (side by side) or dual horizontal (top and bottom), switchable live from the toolbar (Vertical / Horizontal; right-click either for a single display), the View menu, or Ctrl+Shift+V / Ctrl+Shift+H / Ctrl+Shift+1
 - SOURCE and DEST badges; Tab moves to the other display and makes it the source; the destination can be locked
@@ -33,6 +33,27 @@ Servers and archives (KIO):
 - Servers have no trash, so Delete on a server is permanent and says so before it happens
 - Passwords go through KDE's password prompt and wallet; SFTP also uses your `~/.ssh` keys
 
+## Phase 2
+
+- Themes: Follow Desktop, Linopus Light, Linopus Dark and Workbench (Amiga blue, white and orange), from the Theme button, View > Theme or `Set THEME=`. File types have their own colors; SOURCE, DEST and a locked DEST each have an accent edge. Themes are `.ini` files: drop your own in `~/.config/linopus/themes`
+- Labels: color, bold or italic by wildcard (`labels.ini`)
+- Folder trees: one shared tree that follows the source, or one per display. The tree starts from Home, Root, each SD card, USB stick and disk, and your aliases
+- Columns: right-click the column header for Created, Accessed, Extension, Permissions, Owner and Group, Group By, and folder sizes
+- Grouping by type, name, size, date, extension or folder. Click a heading to select its group; click its arrow (or Left/Right) to fold it
+- Filter bar (Ctrl+F): text or wildcards, show or hide matches, files, folders or both
+- Check boxes on every row, so a stray click never drops a selection
+- Folder sizes on hover; Calculate All Folder Sizes (Ctrl+Shift+Z) sizes every folder with a bar
+- Flat view: everything under the folder, grouped by folder, mixed, or files only
+- Folder formats: save columns, sort, grouping and view for a folder, a folder and its subfolders, or as the default. Folders of pictures open as icons by themselves
+
+## Phase 3 (in progress)
+
+- Customize mode (Window > Customize Toolbars, or right-click a toolbar > Customize): drag buttons within a toolbar or to another one (Ctrl+drag copies), double-click to edit, right-click to duplicate, delete, add a separator or a new button. The dialog makes new toolbars, shows and hides them, and lists ready-made buttons to drag onto any bar
+- Button editor: label, icon, tooltip, commands for left, right and middle click, a hotkey, and conditions for when the button is greyed out or shown pressed. A button can be a menu of other buttons, nested as deep as you like
+- Buttons follow the lister: Copy and Move grey out without a selection or destination, toggles like Tree and Hidden show pressed while on
+- Drop files on a button to run it on those files instead of the selection
+- Command console (Ctrl+Shift+P): type any command and run it in the lister; Tab completes, Up/Down for history, `help` and `help Set` explain
+
 ## Commands
 
 Every button, menu item, hotkey, drop and inline rename runs one of these. Button functions can hold several lines; they run in order and stop at the first failure.
@@ -46,9 +67,9 @@ Every button, menu item, hotkey, drop and inline rename runs one of these. Butto
 | `Rename` | no arguments: rename in place; or `FROM=... TO=...` |
 | `CreateFolder` | `NAME="A, B, C"` makes all three; no name asks; `IN=...` |
 | `Clipboard` | `COPY`, `CUT`, `PASTE` |
-| `Set` | `DUAL=on\|off\|toggle\|vertical\|horizontal\|flip`, `SOURCE=toggle`, `DESTLOCK=on\|off\|toggle`, `NAVLOCK=on\|off\|toggle`, `VIEW=details\|list\|icons`, `HIDDEN=on\|off\|toggle` |
+| `Set` | `DUAL=on\|off\|toggle\|vertical\|horizontal\|flip`, `SOURCE=toggle`, `DESTLOCK=`, `NAVLOCK=`, `VIEW=details\|list\|icons`, `HIDDEN=`, `THEME=<name>\|next`, `GROUPBY=none\|type\|name\|size\|modified\|extension\|folder`, `GROUPCOLLAPSE=all\|none\|toggle`, `FILTERBAR=`, `FILTER=<text>` (a leading `!` hides matches), `CHECKBOXES=`, `FOLDERSIZES=`, `FLATVIEW=off\|grouped\|mixed\|nofolders\|toggle`, `TREE=off\|shared\|separate\|toggle`, `FORMAT=save\|savesub\|clear\|savedefault\|cleardefault`, `AUTOFORMAT=`, `COLUMNSTOGGLE=<column>`. Switches take `on\|off\|toggle` |
 | `Select` | `ALL`, `NONE`, `INVERT`, `PATTERN=*.mp3` |
-| `Toolbar` | `NAME=buttons\|drives`, `PLACE=top\|bottom\|left\|right\|between`, `NEWROW`, `STATE=on\|off\|toggle` |
+| `Toolbar` | `NAME=buttons\|drives\|<yours>`, `PLACE=top\|bottom\|left\|right\|between`, `NEWROW`, `STATE=on\|off\|toggle`, `CUSTOMIZE` |
 
 Argument codes: `{sourcepath}`, `{destpath}`, `{filepath}` (every selected item), `{file}` (names only), `{focusedpath}`, `{dlgstring|Prompt text}`. Add `$` to require a value: `{filepath$}` stops the function when nothing is selected. Codes expand to whole arguments, so paths with spaces need no quoting.
 
@@ -97,26 +118,40 @@ pods=/downloads/podcasts
 | Ctrl+N | New lister |
 | Ctrl+Shift+V / H / 1 | Dual vertical / dual horizontal / single |
 | Ctrl+J | Show file operation windows |
+| Ctrl+F | Filter bar |
+| Ctrl+Shift+Z | Calculate all folder sizes |
+| Ctrl+Shift+P | Command console |
 
-## Toolbar file
+## Toolbar files
 
-Phase 1 reads `~/.config/linopus/toolbars/default.json` when it exists and uses the built-in set otherwise. The editor arrives in phase 3.
+Each toolbar is `~/.config/linopus/toolbars/<id>.json`. Customize mode writes them; they are plain JSON to copy or hand-edit. The standard toolbar has no file until you change it, so new standard buttons keep arriving until then.
 
 ```json
 {
+  "name": "Emulation",
   "buttons": [
-    { "label": "Copy", "icon": "edit-copy", "left": "Copy", "right": "Copy AS" },
+    { "label": "Copy", "icon": "edit-copy", "left": "Copy", "right": "Copy AS",
+      "enableWhen": "selection && dest" },
     { "separator": true },
-    { "label": "Podcasts", "left": "Go /pods", "middle": "Go /pods NEWTAB" }
+    { "label": "ROMs", "icon": "input-gaming", "left": "Go /roms", "middle": "Go /roms NEWTAB",
+      "key": "Ctrl+Alt+R" },
+    { "label": "Systems", "icon": "folder-games", "menu": [
+        { "label": "C64", "left": "Go /roms/c64" },
+        { "label": "Amiga", "left": "Go /roms/amiga" } ] }
   ]
 }
 ```
+
+`enableWhen` greys a button out when false; `checkWhen` shows it pressed when true. They combine these words with `&&`, `||`, `!` and parentheses: `selection`, `files`, `folders`, `single`, `multiple`, `dual`, `dest`, `destlocked`, `navlock`, `remote`, `canup`, `back`, `forward`, `clipboard`, `hidden`, `tree`, `flat`, `grouped`, `filter`, `checkboxes`, `foldersizes`, and `view=`, `layout=`, `groupby=`, `treemode=`, `theme=`.
 
 ## Files
 
 - `~/.config/linopus/linopus.ini`: session and window layout
 - `~/.config/linopus/aliases.ini`: your aliases
 - `~/.config/linopus/toolbars/`: button bars
+- `~/.config/linopus/themes/`: your themes
+- `~/.config/linopus/labels.ini`: wildcard labels
+- `~/.config/linopus/formats.ini`: folder formats
 
 Inside the Flatpak these are still the real `~/.config/linopus`, so the configuration copies straight to another machine.
 

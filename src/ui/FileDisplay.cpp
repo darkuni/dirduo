@@ -122,6 +122,7 @@ FileDisplay::FileDisplay(AliasManager &aliases, QWidget *parent)
             m_stack->setCurrentWidget(t);
         updateHeader();
         Q_EMIT currentPathChanged(this);
+        Q_EMIT stateChanged(this);
     });
     connect(m_tabs, &QTabBar::tabCloseRequested, this, &FileDisplay::closeTab);
     connect(m_tabs, &QTabBar::tabBarClicked, this, [this](int) { Q_EMIT activated(this); });
@@ -251,6 +252,12 @@ void FileDisplay::wireTab(FolderTab *t)
             m_status->setText(t->statusText());
     });
     connect(t, &FolderTab::activated, this, [this]() { Q_EMIT activated(this); });
+    for (auto sig : {&FolderTab::selectionChanged, &FolderTab::viewStateChanged, &FolderTab::statusChanged}) {
+        connect(t, sig, this, [this, t]() {
+            if (t == currentTab())
+                Q_EMIT stateChanged(this);
+        });
+    }
     connect(t, &FolderTab::renameRequested, this, [this](const QString &p, const QString &n) {
         Q_EMIT renameRequested(this, p, n);
     });

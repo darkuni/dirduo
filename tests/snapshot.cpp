@@ -11,6 +11,10 @@
 #include "ui/DrivesBar.h"
 #include "ui/ToolbarStrip.h"
 #include "ui/FileDisplay.h"
+#include "ui/ButtonBar.h"
+#include "ui/ButtonEditor.h"
+#include "ui/CommandConsole.h"
+#include "ui/CustomizeDialog.h"
 #include "ui/FolderTab.h"
 #include "ui/FolderTree.h"
 #include "ui/GroupTreeView.h"
@@ -29,6 +33,9 @@
 #include <QIcon>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QLineEdit>
+#include <QTabWidget>
+#include <QTreeWidget>
 #include <QTimer>
 
 static void writeFile(const QString &path, qint64 size)
@@ -241,6 +248,49 @@ int main(int argc, char *argv[])
     QTest::qWait(300);
     shot(w, out, QStringLiteral("17-light-groups-folded"));
     w->runCommand(QStringLiteral("Set GROUPBY=none\nSet FLATVIEW=off\nSet TREE=off"));
+
+    // Phase 3: customize mode, the button editor and the command console.
+    w->runCommand(QStringLiteral("Toolbar CUSTOMIZE"));
+    QTest::qWait(400);
+    shot(w, out, QStringLiteral("18-customize-mode"));
+    if (CustomizeDialog *dlg = w->customizeDialog()) {
+        dlg->findChild<QTabWidget *>()->setCurrentIndex(1);
+        dlg->commandTree()->setCurrentItem(dlg->commandTree()->topLevelItem(0)->child(0));
+        QTest::qWait(300);
+        dlg->grab().save(out + QStringLiteral("/18b-customize-dialog.png"));
+        dlg->close();
+    }
+    {
+        ButtonDef menu;
+        menu.label = QStringLiteral("Emulation");
+        menu.icon = QStringLiteral("input-gaming");
+        menu.tip = QStringLiteral("Jump to emulation folders");
+        ButtonDef roms;
+        roms.label = QStringLiteral("ROMs");
+        roms.left = QStringLiteral("Go \"") + root + QStringLiteral("/Emulation/roms\"");
+        menu.children = {roms};
+        ButtonEditor editor(menu, w);
+        editor.show();
+        QTest::qWait(300);
+        editor.grab().save(out + QStringLiteral("/19-button-editor-menu.png"));
+        ButtonDef copy = w->buttonBar(QStringLiteral("buttons"))->buttonAt(0)->definition();
+        copy.enableWhen = QStringLiteral("selection && dest");
+        ButtonEditor editor2(copy, w);
+        editor2.show();
+        QTest::qWait(300);
+        editor2.grab().save(out + QStringLiteral("/19b-button-editor.png"));
+    }
+    w->showConsole();
+    if (CommandConsole *c = w->console()) {
+        c->submit(QStringLiteral("help"));
+        c->submit(QStringLiteral("Set VIEW=list"));
+        c->submit(QStringLiteral("Set GROUPBY=colour"));
+        c->input()->setText(QStringLiteral("Go /downloads NEW"));
+        QTest::qWait(300);
+        c->grab().save(out + QStringLiteral("/20-command-console.png"));
+        c->close();
+    }
+    w->runCommand(QStringLiteral("Set VIEW=details"));
 
 #ifdef LINOPUS_HAVE_KIO
     // Servers and archives, when run through tests/remote/run-remote-tests.sh.

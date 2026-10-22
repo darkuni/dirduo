@@ -117,5 +117,5 @@ private Q_SLOTS:
     }
 };
 
-QTEST_MAIN(TestListing)
+QTEST_GUILESS_MAIN(TestListing)
 #include "tst_listing.moc"

@@ -9,6 +9,9 @@
 #include "ui/AppContext.h"
 #include "ui/BreadcrumbBar.h"
 #include "ui/ButtonBar.h"
+#include "ui/CommandConsole.h"
+#include "ui/CustomizeDialog.h"
+#include "core/Condition.h"
 #include "ui/DrivesBar.h"
 #include "ui/ToolbarStrip.h"
 #include "ui/FileDisplay.h"
@@ -36,6 +39,7 @@
 #include <QMimeData>
 #include <QSettings>
 #include <QSplitter>
+#include <QTimer>
 #include <QUrl>
 
 namespace {
@@ -89,6 +93,7 @@ ListerWindow::ListerWindow(AppContext &app, QWidget *parent)
         connect(d, &FileDisplay::dropRequested, this, &ListerWindow::onDropRequested);
         connect(d, &FileDisplay::openFileRequested, this, &ListerWindow::openFile);
         connect(d, &FileDisplay::contextMenuRequested, this, &ListerWindow::onContextMenu);
+        connect(d, &FileDisplay::stateChanged, this, &ListerWindow::scheduleButtonStates);
         connect(d, &FileDisplay::tabKeyPressed, this, [this](FileDisplay *from) {
             if (!m_dual)
                 return;
@@ -112,6 +117,8 @@ ListerWindow::ListerWindow(AppContext &app, QWidget *parent)
     buildMenus();
     buildToolbar();
     updateRoles();
+    connect(QGuiApplication::clipboard(), &QClipboard::dataChanged, this, &ListerWindow::scheduleButtonStates);
+    connect(Style::instance(), &Style::changed, this, &ListerWindow::scheduleButtonStates);
 }
 
 // ---------------------------------------------------------------- setup
@@ -334,6 +341,11 @@ void ListerWindow::buildMenus()
     QMenu *window = menuBar()->addMenu(QStringLiteral("&Window"));
     m_toolbarsMenu = window->addMenu(QIcon::fromTheme(QStringLiteral("configure-toolbars")), QStringLiteral("Toolbars"));
     connect(m_toolbarsMenu, &QMenu::aboutToShow, this, &ListerWindow::rebuildToolbarsMenu);
+    QAction *custom = window->addAction(QIcon::fromTheme(QStringLiteral("configure-toolbars")), QStringLiteral("Customize Toolbars..."));
+    connect(custom, &QAction::triggered, this, &ListerWindow::customize);
+    QAction *console = window->addAction(QIcon::fromTheme(QStringLiteral("utilities-terminal")), QStringLiteral("Command Console"));
+    console->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+P")));
+    connect(console, &QAction::triggered, this, &ListerWindow::showConsole);
     window->addSeparator();
     QAction *jobs = window->addAction(QIcon::fromTheme(QStringLiteral("view-process-all")), QStringLiteral("File Operations"));
     jobs->setShortcut(QKeySequence(QStringLiteral("Ctrl+J")));
@@ -352,14 +364,15 @@ void ListerWindow::buildMenus()
 
 void ListerWindow::buildToolbar()
 {
-    bool ok = false;
-    QList<ButtonDef> defs = ButtonBar::load(Paths::configFile(QStringLiteral("toolbars/default.json")), &ok);
-    if (!ok)
-        defs = ButtonBar::defaultButtons();
-    m_buttons = new ButtonBar(QStringLiteral("Buttons"), defs, this);
-    connect(m_buttons, &ButtonBar::commandTriggered, this, [this](const QString &cmd) { runCommand(cmd); });
-    addToolBar(Qt::TopToolBarArea, m_buttons);
-    setupToolbarMenu(m_buttons);
+    ToolbarStore &store = m_app.toolbars();
+    for (const QString &id : store.ids())
+        createButtonBar(id, true);
+    m_buttons = m_buttonBars.value(QLatin1String(ToolbarStore::kMainId));
+    connect(&store, &ToolbarStore::added, this, [this](const QString &id) {
+        // Shown where it was made (customize mode is open there), hidden elsewhere.
+        createButtonBar(id, isCustomizing());
+    });
+    connect(&store, &ToolbarStore::removed, this, &ListerWindow::removeButtonBar);
 
     m_drives = new DrivesBar(this);
     connect(m_drives, &DrivesBar::commandTriggered, this, [this](const QString &cmd) { runCommand(cmd); });
@@ -370,7 +383,225 @@ void ListerWindow::buildToolbar()
 
 QList<QToolBar *> ListerWindow::toolbars() const
 {
-    return {m_buttons, m_drives};
+    QList<QToolBar *> out;
+    for (const QString &id : m_app.toolbars().ids()) {
+        if (ButtonBar *b = m_buttonBars.value(id))
+            out << b;
+    }
+    out << m_drives;
+    return out;
+}
+
+QList<ButtonBar *> ListerWindow::buttonBars() const
+{
+    QList<ButtonBar *> out;
+    for (const QString &id : m_app.toolbars().ids()) {
+        if (ButtonBar *b = m_buttonBars.value(id))
+            out << b;
+    }
+    return out;
+}
+
+void ListerWindow::createButtonBar(const QString &id, bool show)
+{
+    if (m_buttonBars.contains(id))
+        return;
+    auto *bar = new ButtonBar(m_app.toolbars(), id, this, this);
+    m_buttonBars.insert(id, bar);
+    connect(bar, &ButtonBar::commandTriggered, this, [this](const QString &cmd) { runCommand(cmd); });
+    connect(bar, &ButtonBar::filesDropped, this, &ListerWindow::runCommandWithFiles);
+    bar->setEvaluator([this](const QString &cond, bool fallback) { return evaluateCondition(cond, fallback); });
+    setupToolbarMenu(bar);
+    const bool main = id == QLatin1String(ToolbarStore::kMainId);
+    if (main) {
+        addToolBar(Qt::TopToolBarArea, bar);
+    } else {
+        // Its own row under the others, so it never squeezes the main bar.
+        placeToolbar(bar, ToolbarPlace::Top, true);
+    }
+    bar->setVisible(show);
+    if (isCustomizing())
+        bar->setEditMode(true);
+    m_strip->updateGeometryForBars();
+}
+
+void ListerWindow::removeButtonBar(const QString &id)
+{
+    ButtonBar *bar = m_buttonBars.take(id);
+    if (!bar)
+        return;
+    if (m_strip->contains(bar))
+        m_strip->removeBar(bar);
+    else
+        removeToolBar(bar);
+    bar->deleteLater();
+    m_strip->updateGeometryForBars();
+}
+
+void ListerWindow::setButtonBarVisible(const QString &id, bool visible)
+{
+    if (ButtonBar *b = m_buttonBars.value(id)) {
+        b->setVisible(visible);
+        m_strip->updateGeometryForBars();
+    }
+}
+
+bool ListerWindow::isButtonBarVisible(const QString &id) const
+{
+    ButtonBar *b = m_buttonBars.value(id);
+    return b && !b->isHidden();
+}
+
+bool ListerWindow::isCustomizing() const
+{
+    return !m_customize.isNull();
+}
+
+CustomizeDialog *ListerWindow::customizeDialog() const
+{
+    return m_customize;
+}
+
+CommandConsole *ListerWindow::console() const
+{
+    return m_console;
+}
+
+void ListerWindow::customize()
+{
+    if (m_customize) {
+        m_customize->raise();
+        m_customize->activateWindow();
+        return;
+    }
+    m_customize = new CustomizeDialog(this, m_app.toolbars());
+    m_customize->setAttribute(Qt::WA_DeleteOnClose);
+    for (ButtonBar *b : buttonBars())
+        b->setEditMode(true);
+    connect(m_customize, &QDialog::finished, this, [this]() {
+        for (ButtonBar *b : buttonBars())
+            b->setEditMode(false);
+        updateButtonStates();
+    });
+    m_customize->show();
+}
+
+void ListerWindow::showConsole()
+{
+    if (!m_console) {
+        m_console = new CommandConsole(this);
+        m_console->setAttribute(Qt::WA_DeleteOnClose);
+    }
+    m_console->show();
+    m_console->raise();
+    m_console->activateWindow();
+}
+
+std::optional<bool> ListerWindow::conditionAtom(const QString &name, const QString &value) const
+{
+    FolderTab *t = sourceTab();
+    const QStringList sel = t ? t->selectedPaths() : QStringList();
+    auto flag = [&value](bool b) -> std::optional<bool> {
+        if (!value.isEmpty())
+            return std::nullopt; // these take no value
+        return b;
+    };
+    if (name == QLatin1String("selection"))
+        return flag(!sel.isEmpty());
+    if (name == QLatin1String("files") || name == QLatin1String("folders")) {
+        const bool wantFolders = name == QLatin1String("folders");
+        bool any = false;
+        for (const QString &p : sel)
+            any = any || (t->isFolder(p) == wantFolders);
+        return flag(any);
+    }
+    if (name == QLatin1String("single"))
+        return flag(sel.size() == 1);
+    if (name == QLatin1String("multiple"))
+        return flag(sel.size() > 1);
+    if (name == QLatin1String("dual"))
+        return flag(m_dual);
+    if (name == QLatin1String("dest"))
+        return flag(!destPath().isEmpty());
+    if (name == QLatin1String("destlocked"))
+        return flag(destDisplay() && destDisplay()->destLocked());
+    if (name == QLatin1String("navlock"))
+        return flag(m_navLock);
+    if (name == QLatin1String("remote"))
+        return flag(t && !Location::isLocal(t->path()));
+    if (name == QLatin1String("canup"))
+        return flag(t && !t->path().isEmpty() && !Location::isRoot(t->path()));
+    if (name == QLatin1String("back"))
+        return flag(t && t->canGoBack());
+    if (name == QLatin1String("forward"))
+        return flag(t && t->canGoForward());
+    if (name == QLatin1String("clipboard")) {
+        const QMimeData *m = QGuiApplication::clipboard()->mimeData();
+        return flag(m && m->hasUrls());
+    }
+    if (name == QLatin1String("hidden"))
+        return flag(sourceDisplay()->showHidden());
+    if (name == QLatin1String("tree"))
+        return flag(m_treeMode != TreeMode::Off);
+    if (name == QLatin1String("flat"))
+        return flag(t && t->flatMode() != DirLister::FlatMode::Off);
+    if (name == QLatin1String("grouped"))
+        return flag(t && t->groupBy() != FileListModel::GroupBy::None);
+    if (name == QLatin1String("filter"))
+        return flag(t && t->filterBarVisible());
+    if (name == QLatin1String("checkboxes"))
+        return flag(t && t->checkMode());
+    if (name == QLatin1String("foldersizes"))
+        return flag(t && t->liveFolderSizes());
+    if (value.isEmpty())
+        return std::nullopt; // the rest need a value
+    if (name == QLatin1String("view"))
+        return t && FolderTab::viewModeName(t->viewMode()) == value;
+    if (name == QLatin1String("layout")) {
+        const QString now = !m_dual ? QStringLiteral("single") : m_sideBySide ? QStringLiteral("vertical") : QStringLiteral("horizontal");
+        return now == value;
+    }
+    if (name == QLatin1String("groupby"))
+        return t && FileListModel::groupByName(t->groupBy()) == value;
+    if (name == QLatin1String("treemode")) {
+        const QString now = m_treeMode == TreeMode::Off ? QStringLiteral("off")
+            : m_treeMode == TreeMode::Shared            ? QStringLiteral("shared")
+                                                        : QStringLiteral("separate");
+        return now == value;
+    }
+    if (name == QLatin1String("theme"))
+        return Style::instance()->theme().name.toLower().remove(QLatin1Char(' ')) == value;
+    return std::nullopt;
+}
+
+bool ListerWindow::evaluateCondition(const QString &condition, bool fallback, QString *error) const
+{
+    QString err;
+    const bool v = Condition::evaluate(
+        condition, [this](const QString &n, const QString &val) { return conditionAtom(n, val); }, &err);
+    if (!err.isEmpty()) {
+        if (error)
+            *error = err;
+        return fallback; // a broken condition never hides a button's use
+    }
+    return v;
+}
+
+void ListerWindow::scheduleButtonStates()
+{
+    if (m_statesPending)
+        return;
+    m_statesPending = true;
+    QTimer::singleShot(0, this, [this]() {
+        m_statesPending = false;
+        updateButtonStates();
+    });
+}
+
+void ListerWindow::updateButtonStates()
+{
+    for (ButtonBar *b : buttonBars())
+        b->updateStates();
 }
 
 QToolBar *ListerWindow::toolbarByName(const QString &name) const
@@ -443,6 +674,10 @@ void ListerWindow::setupToolbarMenu(QToolBar *bar)
     // right-click function.
     bar->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(bar, &QWidget::customContextMenuRequested, this, [this, bar](const QPoint &pos) {
+        if (auto *bb = qobject_cast<ButtonBar *>(bar); bb && bb->editMode()) {
+            bb->showEditMenu(-1, bar->mapToGlobal(pos));
+            return;
+        }
         QMenu menu(this);
         fillToolbarMenu(&menu, bar);
         menu.exec(bar->mapToGlobal(pos));
@@ -483,6 +718,10 @@ void ListerWindow::fillToolbarMenu(QMenu *menu, QToolBar *bar)
         connect(row, &QAction::triggered, this, [this, bar, current]() { placeToolbar(bar, current, true); });
     }
     menu->addSeparator();
+    if (qobject_cast<ButtonBar *>(bar)) {
+        QAction *custom = menu->addAction(QIcon::fromTheme(QStringLiteral("configure-toolbars")), QStringLiteral("Customize..."));
+        connect(custom, &QAction::triggered, this, &ListerWindow::customize);
+    }
     QAction *hide = menu->addAction(QStringLiteral("Hide %1").arg(bar->windowTitle()));
     connect(hide, &QAction::triggered, this, [this, bar]() {
         bar->hide();
@@ -505,6 +744,9 @@ void ListerWindow::rebuildToolbarsMenu()
         sub->addSeparator();
         fillToolbarMenu(sub, bar);
     }
+    m_toolbarsMenu->addSeparator();
+    QAction *custom = m_toolbarsMenu->addAction(QIcon::fromTheme(QStringLiteral("configure-toolbars")), QStringLiteral("Customize..."));
+    connect(custom, &QAction::triggered, this, &ListerWindow::customize);
 }
 
 bool ListerWindow::toolbar(const ParsedCommand &cmd, QString *error)
@@ -514,12 +756,21 @@ bool ListerWindow::toolbar(const ParsedCommand &cmd, QString *error)
             *error = msg;
         return false;
     };
+    if (cmd.hasFlag(QStringLiteral("CUSTOMIZE"))) {
+        customize();
+        return true;
+    }
     QString name = cmd.value(QStringLiteral("NAME"));
     if (name.isEmpty() && !cmd.positional.isEmpty())
         name = cmd.positional.first();
     QToolBar *bar = toolbarByName(name);
     if (!bar)
-        return fail(QStringLiteral("There is no toolbar called \"%1\". Try buttons or drives.").arg(name));
+    {
+        QStringList names;
+        for (QToolBar *b : toolbars())
+            names << b->objectName().mid(8);
+        return fail(QStringLiteral("There is no toolbar called \"%1\". Toolbars: %2.").arg(name, names.join(QStringLiteral(", "))));
+    }
 
     if (cmd.hasArg(QStringLiteral("PLACE"))) {
         const QString p = cmd.value(QStringLiteral("PLACE")).toLower();
@@ -694,6 +945,7 @@ void ListerWindow::syncViewActions()
         m_actFolderSizes->setChecked(t->liveFolderSizes());
     }
     m_actAutoFormat->setChecked(FolderFormats::instance().autoSwitch());
+    scheduleButtonStates();
 }
 
 void ListerWindow::mirrorNavigation(FileDisplay *from, const QString &oldPath, const QString &newPath)
@@ -731,7 +983,31 @@ void ListerWindow::mirrorNavigation(FileDisplay *from, const QString &oldPath, c
 
 bool ListerWindow::runCommand(const QString &script)
 {
-    return m_app.engine().run(script, *this);
+    const bool ok = m_app.engine().run(script, *this);
+    scheduleButtonStates();
+    return ok;
+}
+
+bool ListerWindow::runCommandWithFiles(const QString &script, const QStringList &paths)
+{
+    m_selectionOverride = paths;
+    m_hasSelectionOverride = true;
+    const bool ok = runCommand(script);
+    m_hasSelectionOverride = false;
+    m_selectionOverride.clear();
+    return ok;
+}
+
+bool ListerWindow::runCommandReporting(const QString &script, QString *error)
+{
+    QString captured;
+    QString *previous = m_errorSink;
+    m_errorSink = &captured;
+    const bool ok = runCommand(script);
+    m_errorSink = previous;
+    if (error)
+        *error = captured;
+    return ok;
 }
 
 QString ListerWindow::sourcePath() const
@@ -752,12 +1028,16 @@ QString ListerWindow::destPath() const
 
 QStringList ListerWindow::selectedPaths() const
 {
+    if (m_hasSelectionOverride)
+        return m_selectionOverride;
     FolderTab *t = sourceTab();
     return t ? t->selectedPaths() : QStringList();
 }
 
 QString ListerWindow::focusedPath() const
 {
+    if (m_hasSelectionOverride)
+        return m_selectionOverride.value(0);
     FolderTab *t = sourceTab();
     return t ? t->focusedPath() : QString();
 }
@@ -779,6 +1059,10 @@ bool ListerWindow::confirm(const QString &title, const QString &text)
 
 void ListerWindow::showError(const QString &title, const QString &text)
 {
+    if (m_errorSink) {
+        *m_errorSink = text;
+        return;
+    }
     QMessageBox::warning(this, title, text);
 }
 

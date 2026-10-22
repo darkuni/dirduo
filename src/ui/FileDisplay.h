@@ -61,6 +61,8 @@ Q_SIGNALS:
     void openFileRequested(const QString &path);
     void contextMenuRequested(FileDisplay *display, const QPoint &globalPos, bool onItem);
     void tabKeyPressed(FileDisplay *display);
+    // Selection, view or folder changed: buttons may need to update.
+    void stateChanged(FileDisplay *display);
 
 private:
     void wireTab(FolderTab *tab);

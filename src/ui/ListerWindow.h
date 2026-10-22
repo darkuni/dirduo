@@ -5,8 +5,12 @@
 #include <QMainWindow>
 #include <QPointer>
 
+#include <optional>
+
 class AppContext;
 class ButtonBar;
+class CommandConsole;
+class CustomizeDialog;
 class DrivesBar;
 class FileDisplay;
 class FolderTree;
@@ -33,6 +37,24 @@ public:
     void saveListerState(QSettings &s) const;
 
     bool runCommand(const QString &script);
+    // Runs with paths standing in for the selection (files dropped on a button).
+    bool runCommandWithFiles(const QString &script, const QStringList &paths);
+    // Runs without error boxes; the error, if any, comes back in *error.
+    bool runCommandReporting(const QString &script, QString *error);
+
+    // Toolbars made of buttons (the store's toolbars, shown in this lister).
+    QList<ButtonBar *> buttonBars() const;
+    ButtonBar *buttonBar(const QString &id) const { return m_buttonBars.value(id); }
+    void setButtonBarVisible(const QString &id, bool visible);
+    bool isButtonBarVisible(const QString &id) const;
+    void customize();       // opens customize mode
+    bool isCustomizing() const;
+    CustomizeDialog *customizeDialog() const;
+    void showConsole();
+    CommandConsole *console() const;
+    // A button condition ("selection && dual") evaluated here and now.
+    bool evaluateCondition(const QString &condition, bool fallback, QString *error = nullptr) const;
+    void updateButtonStates();
 
     FileDisplay *sourceDisplay() const;
     FileDisplay *destDisplay() const; // null in single mode
@@ -96,6 +118,10 @@ private:
     void onContextMenu(FileDisplay *d, const QPoint &globalPos, bool onItem);
     void openFile(const QString &path);
     void rebuildAliasMenu();
+    void createButtonBar(const QString &id, bool show);
+    void removeButtonBar(const QString &id);
+    void scheduleButtonStates();
+    std::optional<bool> conditionAtom(const QString &name, const QString &value) const;
     void fillViewMenus();
 
     QAction *commandAction(const QString &text, const QString &command, const QKeySequence &key = {},
@@ -116,7 +142,14 @@ private:
     bool m_mirroring = false;
     QString m_lastPath[2]; // for navigation lock
 
-    ButtonBar *m_buttons = nullptr;
+    ButtonBar *m_buttons = nullptr; // the main toolbar
+    QMap<QString, ButtonBar *> m_buttonBars;
+    QPointer<CustomizeDialog> m_customize;
+    QPointer<CommandConsole> m_console;
+    bool m_statesPending = false;
+    bool m_hasSelectionOverride = false;
+    QStringList m_selectionOverride;
+    QString *m_errorSink = nullptr;
     DrivesBar *m_drives = nullptr;
     ToolbarStrip *m_strip = nullptr;
     QMenu *m_toolbarsMenu = nullptr;

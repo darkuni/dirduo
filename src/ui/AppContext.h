@@ -14,6 +14,7 @@ class JobManager;
 class ListerWindow;
 class ProgressWindows;
 class QSettings;
+class ToolbarStore;
 
 // Application-wide services shared by every lister: aliases, the job queue,
 // the command engine, and the session.
@@ -34,6 +35,7 @@ public:
     JobManager &jobs() { return *m_jobs; }
     CommandEngine &engine() { return *m_engine; }
     QSettings &settings() { return *m_settings; }
+    ToolbarStore &toolbars() { return *m_toolbars; }
     ProgressWindows &progress() { return *m_progress; }
 
     ListerWindow *newLister(const QString &startPath = {});
@@ -57,6 +59,7 @@ private:
     void onCollision(const CollisionRequest &request);
 
     std::unique_ptr<QSettings> m_settings;
+    std::unique_ptr<ToolbarStore> m_toolbars;
     std::unique_ptr<AliasManager> m_aliases;
     std::unique_ptr<JobManager> m_jobs;
     std::unique_ptr<CommandEngine> m_engine;

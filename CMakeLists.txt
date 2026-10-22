@@ -51,6 +51,8 @@ add_library(linopus_core STATIC
     src/core/JobManager.cpp
     src/core/CommandParser.cpp
     src/core/CommandEngine.cpp
+    src/core/CommandCatalog.cpp
+    src/core/Condition.cpp
     src/core/DriveList.cpp
     src/core/FileKind.cpp
     src/core/LabelRules.cpp
@@ -82,6 +84,9 @@ add_library(linopus_ui STATIC
     src/ui/GroupTreeView.cpp
     src/ui/FolderFormats.cpp
     src/ui/FolderTree.cpp
+    src/ui/ButtonEditor.cpp
+    src/ui/CustomizeDialog.cpp
+    src/ui/CommandConsole.cpp
     src/ui/ListerWindow.cpp
     src/ui/AppContext.cpp
 )
@@ -110,7 +115,7 @@ endif()
 if(LINOPUS_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS Test)
     enable_testing()
-    foreach(t aliases commandparser fileops trash jobmanager commandengine drives location listing)
+    foreach(t aliases commandparser fileops trash jobmanager commandengine drives location listing condition)
         add_executable(tst_${t} tests/tst_${t}.cpp)
         target_link_libraries(tst_${t} PRIVATE linopus_core Qt6::Test)
         add_test(NAME ${t} COMMAND tst_${t})
