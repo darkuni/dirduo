@@ -60,6 +60,7 @@ add_library(linopus_core STATIC
     src/core/CommandCatalog.cpp
     src/core/ImageConvert.cpp
     src/core/Metadata.cpp
+    src/core/Thumbnails.cpp
     src/core/Condition.cpp
     src/core/DriveList.cpp
     src/core/FileKind.cpp
@@ -161,7 +162,7 @@ endif()
 if(LINOPUS_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS Test)
     enable_testing()
-    foreach(t aliases commandparser fileops trash jobmanager commandengine drives location listing condition rename foldersync find imageconvert metadata)
+    foreach(t aliases commandparser fileops trash jobmanager commandengine drives location listing condition rename foldersync find imageconvert metadata thumbnails)
         add_executable(tst_${t} tests/tst_${t}.cpp)
         target_link_libraries(tst_${t} PRIVATE linopus_core Qt6::Test)
         add_test(NAME ${t} COMMAND tst_${t})
@@ -193,5 +194,9 @@ if(LINOPUS_BUILD_TESTS)
         # Renders a lister offscreen and saves a PNG. Used to eyeball the UI without a desktop.
         add_executable(linopus_snapshot tests/snapshot.cpp)
         target_link_libraries(linopus_snapshot PRIVATE linopus_ui Qt6::Test)
+
+        # Showcase screenshots of a made-up Deck in every theme.
+        add_executable(linopus_sizzle tests/sizzle.cpp)
+        target_link_libraries(linopus_sizzle PRIVATE linopus_ui Qt6::Test)
     endif()
 endif()

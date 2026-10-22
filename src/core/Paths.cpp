@@ -5,6 +5,7 @@
 namespace {
 QString g_configOverride;
 QString g_dataOverride;
+QString g_cacheOverride;
 
 QString xdgOrDefault(const char *var, const QString &fallbackRelative)
 {
@@ -36,6 +37,13 @@ QString userDataHome()
     return xdgOrDefault("XDG_DATA_HOME", QStringLiteral(".local/share"));
 }
 
+QString userCacheHome()
+{
+    if (!g_cacheOverride.isEmpty())
+        return g_cacheOverride;
+    return xdgOrDefault("XDG_CACHE_HOME", QStringLiteral(".cache"));
+}
+
 QString configDir()
 {
     const QString dir = g_configOverride.isEmpty()
@@ -58,6 +66,11 @@ void setConfigDirOverride(const QString &dir)
 void setDataHomeOverride(const QString &dir)
 {
     g_dataOverride = dir;
+}
+
+void setCacheHomeOverride(const QString &dir)
+{
+    g_cacheOverride = dir;
 }
 
 } // namespace Paths

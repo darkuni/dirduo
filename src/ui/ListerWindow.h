@@ -176,6 +176,7 @@ private:
     QAction *m_actDetails = nullptr;
     QAction *m_actList = nullptr;
     QAction *m_actIcons = nullptr;
+    QAction *m_actThumbs = nullptr;
     QAction *m_actHidden = nullptr;
     QAction *m_actLock = nullptr;
     QAction *m_actNavLock = nullptr;

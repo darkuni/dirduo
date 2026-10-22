@@ -5,14 +5,18 @@
 #include "core/FolderSizes.h"
 #include "core/Location.h"
 #include "core/Metadata.h"
+#include "core/Thumbnails.h"
 #include "ui/Style.h"
 
 #include <QApplication>
+#include <QFile>
 #include <QFileInfo>
 #include <QFont>
 #include <QLocale>
 #include <QMimeData>
+#include <QPainter>
 #include <QPalette>
+#include <QPixmap>
 #include <QSet>
 #include <QStyle>
 #include <QTimer>
@@ -25,6 +29,7 @@ FileListModel::FileListModel(QObject *parent)
 {
     connect(FolderSizes::instance(), &FolderSizes::ready, this, &FileListModel::onFolderSizeReady);
     connect(MetadataCache::instance(), &MetadataCache::ready, this, &FileListModel::onMetadataReady);
+    connect(ThumbnailCache::instance(), &ThumbnailCache::ready, this, &FileListModel::onThumbnailReady);
     connect(Style::instance(), &Style::changed, this, [this]() {
         if (!m_items.isEmpty())
             Q_EMIT dataChanged(index(0, 0), index(m_items.size() - 1, ColumnCount - 1));
@@ -348,6 +353,78 @@ QPair<QString, QString> FileListModel::groupFor(int row) const
     return {};
 }
 
+void FileListModel::setThumbnails(bool on)
+{
+    if (m_thumbs == on)
+        return;
+    m_thumbs = on;
+    if (!m_items.isEmpty())
+        Q_EMIT dataChanged(index(0, NameColumn), index(m_items.size() - 1, NameColumn), {Qt::DecorationRole});
+}
+
+QVariant FileListModel::thumbnailFor(int row) const
+{
+    const FileItem &it = m_items.at(row);
+    if (it.isDir || !Location::isLocal(it.path) || it.path.startsWith(QLatin1String("coll:")))
+        return {};
+    if (auto cached = m_thumbIcons.constFind(it.path); cached != m_thumbIcons.cend())
+        return cached->isNull() ? QVariant() : QVariant(*cached);
+    QImage img;
+    if (!ThumbnailCache::instance()->lookup(it.path, it.modified, &img))
+        return {}; // on its way; the plain icon meanwhile
+    if (img.isNull()) {
+        m_thumbIcons.insert(it.path, QIcon());
+        return {};
+    }
+    // On a square, so a row of thumbnails lines up whatever their shape, with
+    // a thin edge and a soft shadow.
+    const int side = Thumbnails::kLarge;
+    QSize fit = img.size().scaled(side - 12, side - 12, Qt::KeepAspectRatio);
+    if (img.width() < fit.width() && img.height() < fit.height())
+        fit = img.size(); // small pictures stay small
+    QImage canvas(side, side, QImage::Format_ARGB32_Premultiplied);
+    canvas.fill(Qt::transparent);
+    QPainter p(&canvas);
+    p.setRenderHint(QPainter::SmoothPixmapTransform);
+    p.setRenderHint(QPainter::Antialiasing);
+    const QRect r(QPoint((side - fit.width()) / 2, (side - fit.height()) / 2), fit);
+    for (int i = 4; i > 0; --i) {
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(0, 0, 0, 14));
+        p.drawRoundedRect(QRectF(r).adjusted(-i, -i + 3, i, i + 3), 3 + i, 3 + i);
+    }
+    p.drawImage(r, img);
+    p.setPen(QPen(QColor(0, 0, 0, 70), 1));
+    p.setBrush(Qt::NoBrush);
+    p.drawRect(QRectF(r).adjusted(0.5, 0.5, -0.5, -0.5));
+    p.end();
+    const QIcon icon(QPixmap::fromImage(canvas));
+    m_thumbIcons.insert(it.path, icon);
+    return icon;
+}
+
+void FileListModel::onThumbnailReady(const QString &path)
+{
+    if (!m_thumbs)
+        return;
+    const int row = m_rowByPath.value(path, -1);
+    if (row < 0)
+        return;
+    m_thumbIcons.remove(path);
+    m_thumbRows.insert(row);
+    if (m_thumbPending)
+        return;
+    m_thumbPending = true;
+    QTimer::singleShot(80, this, [this]() {
+        m_thumbPending = false;
+        const QSet<int> rows = std::exchange(m_thumbRows, {});
+        for (int r : rows) {
+            if (r < m_items.size())
+                Q_EMIT dataChanged(index(r, NameColumn), index(r, NameColumn), {Qt::DecorationRole});
+        }
+    });
+}
+
 bool FileListModel::mediaInfo(int row, MediaInfo *out) const
 {
     if (row < 0 || row >= m_items.size())
@@ -439,6 +516,7 @@ void FileListModel::setListing(const QString &dir, const FileItemList &items)
     m_dir = dir;
     m_items = items;
     m_mimeNames = QVector<QString>(m_items.size());
+    m_thumbIcons.clear();
     rebuildIndex();
     endResetModel();
     if (m_liveSizes)
@@ -488,6 +566,7 @@ void FileListModel::updateListing(const FileItemList &items)
         if (!m_items.at(row).sameContentAs(fresh)) {
             const bool kindChanged = m_items.at(row).isDir != fresh.isDir || m_items.at(row).name != fresh.name;
             m_items[row] = fresh;
+            m_thumbIcons.remove(fresh.path);
             if (kindChanged)
                 m_mimeNames[row].clear();
             Q_EMIT dataChanged(index(row, 0), index(row, ColumnCount - 1));
@@ -544,6 +623,13 @@ QString FileListModel::mimeNameFor(int row) const
             cached = QStringLiteral("inode/directory");
         else
             cached = m_mimeDb.mimeTypeForFile(it.path, QMimeDatabase::MatchExtension).name();
+        if (!it.isDir && FileKind::extensionOf(it.name) == QLatin1String("crt") && Location::isLocal(it.path)) {
+            // .crt is a certificate to the MIME database, but on a Deck it is
+            // far more likely a C64 cartridge: those start with this header.
+            QFile f(it.path);
+            if (f.open(QIODevice::ReadOnly) && f.read(16) == QByteArrayLiteral("C64 CARTRIDGE   "))
+                cached = QStringLiteral("application/x-c64-cartridge");
+        }
     }
     return cached;
 }
@@ -551,6 +637,8 @@ QString FileListModel::mimeNameFor(int row) const
 QString FileListModel::typeName(int row) const
 {
     const QString mime = mimeNameFor(row);
+    if (mime == QLatin1String("application/x-c64-cartridge"))
+        return QStringLiteral("C64 cartridge image");
     if (mime == QLatin1String("application/octet-stream")) {
         // Unknown to the MIME database: name it after its extension, so a
         // folder of D64s or ADFs does not read "Unknown" all the way down.
@@ -588,6 +676,8 @@ QIcon FileListModel::iconFor(int row) const
     const FileItem &item = m_items.at(row);
     if (item.isDir) {
         icon = QIcon::fromTheme(QStringLiteral("folder"));
+    } else if (mime == QLatin1String("application/x-c64-cartridge")) {
+        icon = QIcon::fromTheme(QStringLiteral("media-flash"), QIcon::fromTheme(QStringLiteral("media-floppy")));
     } else if (mime == QLatin1String("application/octet-stream")
                && FileKind::categoryFor(item.name, false) == FileKind::Category::DiskImage) {
         // Disk images the MIME database does not know (D64, ADF, ...): a disk.
@@ -682,6 +772,11 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
             return it.name;
         break;
     case Qt::DecorationRole:
+        if (col == NameColumn && m_thumbs) {
+            const QVariant thumb = thumbnailFor(index.row());
+            if (thumb.isValid())
+                return thumb;
+        }
         if (col == NameColumn)
             return iconFor(index.row());
         break;

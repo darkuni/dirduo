@@ -30,7 +30,7 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Ctrl+F filter: type `*.png` and only PNGs stay; Esc clears it.
 - [ ] Sizes button on a big folder (Emulation, for example): sizes and bars fill in without freezing.
 - [ ] Flat button on a folder with subfolders: everything below, grouped by folder.
-- [ ] A folder full of screenshots opens in icon view by itself.
+- [ ] A folder full of screenshots opens as thumbnails by itself; they fill in within a second or two. A folder of videos Dolphin has shown before has thumbnails too.
 
 ## Servers (needs the sandbox: SFTP and FTP are bundled in the Flatpak)
 

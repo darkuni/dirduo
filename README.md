@@ -71,6 +71,7 @@ Servers and archives (KIO):
 - Self-filling toolbar menus: a button can be a menu of your Favourites, Frequent folders, Aliases or Collections that stays up to date (customize mode, Commands > Favourites)
 - Find Duplicates (Tools > Find Duplicates): identical files by contents (renamed copies too), by name and size, or by name, across several folders; check all but the newest, oldest or shortest path in each group and send the rest to the trash
 - Convert Images (Tools > Convert Images): PNG, JPEG, WebP, BMP and whatever else the image plugins write; resize by percentage, to fit, by width or height, or exactly; turn and flip; save next to each picture or in another folder. A row per picture shows its new name and size before anything is written. The format, quality and size are remembered
+- Thumbnails view (View > Thumbnails, Ctrl+4; folders that are mostly pictures open in it): pictures as themselves, read in the background. Shares the standard ~/.cache/thumbnails with Dolphin and Gwenview, so videos and documents they have already done show too, and what Linopus makes they reuse. Icons view shows thumbnails at its smaller size
 - Music and photo columns (right-click a column header > Music or Pictures): Title, Artist, Album, Track, Year, Genre, Length and Bitrate from music tags (TagLib); Dimensions, Date Taken and Camera from photos (Exiv2). C64 SID tunes show their name, composer and release line. Read in the background as you browse, then sortable and groupable (Group By > Artist, Album, Genre, Year, Camera, Date Taken). The viewer pane shows the full tags, and the camera line under a photo. Column layouts saved before these columns existed keep them hidden
 
 ## Commands
@@ -95,7 +96,7 @@ Every button, menu item, hotkey, drop and inline rename runs one of these. Butto
 | `Duplicates` | `IN=...` (several allowed), `BY=contents\|namesize\|name`, `MINSIZE=<bytes>`, `HIDDEN` |
 | `Image` | `CONVERT=png\|jpg\|webp\|...\|keep`, `QUALITY=1-100`, `WIDTH=`, `HEIGHT=` (both: fit inside), `PERCENT=`, `STRETCH`, `ENLARGE`, `ROTATE=90\|180\|270`, `FLIP=h\|v\|both`, `TO=<folder>\|dest`, `WHENEXISTS=rename\|replace\|skip`, `FILE=...`, `RUN` (no window) |
 | `Settings` | no arguments: Preferences; `PAGE=appearance\|theme\|labels\|aliases\|formats\|toolbars`; `BACKUP=<file>\|ask`, `RESTORE=<file>\|ask`, `QUIET` |
-| `Set` | `DUAL=on\|off\|toggle\|vertical\|horizontal\|flip`, `SOURCE=toggle`, `DESTLOCK=`, `NAVLOCK=`, `VIEW=details\|list\|icons`, `HIDDEN=`, `VIEWER=`, `VIEWERPOS=right\|bottom\|left`, `THEME=<name>\|next`, `SIZE=normal\|large\|larger\|bigger\|smaller`, `GROUPBY=none\|type\|name\|size\|modified\|extension\|folder\|artist\|album\|genre\|year\|camera\|taken`, `GROUPCOLLAPSE=all\|none\|toggle`, `FILTERBAR=`, `FILTER=<text>` (a leading `!` hides matches), `CHECKBOXES=`, `FOLDERSIZES=`, `FLATVIEW=off\|grouped\|mixed\|nofolders\|toggle`, `TREE=off\|shared\|separate\|toggle`, `FORMAT=save\|savesub\|clear\|savedefault\|cleardefault`, `AUTOFORMAT=`, `COLUMNSTOGGLE=<column>`. Switches take `on\|off\|toggle` |
+| `Set` | `DUAL=on\|off\|toggle\|vertical\|horizontal\|flip`, `SOURCE=toggle`, `DESTLOCK=`, `NAVLOCK=`, `VIEW=details\|list\|icons\|thumbnails`, `HIDDEN=`, `VIEWER=`, `VIEWERPOS=right\|bottom\|left`, `THEME=<name>\|next`, `SIZE=normal\|large\|larger\|bigger\|smaller`, `GROUPBY=none\|type\|name\|size\|modified\|extension\|folder\|artist\|album\|genre\|year\|camera\|taken`, `GROUPCOLLAPSE=all\|none\|toggle`, `FILTERBAR=`, `FILTER=<text>` (a leading `!` hides matches), `CHECKBOXES=`, `FOLDERSIZES=`, `FLATVIEW=off\|grouped\|mixed\|nofolders\|toggle`, `TREE=off\|shared\|separate\|toggle`, `FORMAT=save\|savesub\|clear\|savedefault\|cleardefault`, `AUTOFORMAT=`, `COLUMNSTOGGLE=<column>`. Switches take `on\|off\|toggle` |
 | `Select` | `ALL`, `NONE`, `INVERT`, `PATTERN=*.mp3` |
 | `Toolbar` | `NAME=buttons\|drives\|<yours>`, `PLACE=top\|bottom\|left\|right\|between`, `NEWROW`, `STATE=on\|off\|toggle`, `CUSTOMIZE` |
 
@@ -239,6 +240,8 @@ QT_QPA_PLATFORM=offscreen ./build/linopus_snapshot /tmp/linopus-shots
 ```
 
 `linopus_snapshot` builds a sample folder tree, drives the lister through a few commands and saves a PNG at each step.
+
+`linopus_sizzle out-dir` makes the showcase screenshots: a made-up Deck (at `/home/deck` and `/run/media/deck`, removed afterwards, so run it in a throwaway container) shown in every theme and the main layouts, plus two contact sheets.
 
 ## Known gaps
 

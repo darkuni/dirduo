@@ -182,7 +182,8 @@ void ListerWindow::buildActions()
     m_actDetails = commandAction(QStringLiteral("Details"), QStringLiteral("Set VIEW=details"), QKeySequence(QStringLiteral("Ctrl+1")));
     m_actList = commandAction(QStringLiteral("List"), QStringLiteral("Set VIEW=list"), QKeySequence(QStringLiteral("Ctrl+2")));
     m_actIcons = commandAction(QStringLiteral("Icons"), QStringLiteral("Set VIEW=icons"), QKeySequence(QStringLiteral("Ctrl+3")));
-    for (QAction *a : {m_actDetails, m_actList, m_actIcons}) {
+    m_actThumbs = commandAction(QStringLiteral("Thumbnails"), QStringLiteral("Set VIEW=thumbnails"), QKeySequence(QStringLiteral("Ctrl+4")));
+    for (QAction *a : {m_actDetails, m_actList, m_actIcons, m_actThumbs}) {
         a->setCheckable(true);
         viewGroup->addAction(a);
     }
@@ -359,6 +360,7 @@ void ListerWindow::buildMenus()
     view->addAction(m_actDetails);
     view->addAction(m_actList);
     view->addAction(m_actIcons);
+    view->addAction(m_actThumbs);
     view->addSeparator();
     view->addAction(m_actHidden);
     m_treeMenu = view->addMenu(QIcon::fromTheme(QStringLiteral("view-list-tree")), QStringLiteral("Folder Tree"));
@@ -1058,6 +1060,7 @@ void ListerWindow::syncViewActions()
         m_actDetails->setChecked(t->viewMode() == FolderTab::ViewMode::Details);
         m_actList->setChecked(t->viewMode() == FolderTab::ViewMode::List);
         m_actIcons->setChecked(t->viewMode() == FolderTab::ViewMode::Icons);
+        m_actThumbs->setChecked(t->viewMode() == FolderTab::ViewMode::Thumbnails);
     }
     m_actHidden->setChecked(sourceDisplay()->showHidden());
     FileDisplay *dest = destDisplay();

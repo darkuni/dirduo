@@ -86,6 +86,11 @@ public:
     int folderCount() const;
 
     QString typeName(int row) const;
+    // Icon and thumbnail views: pictures (and anything with a cached
+    // thumbnail) show as themselves.
+    void setThumbnails(bool on);
+    bool thumbnails() const { return m_thumbs; }
+
     // Tags and photo details of a row, if read; starts reading otherwise.
     bool mediaInfo(int row, MediaInfo *out) const;
 
@@ -116,6 +121,8 @@ private:
     void requestAllFolderSizes();
     void onFolderSizeReady(const QString &path);
     void onMetadataReady(const QString &path);
+    void onThumbnailReady(const QString &path);
+    QVariant thumbnailFor(int row) const;
     QVariant metadataValue(int row, int column, bool forSorting) const;
     QPair<QString, QString> groupFor(int row) const;
     QString folderSizeText(int row) const;
@@ -134,4 +141,8 @@ private:
     qint64 m_maxFolderBytes = 0;
     QSet<int> m_metaRows; // rows whose details came in, announced together
     bool m_metaPending = false;
+    bool m_thumbs = false;
+    mutable QHash<QString, QIcon> m_thumbIcons; // framed, ready to paint
+    QSet<int> m_thumbRows;
+    bool m_thumbPending = false;
 };

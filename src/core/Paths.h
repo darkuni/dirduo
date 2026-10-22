@@ -16,6 +16,10 @@ QString userConfigHome();
 // ~/.local/share (or $XDG_DATA_HOME outside a Flatpak).
 QString userDataHome();
 
+// ~/.cache (or $XDG_CACHE_HOME outside a Flatpak): the shared thumbnail
+// cache lives in its thumbnails folder.
+QString userCacheHome();
+
 // ~/.config/linopus, created on demand.
 QString configDir();
 
@@ -25,5 +29,6 @@ QString configFile(const QString &name);
 // Can be pointed somewhere else by tests.
 void setConfigDirOverride(const QString &dir);
 void setDataHomeOverride(const QString &dir);
+void setCacheHomeOverride(const QString &dir);
 
 } // namespace Paths

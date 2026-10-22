@@ -26,7 +26,7 @@ class FolderTab : public QWidget
 {
     Q_OBJECT
 public:
-    enum class ViewMode { Details, List, Icons };
+    enum class ViewMode { Details, List, Icons, Thumbnails };
 
     explicit FolderTab(QWidget *parent = nullptr);
 
@@ -80,6 +80,7 @@ public:
     void expandAllGroups();
     bool toggleCurrentGroup(); // false when not grouped
     GroupTreeView *detailsView() const { return m_details; }
+    FileListModel *fileModel() const { return m_model; }
 
     // Filter bar
     void setFilterBarVisible(bool visible);

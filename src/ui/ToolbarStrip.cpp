@@ -1,7 +1,10 @@
 #include "ui/ToolbarStrip.h"
 
+#include "ui/Style.h"
+
 #include <QBoxLayout>
 #include <QEvent>
+#include <QTimer>
 #include <QToolBar>
 
 ToolbarStrip::ToolbarStrip(QWidget *parent)
@@ -13,6 +16,14 @@ ToolbarStrip::ToolbarStrip(QWidget *parent)
     m_layout->setSpacing(0);
     setAutoFillBackground(true);
     hide();
+    // A bigger text size makes the bars wider: measure again once they have
+    // taken the new font, or the drive names get cut short.
+    connect(Style::instance(), &Style::changed, this, [this]() {
+        QTimer::singleShot(0, this, [this]() {
+            if (!m_bars.isEmpty())
+                updateGeometryForBars();
+        });
+    });
 }
 
 void ToolbarStrip::setSplitOrientation(Qt::Orientation splitOrientation)

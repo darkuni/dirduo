@@ -38,6 +38,7 @@
 #include <QPushButton>
 #include <QTreeWidget>
 #include <QClipboard>
+#include <QIcon>
 #include <QImage>
 #include <QInputDialog>
 #include <QJsonDocument>
@@ -457,14 +458,14 @@ private Q_SLOTS:
         QCOMPARE(t->viewMode(), FolderTab::ViewMode::Details);
     }
 
-    void pictureFoldersSwitchToIcons()
+    void pictureFoldersSwitchToThumbnails()
     {
         for (const char *n : {"p/1.png", "p/2.jpg", "p/3.jpg", "p/4.webp", "p/notes.txt"})
             touch(root + QLatin1Char('/') + QLatin1String(n));
         FolderTab *t = w->display(0)->currentTab();
         t->navigate(root + QStringLiteral("/p"));
         waitListed(t, 5);
-        QCOMPARE(t->viewMode(), FolderTab::ViewMode::Icons);
+        QCOMPARE(t->viewMode(), FolderTab::ViewMode::Thumbnails);
         t->navigate(root + QStringLiteral("/a"));
         QCOMPARE(t->viewMode(), FolderTab::ViewMode::Details);
         QVERIFY(w->runCommand(QStringLiteral("Set AUTOFORMAT=off")));
@@ -1563,6 +1564,46 @@ private Q_SLOTS:
         t->restoreHeaderState(now);
         QVERIFY(t->isColumnVisible(FileListModel::ArtistColumn));
         QVERIFY(t->isColumnVisible(FileListModel::YearColumn));
+    }
+
+    void thumbnailsView()
+    {
+        Paths::setCacheHomeOverride(m_dir->filePath(QStringLiteral("cache")));
+        const QString pics = root + QStringLiteral("/shots");
+        QDir().mkpath(pics);
+        for (int i = 0; i < 5; ++i) {
+            QImage img(640, 400, QImage::Format_RGB32);
+            img.fill(QColor::fromHsv(i * 60, 200, 220));
+            QVERIFY(img.save(pics + QStringLiteral("/shot%1.png").arg(i)));
+        }
+        // A C64 cartridge is not a certificate.
+        QFile crt(pics + QStringLiteral("/Mayhem.crt"));
+        QVERIFY(crt.open(QIODevice::WriteOnly));
+        crt.write("C64 CARTRIDGE   ");
+        crt.write(QByteArray(64, '\0'));
+        crt.close();
+        FolderTab *t = w->display(0)->currentTab();
+        t->navigate(pics);
+        waitListed(t, 6);
+        // Mostly pictures: thumbnails by themselves.
+        QCOMPARE(t->viewMode(), FolderTab::ViewMode::Thumbnails);
+        QVERIFY(w->evaluateCondition(QStringLiteral("view=thumbnails"), false));
+        FileListModel *model = t->fileModel();
+        QVERIFY(model);
+        QVERIFY(model->thumbnails());
+        const int row = model->rowForPath(pics + QStringLiteral("/shot2.png"));
+        QVERIFY(row >= 0);
+        auto thumbShown = [model, row]() {
+            const QIcon icon = qvariant_cast<QIcon>(model->index(row, 0).data(Qt::DecorationRole));
+            return icon.availableSizes().contains(QSize(256, 256));
+        };
+        QTRY_VERIFY(thumbShown());
+        QCOMPARE(model->typeName(model->rowForPath(pics + QStringLiteral("/Mayhem.crt"))), QStringLiteral("C64 cartridge image"));
+        QVERIFY(w->runCommand(QStringLiteral("Set VIEW=details")));
+        QVERIFY(!model->thumbnails());
+        QVERIFY(w->runCommand(QStringLiteral("Set VIEW=thumbnails")));
+        QCOMPARE(t->viewMode(), FolderTab::ViewMode::Thumbnails);
+        Paths::setCacheHomeOverride(QString());
     }
 
 private:

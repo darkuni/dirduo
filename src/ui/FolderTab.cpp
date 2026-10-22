@@ -469,7 +469,22 @@ void FolderTab::setViewMode(ViewMode mode)
         m_list->setMovement(QListView::Static);
         m_stack->setCurrentWidget(m_list);
         break;
+    case ViewMode::Thumbnails: {
+        const int px = Style::instance()->scaled(128);
+        m_list->setViewMode(QListView::IconMode);
+        m_list->setFlow(QListView::LeftToRight);
+        m_list->setWrapping(true);
+        m_list->setIconSize(QSize(px, px));
+        m_list->setGridSize(QSize(px + Style::instance()->scaled(24), px + fontMetrics().lineSpacing() * 2 + Style::instance()->scaled(12)));
+        m_list->setSpacing(4);
+        m_list->setWordWrap(true);
+        m_list->setMovement(QListView::Static);
+        m_stack->setCurrentWidget(m_list);
+        break;
     }
+    }
+    // Pictures show as themselves in both icon views.
+    m_model->setThumbnails(mode == ViewMode::Icons || mode == ViewMode::Thumbnails);
     const QModelIndex cur = m_selection->currentIndex();
     if (cur.isValid())
         view()->scrollTo(cur);
@@ -701,6 +716,8 @@ QString FolderTab::viewModeName(ViewMode mode)
         return QStringLiteral("list");
     case ViewMode::Icons:
         return QStringLiteral("icons");
+    case ViewMode::Thumbnails:
+        return QStringLiteral("thumbnails");
     }
     return QStringLiteral("details");
 }
@@ -714,6 +731,8 @@ bool FolderTab::viewModeFromName(const QString &name, ViewMode &out)
         out = ViewMode::List;
     else if (n == QLatin1String("icons") || n == QLatin1String("largeicons"))
         out = ViewMode::Icons;
+    else if (n == QLatin1String("thumbnails") || n == QLatin1String("thumbs"))
+        out = ViewMode::Thumbnails;
     else
         return false;
     return true;
@@ -1064,11 +1083,11 @@ void FolderTab::autoSwitchForContent()
         if (FileKind::categoryFor(it.name, false) == FileKind::Category::Image)
             ++pictures;
     }
-    // Mostly pictures: icons. Any other folder keeps the view it had.
+    // Mostly pictures: thumbnails. Any other folder keeps the view it had.
     if (files >= 4 && pictures * 10 >= files * 7) {
         m_modeBeforeAuto = m_mode;
         m_autoIcons = true;
-        setViewMode(ViewMode::Icons);
+        setViewMode(ViewMode::Thumbnails);
     }
 }
 
