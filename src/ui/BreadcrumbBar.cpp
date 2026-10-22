@@ -145,7 +145,10 @@ void BreadcrumbBar::rebuild()
         QUrl root = url;
         root.setPath(QStringLiteral("/"));
         const QString rootLoc = Location::clean(root.toString(QUrl::FullyEncoded));
-        Crumb server{url.host().isEmpty() ? url.scheme() + QLatin1Char(':') : url.host(), rootLoc};
+        Crumb server{url.scheme() == QLatin1String("coll") ? QStringLiteral("Collections")
+                         : url.host().isEmpty()            ? url.scheme() + QLatin1Char(':')
+                                                           : url.host(),
+                     rootLoc};
         server.icon = QStringLiteral("network-server");
         server.canList = false;
         m_crumbs.append(server);

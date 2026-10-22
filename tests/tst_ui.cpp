@@ -7,6 +7,8 @@
 #include "ui/AdvancedRenameDialog.h"
 #include "ui/ButtonEditor.h"
 #include "ui/DuplicatesDialog.h"
+#include "ui/FindDialog.h"
+#include "core/Collections.h"
 #include "ui/SyncDialog.h"
 #include "ui/CommandConsole.h"
 #include "ui/CustomizeDialog.h"
@@ -1100,6 +1102,86 @@ private Q_SLOTS:
         QVERIFY(!QFile::exists(root + QStringLiteral("/a/game.d64")));
         QCOMPARE(dlg.groups().size(), 0); // one left: no longer a duplicate
         QVERIFY(dlg.summary().contains(QStringLiteral("No duplicates")));
+    }
+
+    void collectionsInTheLister()
+    {
+        FolderTab *t = w->display(0)->currentTab();
+        t->selectPaths({root + QStringLiteral("/a/one.txt"), root + QStringLiteral("/a/two.txt")});
+        QTRY_COMPARE(t->selectedPaths().size(), 2);
+        QVERIFY(w->runCommand(QStringLiteral("Collection ADD=Picks")));
+        QVERIFY(w->runCommand(QStringLiteral("Go /collections")));
+        QTRY_COMPARE(t->path(), QStringLiteral("coll:/"));
+        waitListed(t, 1);
+        QVERIFY(w->runCommand(QStringLiteral("Collection OPEN=Picks")));
+        QTRY_COMPARE(t->path(), Collections::location(QStringLiteral("Picks")));
+        waitListed(t, 2);
+        QVERIFY(t->isColumnVisible(FileListModel::LocationColumn));
+        QCOMPARE(t->title(), QStringLiteral("Picks"));
+
+        // Copy out of a collection copies the real files.
+        t->selectPaths({root + QStringLiteral("/a/one.txt")});
+        QTRY_COMPARE(t->selectedPaths().size(), 1);
+        QVERIFY(w->runCommand(QStringLiteral("Copy")));
+        m_app->jobs().waitForIdle(5000);
+        QTRY_VERIFY(QFile::exists(root + QStringLiteral("/b/one.txt")));
+
+        // Delete only takes it out of the collection.
+        QVERIFY(w->runCommand(QStringLiteral("Delete")));
+        waitListed(t, 1);
+        QVERIFY(QFile::exists(root + QStringLiteral("/a/one.txt")));
+
+        // Renaming in a collection renames the real file and keeps the link.
+        QVERIFY(w->runCommand(QStringLiteral("Rename FROM=\"%1\" TO=deux.txt").arg(root + QStringLiteral("/a/two.txt"))));
+        QVERIFY(QFile::exists(root + QStringLiteral("/a/deux.txt")));
+        QCOMPARE(Collections::instance()->items(QStringLiteral("Picks")), QStringList{root + QStringLiteral("/a/deux.txt")});
+        waitListed(t, 1);
+
+        // Copy into a collection (the destination showing one) adds links.
+        w->display(1)->currentTab()->navigate(Collections::location(QStringLiteral("Picks")));
+        QVERIFY(w->runCommand(QStringLiteral("Go \"%1\"").arg(root + QStringLiteral("/a"))));
+        waitListed(t, 3);
+        t->selectPaths({root + QStringLiteral("/a/three.txt")});
+        QTRY_COMPARE(t->selectedPaths().size(), 1);
+        QVERIFY(w->runCommand(QStringLiteral("Copy")));
+        QCOMPARE(Collections::instance()->items(QStringLiteral("Picks")).size(), 2);
+        QCOMPARE(QDir(root + QStringLiteral("/a")).entryList(QDir::Files).size(), 3); // nothing copied
+
+        // New collection from the list of collections; delete one.
+        t->navigate(QStringLiteral("coll:/"));
+        QVERIFY(w->runCommand(QStringLiteral("CreateFolder NAME=\"Amiga, C64\"")));
+        QCOMPARE(Collections::instance()->names().size(), 3);
+        QVERIFY(w->runCommand(QStringLiteral("Collection DELETE=Amiga")));
+        QCOMPARE(Collections::instance()->names().size(), 2);
+        Collections::instance()->remove(QStringLiteral("C64"));
+        Collections::instance()->remove(QStringLiteral("Picks"));
+    }
+
+    void findShowsResultsAsACollection()
+    {
+        QVERIFY(w->runCommand(QStringLiteral("Find NAME=t*.txt RUN")));
+        FileDisplay *d = w->display(0);
+        QTRY_COMPARE(d->currentTab()->path(), Collections::location(QStringLiteral("Find Results")));
+        waitListed(d->currentTab(), 2); // two.txt, three.txt
+        const int tabs = d->tabCount();
+        // A second search reuses the results tab.
+        QVERIFY(w->runCommand(QStringLiteral("Find NAME=one RUN")));
+        QTRY_COMPARE(Collections::instance()->items(QStringLiteral("Find Results")).size(), 1);
+        waitListed(d->currentTab(), 1);
+        QCOMPARE(d->tabCount(), tabs);
+        QVERIFY(!runFailing(QStringLiteral("Find RUN"))); // nothing to look for
+        QVERIFY(!runFailing(QStringLiteral("Find NAME=x MINSIZE=lots")));
+
+        // The dialog.
+        FindDialog dlg({root}, FindCriteria(), QStringLiteral("Mine"), w);
+        dlg.nameEdit()->setText(QStringLiteral("keep"));
+        dlg.startSearch();
+        QTRY_VERIFY(!dlg.isSearching());
+        QCOMPARE(dlg.results(), QStringList{root + QStringLiteral("/b/keep.txt")});
+        QCOMPARE(Collections::instance()->items(QStringLiteral("Mine")), dlg.results());
+        QVERIFY(dlg.status().startsWith(QStringLiteral("1 found")));
+        Collections::instance()->remove(QStringLiteral("Mine"));
+        Collections::instance()->remove(QStringLiteral("Find Results"));
     }
 
     void sessionRoundTrip()

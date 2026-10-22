@@ -196,6 +196,8 @@ QString title(const QString &loc)
     const QString name = fileName(loc);
     if (!name.isEmpty())
         return name;
+    if (loc.startsWith(QLatin1String("coll:"), Qt::CaseInsensitive))
+        return QStringLiteral("Collections");
     const QUrl url(loc);
     return url.host().isEmpty() ? url.scheme() + QLatin1Char(':') : url.host();
 }

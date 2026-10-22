@@ -55,6 +55,8 @@ public:
     // A button condition ("selection && dual") evaluated here and now.
     bool evaluateCondition(const QString &condition, bool fallback, QString *error = nullptr) const;
     void updateButtonStates();
+    // Opens (or refreshes) the tab showing a Find result collection.
+    void showFindResults(const QString &collectionLocation, int count);
 
     FileDisplay *sourceDisplay() const;
     FileDisplay *destDisplay() const; // null in single mode
@@ -154,6 +156,7 @@ private:
     bool m_hasSelectionOverride = false;
     QStringList m_selectionOverride;
     QString *m_errorSink = nullptr;
+    QStringList m_lastFindRoots;
     DrivesBar *m_drives = nullptr;
     ToolbarStrip *m_strip = nullptr;
     QMenu *m_toolbarsMenu = nullptr;

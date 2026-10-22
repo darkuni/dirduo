@@ -1,6 +1,7 @@
 #include "core/CommandEngine.h"
 
 #include "core/AliasManager.h"
+#include "core/Collections.h"
 #include "core/FileOps.h"
 #include "core/JobManager.h"
 #include "core/Location.h"
@@ -56,10 +57,17 @@ CommandEngine::CommandEngine(AliasManager &aliases, JobManager &jobs, QObject *p
 {
 }
 
+void CommandEngine::recordRename(const QList<QPair<QString, QString>> &done)
+{
+    m_lastRename = done;
+    for (const auto &d : done)
+        Collections::instance()->renamed(d.second, d.first);
+}
+
 QStringList CommandEngine::commandNames()
 {
-    return {QStringLiteral("Clipboard"), QStringLiteral("Copy"), QStringLiteral("CreateFolder"),
-            QStringLiteral("Delete"), QStringLiteral("Duplicates"), QStringLiteral("Go"), QStringLiteral("Move"), QStringLiteral("Print"),
+    return {QStringLiteral("Clipboard"), QStringLiteral("Collection"), QStringLiteral("Copy"), QStringLiteral("CreateFolder"),
+            QStringLiteral("Delete"), QStringLiteral("Duplicates"), QStringLiteral("Find"), QStringLiteral("Go"), QStringLiteral("Move"), QStringLiteral("Print"),
             QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Set"), QStringLiteral("Settings"),
             QStringLiteral("Sync"), QStringLiteral("Toolbar")};
 }
@@ -163,6 +171,8 @@ bool CommandEngine::execute(const ParsedCommand &cmd, CommandContext &ctx, QStri
         return cmdCreateFolder(cmd, ctx, error);
     if (cmd.is(QStringLiteral("Clipboard")))
         return cmdClipboard(cmd, ctx, error);
+    if (cmd.is(QStringLiteral("Collection")))
+        return cmdCollection(cmd, ctx, error);
     if (cmd.is(QStringLiteral("Set")))
         return ctx.set(cmd, error);
     if (cmd.is(QStringLiteral("Select")))
@@ -173,7 +183,7 @@ bool CommandEngine::execute(const ParsedCommand &cmd, CommandContext &ctx, QStri
         return ctx.printFolder(cmd, error);
     if (cmd.is(QStringLiteral("Settings")))
         return ctx.settings(cmd, error);
-    if (cmd.is(QStringLiteral("Sync")) || cmd.is(QStringLiteral("Duplicates")))
+    if (cmd.is(QStringLiteral("Sync")) || cmd.is(QStringLiteral("Duplicates")) || cmd.is(QStringLiteral("Find")))
         return ctx.tool(cmd, error);
     if (error)
         *error = QStringLiteral("Unknown command \"%1\".").arg(cmd.name);
@@ -276,6 +286,17 @@ bool CommandEngine::cmdCopy(const ParsedCommand &cmd, CommandContext &ctx, bool 
             *error = kCancelled;
         return false;
     }
+    if (Collections::isCollectionLocation(dest)) {
+        // Into a collection: a link to each item, nothing is copied.
+        const QString name = Collections::nameOf(dest);
+        if (name.isEmpty()) {
+            if (error)
+                *error = QStringLiteral("Open a collection first; this is the list of collections.");
+            return false;
+        }
+        Collections::instance()->add(name, sources);
+        return true;
+    }
     if (Location::isLocal(dest) && !QFileInfo(dest).isDir()) {
         if (error)
             *error = QStringLiteral("\"%1\" is not a folder.").arg(dest);
@@ -321,6 +342,26 @@ bool CommandEngine::cmdDelete(const ParsedCommand &cmd, CommandContext &ctx, QSt
             *error = kCancelled;
         return false;
     }
+    if (Collections::isCollectionLocation(ctx.sourcePath()) && !cmd.hasArg(QStringLiteral("FILE"))) {
+        Collections *c = Collections::instance();
+        const QString name = Collections::nameOf(ctx.sourcePath());
+        if (name.isEmpty()) {
+            // Whole collections; the files in them stay where they are.
+            if (!cmd.hasFlag(QStringLiteral("QUIET"))
+                && !ctx.confirm(QStringLiteral("Delete collections"),
+                                QStringLiteral("Delete %1 collection(s)? The files in them are not touched.").arg(sources.size()))) {
+                if (error)
+                    *error = kCancelled;
+                return false;
+            }
+            for (const QString &s : sources)
+                c->remove(Collections::nameOf(s));
+            return true;
+        }
+        // In a collection, Delete takes items out of it; the files stay.
+        c->removeItems(name, sources);
+        return true;
+    }
     bool anyRemote = false;
     for (const QString &s : sources)
         anyRemote = anyRemote || Location::isRemote(s);
@@ -360,8 +401,10 @@ bool CommandEngine::cmdRename(const ParsedCommand &cmd, CommandContext &ctx, QSt
         if (!RenameEngine::undo(m_lastRename, &err))
             return fail(err);
         QStringList back;
-        for (const auto &d : std::as_const(m_lastRename))
+        for (const auto &d : std::as_const(m_lastRename)) {
             back << d.second;
+            Collections::instance()->renamed(d.first, d.second);
+        }
         m_lastRename.clear();
         ctx.afterLocalChange(back);
         return true;
@@ -425,6 +468,8 @@ bool CommandEngine::cmdRename(const ParsedCommand &cmd, CommandContext &ctx, QSt
             return fail(err);
         if (!done.isEmpty())
             m_lastRename = done;
+        for (const auto &d : std::as_const(done))
+            Collections::instance()->renamed(d.second, d.first);
         QStringList renamed;
         for (const auto &d : std::as_const(done))
             renamed << d.first;
@@ -443,6 +488,13 @@ bool CommandEngine::cmdRename(const ParsedCommand &cmd, CommandContext &ctx, QSt
         return false;
     }
     QString newPath;
+    if (Collections::isCollectionLocation(from)) {
+        // Renaming a collection itself.
+        if (!Collections::instance()->rename(Collections::nameOf(from), to, error))
+            return false;
+        ctx.afterLocalChange({Collections::location(to)});
+        return true;
+    }
     if (Location::isRemote(from)) {
         QString why;
         if (!FileOps::isValidFileName(to, &why)) {
@@ -462,6 +514,7 @@ bool CommandEngine::cmdRename(const ParsedCommand &cmd, CommandContext &ctx, QSt
     } else if (!FileOps::renameEntry(from, to, &newPath, error)) {
         return false;
     }
+    Collections::instance()->renamed(from, newPath);
     ctx.afterLocalChange({newPath});
     return true;
 }
@@ -470,6 +523,35 @@ bool CommandEngine::cmdCreateFolder(const ParsedCommand &cmd, CommandContext &ct
 {
     const QString parent = cmd.hasArg(QStringLiteral("IN")) ? resolvePath(cmd.value(QStringLiteral("IN")), ctx.sourcePath())
                                                            : ctx.sourcePath();
+    if (Collections::isCollectionLocation(parent)) {
+        if (!Collections::nameOf(parent).isEmpty()) {
+            if (error)
+                *error = QStringLiteral("A collection holds links, not folders.");
+            return false;
+        }
+        QString names = cmd.values(QStringLiteral("NAME")).join(QLatin1Char(','));
+        if (names.trimmed().isEmpty()) {
+            QString value = QStringLiteral("New Collection");
+            if (!ctx.promptText(QStringLiteral("New Collection"), QStringLiteral("Collection name:"), value)) {
+                if (error)
+                    *error = kCancelled;
+                return false;
+            }
+            names = value;
+        }
+        QStringList made;
+        for (const QString &n : names.split(QLatin1Char(','), Qt::SkipEmptyParts)) {
+            QString why;
+            if (!Collections::instance()->create(n.trimmed(), &why)) {
+                if (error)
+                    *error = why;
+                return false;
+            }
+            made << Collections::location(n.trimmed());
+        }
+        ctx.afterLocalChange(made);
+        return true;
+    }
     QString names = cmd.values(QStringLiteral("NAME")).join(QLatin1Char(','));
     if (names.isEmpty())
         names = cmd.positional.join(QLatin1Char(' '));
@@ -565,6 +647,11 @@ bool CommandEngine::pasteAsFile(const QMimeData *mime, bool askName, CommandCont
     }
 
     const QString dir = ctx.sourcePath();
+    if (Collections::isCollectionLocation(dir)) {
+        if (error)
+            *error = QStringLiteral("A collection holds links to files; paste the picture into a folder.");
+        return false;
+    }
     if (Location::isLocal(dir)) {
         // Never overwrite: "name (2).png" when the name is taken.
         QString target = Location::join(dir, name);
@@ -593,6 +680,60 @@ bool CommandEngine::pasteAsFile(const QMimeData *mime, bool askName, CommandCont
     f.close();
     copyItems({tmp}, dir, true, CollisionAction::Rename);
     return true;
+}
+
+bool CommandEngine::cmdCollection(const ParsedCommand &cmd, CommandContext &ctx, QString *error)
+{
+    auto fail = [error](const QString &msg) {
+        if (error)
+            *error = msg;
+        return false;
+    };
+    Collections *c = Collections::instance();
+    if (cmd.hasArg(QStringLiteral("ADD"))) {
+        QString name = cmd.value(QStringLiteral("ADD"));
+        if (name.isEmpty() || name == QLatin1String("ask")) {
+            name = QStringLiteral("Favourites");
+            if (!ctx.promptText(QStringLiteral("Add to Collection"), QStringLiteral("Collection (new or existing):"), name))
+                return fail(kCancelled);
+        }
+        const QStringList paths = sourcesFor(cmd, ctx, {QStringLiteral("ADD")});
+        if (paths.isEmpty())
+            return fail(QStringLiteral("Select what to add first."));
+        QString why;
+        if (!c->exists(name) && !c->create(name, &why))
+            return fail(why);
+        c->add(name, paths);
+        return true;
+    }
+    if (cmd.hasFlag(QStringLiteral("REMOVE"))) {
+        const QString name = Collections::nameOf(ctx.sourcePath());
+        if (name.isEmpty())
+            return fail(QStringLiteral("Open a collection first."));
+        c->removeItems(name, ctx.selectedPaths());
+        return true;
+    }
+    if (cmd.hasArg(QStringLiteral("CREATE"))) {
+        QString why;
+        if (!c->create(cmd.value(QStringLiteral("CREATE")), &why))
+            return fail(why);
+        return true;
+    }
+    if (cmd.hasArg(QStringLiteral("DELETE"))) {
+        if (!c->remove(cmd.value(QStringLiteral("DELETE"))))
+            return fail(QStringLiteral("There is no collection called %1.").arg(cmd.value(QStringLiteral("DELETE"))));
+        return true;
+    }
+    if (cmd.hasArg(QStringLiteral("OPEN")) || cmd.positional.isEmpty() || cmd.hasFlag(QStringLiteral("NEWTAB"))) {
+        const QString name = cmd.value(QStringLiteral("OPEN"));
+        ParsedCommand go;
+        go.name = QStringLiteral("Go");
+        go.args[QStringLiteral("PATH")] = QStringList{name.isEmpty() ? QString::fromLatin1(Collections::kRoot) : Collections::location(name)};
+        if (cmd.hasFlag(QStringLiteral("NEWTAB")))
+            go.positional << QStringLiteral("NEWTAB");
+        return ctx.go(go, error);
+    }
+    return fail(QStringLiteral("Collection takes ADD=, REMOVE, CREATE=, DELETE= or OPEN=."));
 }
 
 bool CommandEngine::cmdClipboard(const ParsedCommand &cmd, CommandContext &ctx, QString *error)
@@ -641,6 +782,16 @@ bool CommandEngine::cmdClipboard(const ParsedCommand &cmd, CommandContext &ctx, 
             if (error)
                 *error = QStringLiteral("The clipboard holds no files.");
             return false;
+        }
+        if (Collections::isCollectionLocation(ctx.sourcePath())) {
+            const QString name = Collections::nameOf(ctx.sourcePath());
+            if (name.isEmpty()) {
+                if (error)
+                    *error = QStringLiteral("Open a collection to paste into it.");
+                return false;
+            }
+            Collections::instance()->add(name, sources);
+            return true;
         }
         bool isCut = mime->data(QStringLiteral("application/x-kde-cutselection")) == "1";
         if (!isCut) {

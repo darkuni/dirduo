@@ -1,10 +1,12 @@
 #include "core/DirLister.h"
 
 #include "core/Location.h"
+#include "core/Collections.h"
 #include "core/RemoteBackend.h"
 
 #include <QDir>
 #include <QDirIterator>
+#include <QTimer>
 #include <QFileInfo>
 #include <QFutureWatcher>
 #include <QtConcurrent/QtConcurrentRun>
@@ -115,6 +117,11 @@ void DirLister::open(const QString &path)
     m_path = Location::clean(path);
     m_debounce.stop();
     ++m_generation; // drop any local listing still in flight
+    if (Collections::isCollectionLocation(m_path)) {
+        watch();
+        listCollection(false);
+        return;
+    }
     if (Location::isRemote(m_path)) {
         watch(); // stops watching the previous local folder
         openRemote(false);
@@ -158,6 +165,10 @@ void DirLister::refresh()
 {
     if (m_path.isEmpty())
         return;
+    if (Collections::isCollectionLocation(m_path)) {
+        listCollection(true);
+        return;
+    }
     if (Location::isRemote(m_path)) {
         openRemote(true);
         return;
@@ -214,4 +225,56 @@ void DirLister::start(bool isRefresh)
                                                &r.error, live.get(), gen);
         return r;
     }));
+}
+
+void DirLister::listCollection(bool isRefresh)
+{
+    if (!m_collectionHooked) {
+        m_collectionHooked = true;
+        connect(Collections::instance(), &Collections::changed, this, [this](const QString &name) {
+            if (!Collections::isCollectionLocation(m_path))
+                return;
+            const QString mine = Collections::nameOf(m_path);
+            if (mine == name || (mine.isEmpty() && name.isEmpty()))
+                listCollection(true);
+        });
+    }
+    const QString path = m_path;
+    const QString name = Collections::nameOf(path);
+    Collections *c = Collections::instance();
+    FileItemList items;
+    if (name.isEmpty()) {
+        for (const QString &n : c->names()) {
+            FileItem it;
+            it.name = n;
+            it.path = Collections::location(n);
+            it.isDir = true;
+            it.modified = QFileInfo(QDir(c->dir()).filePath(n + QStringLiteral(".txt"))).lastModified();
+            items.append(it);
+        }
+    } else if (!c->exists(name)) {
+        const quint64 gen = m_generation;
+        QTimer::singleShot(0, this, [this, path, gen]() {
+            if (gen == m_generation)
+                Q_EMIT failed(path, QStringLiteral("There is no collection called %1.").arg(Collections::nameOf(path)));
+        });
+        return;
+    } else {
+        for (const QString &p : c->items(name)) {
+            if (!Location::isLocal(p))
+                continue;
+            const QFileInfo fi(p);
+            if (!fi.exists() && !fi.isSymLink())
+                continue; // gone; it stays in the list in case a drive comes back
+            FileItem it = FileItem::fromFileInfo(fi);
+            it.relPath = fi.absolutePath(); // shown in the Location column
+            items.append(it);
+        }
+    }
+    const quint64 gen = m_generation;
+    // Delivered like any listing: after the caller has finished setting up.
+    QTimer::singleShot(0, this, [this, path, items, isRefresh, gen]() {
+        if (gen == m_generation && path == m_path)
+            Q_EMIT listed(path, items, isRefresh);
+    });
 }

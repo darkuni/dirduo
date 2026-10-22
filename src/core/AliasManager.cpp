@@ -89,6 +89,7 @@ void AliasManager::buildBuiltIns()
     m_builtIns.insert(QStringLiteral("config"), Paths::userConfigHome());
     m_builtIns.insert(QStringLiteral("linopus"), Paths::configDir());
     m_builtIns.insert(QStringLiteral("trash"), Paths::userDataHome() + QStringLiteral("/Trash/files"));
+    m_builtIns.insert(QStringLiteral("collections"), QStringLiteral("coll:/"));
     m_builtIns.insert(QStringLiteral("steam"), Paths::userDataHome() + QStringLiteral("/Steam"));
     m_builtIns.insert(QStringLiteral("temp"), QDir::tempPath());
 }

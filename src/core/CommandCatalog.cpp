@@ -27,6 +27,14 @@ QList<CommandInfo> buildCommands()
         arg("WHENEXISTS=", {QStringLiteral("ask"), QStringLiteral("replace"), QStringLiteral("newer"), QStringLiteral("skip"), QStringLiteral("rename")},
             "What to do when a name is taken"),
     };
+    c << CommandInfo{QStringLiteral("Collection"), QStringLiteral("Virtual folders of links to files anywhere"),
+                     {arg("ADD=", {QStringLiteral("ask")}, "Add the selection to this collection (made if new)"),
+                      arg("REMOVE", {}, "Take the selection out of the open collection"),
+                      arg("CREATE=", {}, "Make an empty collection"),
+                      arg("DELETE=", {}, "Delete a collection (the files stay)"),
+                      arg("OPEN=", {}, "Show a collection (all of them when left empty)"),
+                      arg("NEWTAB", {}, "In a new tab")},
+                     QStringLiteral("Collection ADD=\"C64 favourites\"")};
     c << CommandInfo{QStringLiteral("Copy"), QStringLiteral("Copy the selection to the destination"), copyArgs,
                      QStringLiteral("Copy TO=/sdcard WHENEXISTS=newer")};
     c << CommandInfo{QStringLiteral("CreateFolder"), QStringLiteral("Make new folders; several at once with commas"),
@@ -42,6 +50,21 @@ QList<CommandInfo> buildCommands()
                       arg("MINSIZE=", {}, "Ignore files smaller than this many bytes"),
                       arg("HIDDEN", {}, "Include hidden files")},
                      QStringLiteral("Duplicates IN=/roms BY=contents")};
+    c << CommandInfo{QStringLiteral("Find"), QStringLiteral("Search by name, text inside, size and date"),
+                     {arg("NAME=", {}, "Wildcards (; between several) or text the name contains"),
+                      arg("REGEX", {}, "NAME is a regular expression"),
+                      arg("CASE", {}, "Match case"),
+                      arg("CONTAINS=", {}, "Text inside the file"),
+                      arg("MINSIZE=", {}, "At least, like 10M"), arg("MAXSIZE=", {}, "At most, like 700K"),
+                      arg("NEWER=", {}, "Modified in the last N days, or since a date"),
+                      arg("OLDER=", {}, "Not modified in the last N days, or before a date"),
+                      arg("TYPE=", {QStringLiteral("files"), QStringLiteral("folders"), QStringLiteral("both")}, "What to find"),
+                      arg("IN=", {}, "Where to look (the source folder when left out)"),
+                      arg("HIDDEN", {}, "Include hidden files"), arg("NORECURSE", {}, "Not in subfolders"),
+                      arg("COLLECTION=", {}, "Where the results go (Find Results)"),
+                      arg("PRESET=", {}, "Start from a saved search"),
+                      arg("RUN", {}, "Search now and show the results, without the dialog")},
+                     QStringLiteral("Find NAME=*.d64 NEWER=30 IN=/roms RUN")};
     c << CommandInfo{QStringLiteral("Go"), QStringLiteral("Read a folder, or move through history"),
                      {arg("PATH=", {}, "Folder, alias (/downloads) or server (sftp://...)"),
                       arg("UP", {}, "Parent folder"), arg("BACK", {}, "Back in history"),

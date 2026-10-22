@@ -9,6 +9,8 @@
 #include "ui/AdvancedRenameDialog.h"
 #include "ui/AppContext.h"
 #include "ui/DuplicatesDialog.h"
+#include "ui/FindDialog.h"
+#include "core/Collections.h"
 #include "ui/SyncDialog.h"
 #include "ui/BreadcrumbBar.h"
 #include "ui/ButtonBar.h"
@@ -290,6 +292,19 @@ void ListerWindow::buildMenus()
     edit->addAction(commandAction(QStringLiteral("Cut"), QStringLiteral("Clipboard CUT"), QKeySequence::Cut, QStringLiteral("edit-cut")));
     edit->addAction(commandAction(QStringLiteral("Copy"), QStringLiteral("Clipboard COPY"), QKeySequence::Copy, QStringLiteral("edit-copy")));
     edit->addAction(commandAction(QStringLiteral("Paste"), QStringLiteral("Clipboard PASTE"), QKeySequence::Paste, QStringLiteral("edit-paste")));
+    QMenu *addTo = edit->addMenu(QIcon::fromTheme(QStringLiteral("folder-favorites")), QStringLiteral("Add to Collection"));
+    connect(addTo, &QMenu::aboutToShow, this, [this, addTo]() {
+        addTo->clear();
+        for (const QString &n : Collections::instance()->names()) {
+            QString quoted = n;
+            quoted.replace(QLatin1Char('"'), QString());
+            addTo->addAction(commandAction(n, QStringLiteral("Collection ADD=\"%1\"").arg(quoted)));
+        }
+        if (!addTo->isEmpty())
+            addTo->addSeparator();
+        addTo->addAction(commandAction(QStringLiteral("New Collection..."), QStringLiteral("Collection ADD=ask")));
+    });
+    edit->addAction(commandAction(QStringLiteral("Remove from Collection"), QStringLiteral("Collection REMOVE")));
     edit->addAction(commandAction(QStringLiteral("Paste as File..."), QStringLiteral("Clipboard PASTE AS"), {},
                                   QStringLiteral("edit-paste")));
     edit->addSeparator();
@@ -365,10 +380,13 @@ void ListerWindow::buildMenus()
     location->setShortcuts({QKeySequence(QStringLiteral("Ctrl+L")), QKeySequence(QStringLiteral("Alt+D"))});
     connect(location, &QAction::triggered, this, [this]() { sourceDisplay()->breadcrumb()->startEditing(); });
     go->addSeparator();
+    go->addAction(commandAction(QStringLiteral("Collections"), QStringLiteral("Collection OPEN"), {}, QStringLiteral("folder-favorites")));
     m_aliasMenu = go->addMenu(QIcon::fromTheme(QStringLiteral("bookmarks")), QStringLiteral("Aliases"));
     connect(m_aliasMenu, &QMenu::aboutToShow, this, &ListerWindow::rebuildAliasMenu);
 
     QMenu *tools = menuBar()->addMenu(QStringLiteral("&Tools"));
+    tools->addAction(commandAction(QStringLiteral("Find..."), QStringLiteral("Find"), QKeySequence(QStringLiteral("Ctrl+Shift+F")),
+                                   QStringLiteral("edit-find")));
     tools->addAction(commandAction(QStringLiteral("Synchronize..."), QStringLiteral("Sync"), {}, QStringLiteral("folder-sync")));
     tools->addAction(commandAction(QStringLiteral("Find Duplicates..."), QStringLiteral("Duplicates"), {}, QStringLiteral("edit-copy")));
     tools->addSeparator();
@@ -1906,6 +1924,73 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
             dlg->startCompare();
         return true;
     }
+    if (cmd.is(QStringLiteral("Find"))) {
+        FindCriteria c;
+        QStringList roots;
+        if (cmd.hasArg(QStringLiteral("PRESET")) && !FindPresets::load(cmd.value(QStringLiteral("PRESET")), c, &roots))
+            return fail(QStringLiteral("There is no saved search called \"%1\".").arg(cmd.value(QStringLiteral("PRESET"))));
+        if (cmd.hasArg(QStringLiteral("NAME")))
+            c.name = cmd.value(QStringLiteral("NAME"));
+        if (cmd.hasFlag(QStringLiteral("REGEX")))
+            c.nameRegex = true;
+        if (cmd.hasFlag(QStringLiteral("CASE")))
+            c.caseSensitive = true;
+        if (cmd.hasArg(QStringLiteral("CONTAINS")))
+            c.contains = cmd.value(QStringLiteral("CONTAINS"));
+        auto size = [&](const char *key, qint64 &out) {
+            if (!cmd.hasArg(QLatin1String(key)))
+                return true;
+            out = FindCriteria::parseSize(cmd.value(QLatin1String(key)));
+            return out >= 0;
+        };
+        if (!size("MINSIZE", c.minSize) || !size("MAXSIZE", c.maxSize))
+            return fail(QStringLiteral("Sizes look like 500, 700K, 10M or 2G."));
+        auto when = [&](const char *key, QDateTime &out) {
+            if (!cmd.hasArg(QLatin1String(key)))
+                return true;
+            out = FindCriteria::parseWhen(cmd.value(QLatin1String(key)));
+            return out.isValid();
+        };
+        if (!when("NEWER", c.newerThan) || !when("OLDER", c.olderThan))
+            return fail(QStringLiteral("NEWER and OLDER take a number of days or a date like 2024-01-31."));
+        const QString type = cmd.value(QStringLiteral("TYPE")).toLower();
+        if (type == QLatin1String("folders"))
+            c.type = FindCriteria::Type::Folders;
+        else if (type == QLatin1String("both"))
+            c.type = FindCriteria::Type::Both;
+        else if (!type.isEmpty() && type != QLatin1String("files"))
+            return fail(QStringLiteral("TYPE takes files, folders or both."));
+        if (cmd.hasFlag(QStringLiteral("HIDDEN")))
+            c.includeHidden = true;
+        if (cmd.hasFlag(QStringLiteral("NORECURSE")))
+            c.recurse = false;
+        for (const QString &f : cmd.values(QStringLiteral("IN")))
+            roots << engine.resolvePath(f, sourcePath());
+        if (roots.isEmpty())
+            roots = Location::isLocal(sourcePath()) ? QStringList{sourcePath()} : m_lastFindRoots; // from a results tab: search again
+        for (const QString &r : std::as_const(roots)) {
+            if (!Location::isLocal(r))
+                return fail(QStringLiteral("Find works in local folders for now."));
+        }
+        if (cmd.hasFlag(QStringLiteral("RUN")) && roots.isEmpty())
+            return fail(QStringLiteral("Find needs a folder to look in (IN=...)."));
+        if (!roots.isEmpty())
+            m_lastFindRoots = roots;
+        const QString collection = cmd.value(QStringLiteral("COLLECTION"));
+        auto *dlg = new FindDialog(roots, c, collection, this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        connect(dlg, &FindDialog::resultsReady, this, &ListerWindow::showFindResults);
+        if (cmd.hasFlag(QStringLiteral("RUN"))) {
+            if (c.isEmpty())
+                return fail(QStringLiteral("Find RUN needs something to look for (NAME=, CONTAINS=, a size or a date)."));
+            // No dialog: it searches out of sight and closes itself when done.
+            connect(dlg, &FindDialog::resultsReady, dlg, &QDialog::close);
+            dlg->startSearch();
+            return true;
+        }
+        dlg->show();
+        return true;
+    }
     // Duplicates
     DuplicateOptions o;
     const QString by = cmd.value(QStringLiteral("BY")).toLower();
@@ -1938,4 +2023,19 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
     dlg->show();
     dlg->startSearch();
     return true;
+}
+
+void ListerWindow::showFindResults(const QString &collectionLocation, int count)
+{
+    Q_UNUSED(count)
+    // Reuse a tab already showing these results; otherwise a new one.
+    FileDisplay *d = sourceDisplay();
+    for (int i = 0; i < d->tabCount(); ++i) {
+        if (d->tab(i)->path() == collectionLocation) {
+            d->setCurrentIndex(i);
+            d->tab(i)->refresh();
+            return;
+        }
+    }
+    d->addTab(collectionLocation, true);
 }

@@ -47,6 +47,7 @@ private:
     void start(bool isRefresh);
     void watch();
     void openRemote(bool isRefresh);
+    void listCollection(bool isRefresh);
 
     QString m_path;
     QFileSystemWatcher m_watcher;
@@ -56,6 +57,7 @@ private:
     bool m_refreshPending = false;
     RemoteLister *m_remote = nullptr;
     FlatMode m_flat = FlatMode::Off;
+    bool m_collectionHooked = false;
     bool m_truncated = false;
     std::shared_ptr<std::atomic<quint64>> m_liveGeneration;
 

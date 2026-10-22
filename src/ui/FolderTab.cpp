@@ -1,5 +1,6 @@
 #include "ui/FolderTab.h"
 
+#include "core/Collections.h"
 #include "core/DirLister.h"
 #include "core/FileKind.h"
 #include "core/FileOps.h"
@@ -220,6 +221,7 @@ void FolderTab::navigate(const QString &rawPath, bool addToHistory)
     m_pendingSelection.clear();
     m_model->clear(path);
     applyFormatFor(path);
+    updateLocationColumn();
     m_lister->open(path);
     Q_EMIT pathChanged(m_path);
     Q_EMIT statusChanged();
@@ -726,7 +728,8 @@ void FolderTab::resetColumns()
 void FolderTab::updateLocationColumn()
 {
     // The Location column only means something in flat view.
-    const bool flat = m_lister->flatMode() != DirLister::FlatMode::Off;
+    // Flat view and collections show where each item lives.
+    const bool flat = m_lister->flatMode() != DirLister::FlatMode::Off || Collections::isCollectionLocation(m_path);
     m_details->header()->setSectionHidden(FileListModel::LocationColumn, !flat);
     fitNameColumn();
 }

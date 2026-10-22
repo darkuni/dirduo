@@ -99,6 +99,7 @@ public:
 //   Sync [LEFT=] [RIGHT=] [MODE=update|mirror|twoway] [COMPARE=date|size|datesize|contents]
 //        [EXCLUDE=] [RUN]
 //   Duplicates [IN=...] [BY=contents|namesize|name] [MINSIZE=bytes] [HIDDEN]
+//   Collection ADD=<name> | REMOVE | CREATE=<name> | DELETE=<name> | OPEN=<name> [NEWTAB]
 //   Print FOLDER [AS=text|csv|html] [TO=clipboard|ask|<file>] [SELECTED]
 //   Toolbar NAME=buttons|drives PLACE=top|bottom|left|right|between [NEWROW]
 //           STATE=on|off|toggle
@@ -133,7 +134,7 @@ public:
     JobManager &jobs() { return m_jobs; }
 
     // Batch renames, for Rename UNDO: (new path, old path).
-    void recordRename(const QList<QPair<QString, QString>> &done) { m_lastRename = done; }
+    void recordRename(const QList<QPair<QString, QString>> &done);
     bool canUndoRename() const { return !m_lastRename.isEmpty(); }
 
     // Set when the last run stopped because the user cancelled a prompt.
@@ -146,6 +147,7 @@ private:
     bool cmdRename(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool cmdCreateFolder(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool cmdClipboard(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
+    bool cmdCollection(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool pasteAsFile(const QMimeData *mime, bool askName, CommandContext &ctx, QString *error);
 
     QStringList sourcesFor(const ParsedCommand &cmd, CommandContext &ctx, const QStringList &flags) const;

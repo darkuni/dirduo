@@ -3,6 +3,7 @@
 //   QT_QPA_PLATFORM=offscreen ./linopus_snapshot out-dir
 
 #include "core/AliasManager.h"
+#include "core/Collections.h"
 #include "core/JobManager.h"
 #include "core/Location.h"
 #include "core/Paths.h"
@@ -360,6 +361,19 @@ int main(int argc, char *argv[])
         dlg.checkAllBut(DuplicatesDialog::Keep::ShortestPath);
         QTest::qWait(300);
         dlg.grab().save(out + QStringLiteral("/23-duplicates.png"));
+    }
+
+    // Find: every disk image under the deck, results as a collection in a tab.
+    {
+        w->runCommand(QStringLiteral("Set DUAL=vertical\nSet VIEW=details\nSet THEME=\"Linopus Dark\""));
+        w->display(0)->currentTab()->navigate(root);
+        QTest::qWait(300);
+        w->runCommand(QStringLiteral("Find NAME=*.d64;*.adf IN=\"%1\" RUN").arg(root));
+        for (int i = 0; i < 50 && !Collections::isCollectionLocation(w->display(0)->currentTab()->path()); ++i)
+            QTest::qWait(100);
+        QTest::qWait(600);
+        shot(w, out, QStringLiteral("24-find-results-collection"));
+        w->runCommand(QStringLiteral("Set THEME=\"Linopus Light\""));
     }
 
 #ifdef LINOPUS_HAVE_KIO

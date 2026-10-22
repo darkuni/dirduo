@@ -52,6 +52,8 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Window > Customize Toolbars: drag a button to another spot, double-click one to edit, close.
 - [ ] File > Settings > Back Up Settings: a zip lands where you choose.
 - [ ] Tools > Synchronize between a folder on internal storage and one on the SD card: the list makes sense; Synchronize; Compare again says they match.
+- [ ] Ctrl+Shift+F, name `*.d64` (or any type you have), Find: results open in a tab; copy one of them to the other display.
+- [ ] Select a few files, Edit > Add to Collection > New Collection; Go > Collections opens it; Delete there leaves the real files alone.
 - [ ] Tools > Find Duplicates on a ROM folder: groups show; check copies, then Move Checked to Trash.
 
 ## Report back

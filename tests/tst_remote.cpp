@@ -254,14 +254,16 @@ private Q_SLOTS:
 
     void cancelStopsTransfer()
     {
-        writeFile(local + QStringLiteral("/big.bin"), QByteArray(64 * 1024 * 1024, 'b'));
+        // Big enough that a fast CI machine cannot finish it over localhost
+        // before the cancel arrives; cancelled as soon as it is running.
+        writeFile(local + QStringLiteral("/big.bin"), QByteArray(256 * 1024 * 1024, 'b'));
         QDir().mkpath(sftpDir + QStringLiteral("/big"));
         JobSpec spec;
         spec.type = JobType::Copy;
         spec.sources = {local + QStringLiteral("/big.bin")};
         spec.destDir = sftp + sftpDir + QStringLiteral("/big");
         const int id = m_jobs->enqueue(spec);
-        QTRY_VERIFY_WITH_TIMEOUT(m_jobs->snapshot(id).doneBytes > 0, 15000);
+        QTRY_VERIFY_WITH_TIMEOUT(m_jobs->snapshot(id).state == JobState::Running, 15000);
         m_jobs->cancel(id);
         QVERIFY(m_jobs->waitForIdle(15000));
         QCOMPARE(m_jobs->snapshot(id).state, JobState::Cancelled);

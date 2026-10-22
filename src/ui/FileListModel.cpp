@@ -398,16 +398,35 @@ QString FileListModel::typeName(int row) const
 
 QIcon FileListModel::iconFor(int row) const
 {
+    if (m_items.at(row).isDir && m_items.at(row).path.startsWith(QLatin1String("coll:"))) {
+        static const QIcon coll = QIcon::fromTheme(QStringLiteral("folder-favorites"), QIcon::fromTheme(QStringLiteral("folder")));
+        return coll; // a collection; not cached as "inode/directory"
+    }
     const QString mime = mimeNameFor(row);
     auto it = m_iconCache.constFind(mime);
     if (it != m_iconCache.cend())
         return *it;
     QIcon icon;
-    if (m_items.at(row).isDir) {
+    const FileItem &item = m_items.at(row);
+    if (item.isDir) {
         icon = QIcon::fromTheme(QStringLiteral("folder"));
+    } else if (mime == QLatin1String("application/octet-stream")
+               && FileKind::categoryFor(item.name, false) == FileKind::Category::DiskImage) {
+        // Disk images the MIME database does not know (D64, ADF, ...): a disk.
+        const QString ext = FileKind::extensionOf(item.name).toLower();
+        const bool optical = ext == QLatin1String("iso") || ext == QLatin1String("chd") || ext == QLatin1String("cue")
+            || ext == QLatin1String("bin") || ext == QLatin1String("img");
+        icon = QIcon::fromTheme(optical ? QStringLiteral("media-optical") : QStringLiteral("media-floppy"));
+        if (icon.isNull())
+            icon = QIcon::fromTheme(QStringLiteral("drive-removable-media"));
+        if (icon.isNull())
+            icon = QIcon::fromTheme(QStringLiteral("text-x-generic"));
+        return icon; // per extension, so not cached under the shared MIME name
     } else {
         const QMimeType type = m_mimeDb.mimeTypeForName(mime);
         icon = QIcon::fromTheme(type.iconName());
+        if (icon.isNull() && FileKind::categoryFor(item.name, false) == FileKind::Category::DiskImage)
+            icon = QIcon::fromTheme(QStringLiteral("media-floppy")); // ADF, D64 and friends
         if (icon.isNull())
             icon = QIcon::fromTheme(type.genericIconName());
         if (icon.isNull())

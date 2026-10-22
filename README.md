@@ -62,6 +62,8 @@ Servers and archives (KIO):
 - Settings backup (File > Settings): every setting in one zip, restored in one step on another machine
 - Text and icon size (View > Text and Icon Size): Large and Larger for the Deck's screen
 - Synchronize (Tools > Synchronize): compare the source and destination (or any two folders) by date, size or contents; see every difference with what will happen to it, change any of them, then copy. Update the right, mirror to it (extras go to the trash), or both ways. Allows for the 2-second timestamps of FAT SD cards. `Sync ... RUN` does it from a button without asking
+- Find (Tools > Find, Ctrl+Shift+F): by name (text, wildcards or a regular expression), text inside files, size, modified date, files or folders, under any folders. Results open in a tab as the Find Results collection, where every command works on them; searches can be saved and run again. `Find NAME=*.d64 NEWER=30 RUN` from a button
+- Collections (Go > Collections, `/collections`): virtual folders of links to files anywhere. Edit > Add to Collection, or copy into a collection shown in the other display; Delete there only takes the link out; renaming the real file keeps the link. Each is a text file in `~/.config/linopus/collections`
 - Find Duplicates (Tools > Find Duplicates): identical files by contents (renamed copies too), by name and size, or by name, across several folders; check all but the newest, oldest or shortest path in each group and send the rest to the trash
 
 ## Commands
@@ -78,6 +80,8 @@ Every button, menu item, hotkey, drop and inline rename runs one of these. Butto
 | `CreateFolder` | `NAME="A, B, C"` makes all three; no name asks; `IN=...` |
 | `Clipboard` | `COPY`, `CUT`, `PASTE` (a picture or text pastes as a new file), `AS` |
 | `Print` | `FOLDER`, `AS=text\|csv\|html`, `TO=clipboard\|ask\|<file>`, `SELECTED` |
+| `Find` | `NAME=`, `REGEX`, `CASE`, `CONTAINS=`, `MINSIZE=10M`, `MAXSIZE=`, `NEWER=<days or date>`, `OLDER=`, `TYPE=files\|folders\|both`, `IN=...`, `HIDDEN`, `NORECURSE`, `COLLECTION=`, `PRESET=`, `RUN` |
+| `Collection` | `ADD=<name>\|ask`, `REMOVE`, `CREATE=`, `DELETE=`, `OPEN=<name>`, `NEWTAB` |
 | `Sync` | `LEFT=`, `RIGHT=`, `MODE=update\|mirror\|twoway`, `COMPARE=datesize\|date\|size\|contents`, `EXCLUDE=*.tmp;...`, `RUN` |
 | `Duplicates` | `IN=...` (several allowed), `BY=contents\|namesize\|name`, `MINSIZE=<bytes>`, `HIDDEN` |
 | `Settings` | `BACKUP=<file>\|ask`, `RESTORE=<file>\|ask`, `QUIET` |
@@ -136,6 +140,7 @@ pods=/downloads/podcasts
 | Ctrl+F | Filter bar |
 | Ctrl+Shift+Z | Calculate all folder sizes |
 | Ctrl+Shift+P | Command console |
+| Ctrl+Shift+F | Find |
 
 ## Toolbar files
 
@@ -168,6 +173,8 @@ Each toolbar is `~/.config/linopus/toolbars/<id>.json`. Customize mode writes th
 - `~/.config/linopus/labels.ini`: wildcard labels
 - `~/.config/linopus/formats.ini`: folder formats
 - `~/.config/linopus/rename.ini`: Advanced Rename presets
+- `~/.config/linopus/find.ini`: saved searches
+- `~/.config/linopus/collections/`: collections, one path per line
 
 Inside the Flatpak these are still the real `~/.config/linopus`, so the configuration copies straight to another machine.
 
