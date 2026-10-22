@@ -14,6 +14,7 @@
 #include "ui/FileDisplay.h"
 #include "ui/AdvancedRenameDialog.h"
 #include "ui/ButtonBar.h"
+#include "ui/PreferencesDialog.h"
 #include "ui/DuplicatesDialog.h"
 #include "ui/SyncDialog.h"
 #include "ui/ButtonEditor.h"
@@ -374,6 +375,18 @@ int main(int argc, char *argv[])
         QTest::qWait(600);
         shot(w, out, QStringLiteral("24-find-results-collection"));
         w->runCommand(QStringLiteral("Set THEME=\"Linopus Light\""));
+    }
+
+    // Preferences: the theme editor and the labels page.
+    {
+        PreferencesDialog dlg(context, w, QStringLiteral("theme"));
+        dlg.show();
+        QTest::qWait(400);
+        dlg.grab().save(out + QStringLiteral("/25-preferences-theme.png"));
+        dlg.setPage(QStringLiteral("labels"));
+        QTest::qWait(300);
+        dlg.grab().save(out + QStringLiteral("/26-preferences-labels.png"));
+        dlg.reject();
     }
 
 #ifdef LINOPUS_HAVE_KIO

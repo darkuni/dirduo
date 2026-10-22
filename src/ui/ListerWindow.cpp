@@ -13,6 +13,7 @@
 #include "core/Collections.h"
 #include "core/Favorites.h"
 #include "ui/FavoritesDialog.h"
+#include "ui/PreferencesDialog.h"
 #include "ui/SyncDialog.h"
 #include "ui/BreadcrumbBar.h"
 #include "ui/ButtonBar.h"
@@ -277,6 +278,8 @@ void ListerWindow::buildMenus()
     print->addAction(commandAction(QStringLiteral("Save as HTML..."), QStringLiteral("Print FOLDER AS=html TO=ask")));
     print->addSeparator();
     print->addAction(commandAction(QStringLiteral("Selected Items to Clipboard"), QStringLiteral("Print FOLDER SELECTED")));
+    file->addAction(commandAction(QStringLiteral("Preferences..."), QStringLiteral("Settings"), QKeySequence(QStringLiteral("Ctrl+,")),
+                                  QStringLiteral("configure")));
     QMenu *settingsMenu = file->addMenu(QIcon::fromTheme(QStringLiteral("configure")), QStringLiteral("Settings"));
     settingsMenu->addAction(commandAction(QStringLiteral("Back Up Settings..."), QStringLiteral("Settings BACKUP=ask"),
                                           {}, QStringLiteral("document-save")));
@@ -1882,7 +1885,13 @@ bool ListerWindow::settings(const ParsedCommand &cmd, QString *error)
             return fail(QStringLiteral("The restore failed: %1").arg(err));
         return true;
     }
-    return fail(QStringLiteral("Settings takes BACKUP= or RESTORE=."));
+    // Anything else: the Preferences window, on a page when asked.
+    const QString page = cmd.value(QStringLiteral("PAGE"));
+    if (!page.isEmpty() && !PreferencesDialog::pageNames().contains(page.toLower()))
+        return fail(QStringLiteral("PAGE takes %1.").arg(PreferencesDialog::pageNames().join(QStringLiteral(", "))));
+    PreferencesDialog dlg(m_app, this, page);
+    dlg.exec();
+    return true;
 }
 
 bool ListerWindow::advancedRename(const QStringList &paths, const RenameOptions &initial, QString *error)

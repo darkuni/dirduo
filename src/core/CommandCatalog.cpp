@@ -141,11 +141,14 @@ QList<CommandInfo> buildCommands()
          arg("COLUMNSTOGGLE=", {QStringLiteral("created"), QStringLiteral("accessed"), QStringLiteral("extension"), QStringLiteral("permissions"), QStringLiteral("owner"), QStringLiteral("group")},
              "Show or hide a column")},
         QStringLiteral("Set DUAL=vertical VIEW=details")};
-    c << CommandInfo{QStringLiteral("Settings"), QStringLiteral("Back up or restore all of Linopus's settings"),
+    c << CommandInfo{QStringLiteral("Settings"), QStringLiteral("Preferences, and backing up or restoring every setting"),
                      {arg("BACKUP=", {QStringLiteral("ask")}, "Save every setting to one zip (ask: choose where)"),
                       arg("RESTORE=", {QStringLiteral("ask")}, "Put back settings from a backup zip"),
-                      arg("QUIET", {}, "Restore without asking first")},
-                     QStringLiteral("Settings BACKUP=ask")};
+                      arg("QUIET", {}, "Restore without asking first"),
+                      arg("PAGE=", {QStringLiteral("appearance"), QStringLiteral("theme"), QStringLiteral("labels"), QStringLiteral("aliases"),
+                                    QStringLiteral("formats"), QStringLiteral("toolbars")},
+                          "Open Preferences on this page (no arguments: Preferences)")},
+                     QStringLiteral("Settings PAGE=theme")};
     c << CommandInfo{QStringLiteral("Sync"), QStringLiteral("Compare two folders and make them match"),
                      {arg("LEFT=", {}, "One folder (the source when left out)"),
                       arg("RIGHT=", {}, "The other (the destination when left out)"),

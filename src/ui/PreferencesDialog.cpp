@@ -1,0 +1,877 @@
+#include "ui/PreferencesDialog.h"
+
+#include "core/AliasManager.h"
+#include "core/FileKind.h"
+#include "core/Paths.h"
+#include "ui/AppContext.h"
+#include "ui/ButtonBar.h"
+#include "ui/FolderFormats.h"
+#include "ui/ListerWindow.h"
+
+#include <QAbstractButton>
+#include <QCheckBox>
+#include <QColorDialog>
+#include <QComboBox>
+#include <QContextMenuEvent>
+#include <QDialogButtonBox>
+#include <QDir>
+#include <QFile>
+#include <QFileDialog>
+#include <QFormLayout>
+#include <QGridLayout>
+#include <QGroupBox>
+#include <QHBoxLayout>
+#include <QHeaderView>
+#include <QLabel>
+#include <QLineEdit>
+#include <QListWidget>
+#include <QMenu>
+#include <QMessageBox>
+#include <QPainter>
+#include <QPushButton>
+#include <QScrollArea>
+#include <QSettings>
+#include <QStackedWidget>
+#include <QTableWidget>
+#include <QTreeWidget>
+#include <QVBoxLayout>
+
+// ---------------------------------------------------------------- ColorButton
+
+ColorButton::ColorButton(QWidget *parent)
+    : QToolButton(parent)
+{
+    setFixedSize(46, 24);
+    connect(this, &QToolButton::clicked, this, [this]() {
+        const QColor c = QColorDialog::getColor(m_color.isValid() ? m_color : Qt::white, this);
+        if (c.isValid())
+            setColor(c), Q_EMIT colorChanged(c);
+    });
+}
+
+void ColorButton::setColor(const QColor &c)
+{
+    m_color = c;
+    QPixmap pm(34, 14);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setPen(palette().color(QPalette::Mid));
+    if (c.isValid()) {
+        p.setBrush(c);
+        p.drawRect(pm.rect().adjusted(0, 0, -1, -1));
+    } else {
+        p.drawRect(pm.rect().adjusted(0, 0, -1, -1));
+        p.drawLine(1, pm.height() - 2, pm.width() - 2, 1); // none
+    }
+    p.end();
+    setIcon(QIcon(pm));
+    setIconSize(pm.size());
+    setToolTip(c.isValid() ? c.name() : QStringLiteral("None"));
+}
+
+void ColorButton::contextMenuEvent(QContextMenuEvent *event)
+{
+    if (!m_allowNone)
+        return QToolButton::contextMenuEvent(event);
+    QMenu menu(this);
+    connect(menu.addAction(QStringLiteral("No Colour")), &QAction::triggered, this, [this]() {
+        setColor(QColor());
+        Q_EMIT colorChanged(QColor());
+    });
+    menu.exec(event->globalPos());
+}
+
+// ---------------------------------------------------------------- helpers
+
+namespace {
+
+struct ColorSlot
+{
+    const char *key;
+    const char *label;
+    QColor Theme::*member;
+};
+
+const QList<ColorSlot> &colorSlots()
+{
+    static const QList<ColorSlot> slots = {
+        {"window", "Window", &Theme::window},
+        {"base", "File list", &Theme::base},
+        {"alternate", "Every other row", &Theme::alternate},
+        {"text", "Text", &Theme::text},
+        {"dimText", "Hidden and dimmed text", &Theme::dimText},
+        {"highlight", "Selection", &Theme::highlight},
+        {"highlightText", "Selected text", &Theme::highlightText},
+        {"button", "Buttons", &Theme::button},
+        {"sourceAccent", "SOURCE", &Theme::sourceAccent},
+        {"destAccent", "DEST", &Theme::destAccent},
+        {"lockedAccent", "Locked DEST", &Theme::lockedAccent},
+        {"groupHeader", "Group headings", &Theme::groupHeader},
+        {"sizeBar", "Folder size bars", &Theme::sizeBar},
+    };
+    return slots;
+}
+
+QList<FileKind::Category> typeCategories()
+{
+    using C = FileKind::Category;
+    return {C::Folder, C::Image, C::Audio, C::Video, C::Archive, C::DiskImage, C::Document, C::Code, C::Executable};
+}
+
+QString safeFileName(QString name)
+{
+    for (QChar &c : name) {
+        if (!c.isLetterOrNumber() && c != QLatin1Char(' ') && c != QLatin1Char('-') && c != QLatin1Char('_'))
+            c = QLatin1Char('_');
+    }
+    return name.trimmed();
+}
+
+} // namespace
+
+// ---------------------------------------------------------------- dialog
+
+QStringList PreferencesDialog::pageNames()
+{
+    return {QStringLiteral("appearance"), QStringLiteral("theme"), QStringLiteral("labels"),
+            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("toolbars")};
+}
+
+PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, const QString &page)
+    : QDialog(lister)
+    , m_app(app)
+    , m_lister(lister)
+{
+    setWindowTitle(QStringLiteral("Preferences"));
+    m_originalTheme = Style::instance()->theme().name;
+    m_originalThemeData = Style::instance()->theme();
+    m_originalSize = Style::instance()->sizeLevel();
+
+    auto *layout = new QVBoxLayout(this);
+    m_search = new QLineEdit(this);
+    m_search->setPlaceholderText(QStringLiteral("Search settings (colour, alias, label, size...)"));
+    m_search->setClearButtonEnabled(true);
+    layout->addWidget(m_search);
+    auto *body = new QHBoxLayout;
+    m_nav = new QListWidget(this);
+    m_nav->setFixedWidth(170);
+    m_nav->setIconSize(QSize(20, 20));
+    m_stack = new QStackedWidget(this);
+    body->addWidget(m_nav);
+    body->addWidget(m_stack, 1);
+    layout->addLayout(body, 1);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Apply | QDialogButtonBox::Cancel, this);
+    connect(buttons, &QDialogButtonBox::accepted, this, &PreferencesDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, this, &PreferencesDialog::reject);
+    connect(buttons->button(QDialogButtonBox::Apply), &QPushButton::clicked, this, [this]() {
+        QString err;
+        if (!apply(&err))
+            QMessageBox::warning(this, QStringLiteral("Preferences"), err);
+    });
+    layout->addWidget(buttons);
+
+    addPage(QStringLiteral("appearance"), QStringLiteral("Appearance"), QStringLiteral("preferences-desktop-theme"), buildAppearance(),
+            {QStringLiteral("theme"), QStringLiteral("size"), QStringLiteral("font"), QStringLiteral("icon"), QStringLiteral("dark"),
+             QStringLiteral("light"), QStringLiteral("workbench"), QStringLiteral("scale")});
+    addPage(QStringLiteral("theme"), QStringLiteral("Theme Editor"), QStringLiteral("color-management"), buildTheme(),
+            {QStringLiteral("colour"), QStringLiteral("color"), QStringLiteral("accent"), QStringLiteral("file type"),
+             QStringLiteral("skin"), QStringLiteral("palette")});
+    addPage(QStringLiteral("labels"), QStringLiteral("Labels"), QStringLiteral("tag"), buildLabels(),
+            {QStringLiteral("wildcard"), QStringLiteral("bold"), QStringLiteral("italic"), QStringLiteral("highlight"), QStringLiteral("colour"),
+             QStringLiteral("color")});
+    addPage(QStringLiteral("aliases"), QStringLiteral("Aliases"), QStringLiteral("folder-bookmark"), buildAliases(),
+            {QStringLiteral("shortcut"), QStringLiteral("path"), QStringLiteral("folder"), QStringLiteral("server")});
+    addPage(QStringLiteral("formats"), QStringLiteral("Folder Formats"), QStringLiteral("view-list-details"), buildFormats(),
+            {QStringLiteral("columns"), QStringLiteral("view"), QStringLiteral("group"), QStringLiteral("icons"), QStringLiteral("pictures")});
+    addPage(QStringLiteral("toolbars"), QStringLiteral("Toolbars"), QStringLiteral("configure-toolbars"), buildToolbars(),
+            {QStringLiteral("button"), QStringLiteral("customize"), QStringLiteral("customise")});
+
+    connect(m_nav, &QListWidget::currentRowChanged, this, [this](int row) {
+        if (row >= 0)
+            m_stack->setCurrentIndex(m_nav->item(row)->data(Qt::UserRole).toInt());
+    });
+    connect(m_search, &QLineEdit::textChanged, this, [this](const QString &t) { search(t); });
+    m_nav->setCurrentRow(0);
+    if (!page.isEmpty())
+        setPage(page);
+    resize(760, 560);
+}
+
+PreferencesDialog::~PreferencesDialog() = default;
+
+void PreferencesDialog::addPage(const QString &key, const QString &title, const QString &icon, QWidget *page, const QStringList &keywords)
+{
+    auto *scroll = new QScrollArea(m_stack);
+    scroll->setWidget(page);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    const int index = m_stack->addWidget(scroll);
+    auto *item = new QListWidgetItem(QIcon::fromTheme(icon), title, m_nav);
+    item->setData(Qt::UserRole, index);
+    item->setData(Qt::UserRole + 1, key);
+    // Everything a page says counts for the search, as well as its keywords.
+    QStringList words = keywords;
+    words << title;
+    for (QLabel *l : page->findChildren<QLabel *>())
+        words << l->text();
+    for (QAbstractButton *b : page->findChildren<QAbstractButton *>())
+        words << b->text();
+    for (QGroupBox *g : page->findChildren<QGroupBox *>())
+        words << g->title();
+    for (QTableWidget *t : page->findChildren<QTableWidget *>()) {
+        for (int c = 0; c < t->columnCount(); ++c)
+            if (t->horizontalHeaderItem(c))
+                words << t->horizontalHeaderItem(c)->text();
+    }
+    m_keys << key;
+    m_keywords << words;
+}
+
+bool PreferencesDialog::setPage(const QString &name)
+{
+    for (int r = 0; r < m_nav->count(); ++r) {
+        if (m_nav->item(r)->data(Qt::UserRole + 1).toString().compare(name, Qt::CaseInsensitive) == 0) {
+            m_nav->item(r)->setHidden(false);
+            m_nav->setCurrentRow(r);
+            return true;
+        }
+    }
+    return false;
+}
+
+QString PreferencesDialog::currentPage() const
+{
+    QListWidgetItem *i = m_nav->currentItem();
+    return i ? i->data(Qt::UserRole + 1).toString() : QString();
+}
+
+QStringList PreferencesDialog::search(const QString &text)
+{
+    const QString t = text.trimmed();
+    QStringList shown;
+    for (int r = 0; r < m_nav->count(); ++r) {
+        const int idx = m_keys.indexOf(m_nav->item(r)->data(Qt::UserRole + 1).toString());
+        bool match = t.isEmpty();
+        for (const QString &w : m_keywords.at(idx))
+            match = match || w.contains(t, Qt::CaseInsensitive);
+        m_nav->item(r)->setHidden(!match);
+        if (match)
+            shown << m_keys.at(idx);
+    }
+    // Land on the first page that matches.
+    if (!shown.isEmpty() && (m_nav->currentItem() == nullptr || m_nav->currentItem()->isHidden()))
+        setPage(shown.first());
+    return shown;
+}
+
+// ---------------------------------------------------------------- appearance
+
+QWidget *PreferencesDialog::buildAppearance()
+{
+    auto *w = new QWidget;
+    auto *form = new QFormLayout(w);
+    m_themeBox = new QComboBox(w);
+    m_sizeBox = new QComboBox(w);
+    m_sizeBox->addItems({QStringLiteral("Normal"), QStringLiteral("Large"), QStringLiteral("Larger")});
+    m_sizeBox->setCurrentIndex(Style::instance()->sizeLevel());
+    form->addRow(QStringLiteral("Theme:"), m_themeBox);
+    form->addRow(QStringLiteral("Text and icon size:"), m_sizeBox);
+    auto *hint = new QLabel(QStringLiteral("Changes show at once; Cancel puts back what you had. The Theme Editor page "
+                                           "changes any colour and saves the result as your own theme."),
+                            w);
+    hint->setWordWrap(true);
+    hint->setEnabled(false);
+    form->addRow(hint);
+    auto *edit = new QPushButton(QIcon::fromTheme(QStringLiteral("color-management")), QStringLiteral("Edit This Theme..."), w);
+    form->addRow(QString(), edit);
+    connect(edit, &QPushButton::clicked, this, [this]() { setPage(QStringLiteral("theme")); });
+    connect(m_themeBox, &QComboBox::currentTextChanged, this, [this](const QString &name) {
+        if (m_loading || name.isEmpty())
+            return;
+        Style::instance()->setTheme(name);
+        loadThemeIntoEditor(Style::instance()->theme());
+    });
+    connect(m_sizeBox, &QComboBox::currentIndexChanged, this, [](int level) { Style::instance()->setSizeLevel(level); });
+    return w;
+}
+
+// ---------------------------------------------------------------- theme editor
+
+QWidget *PreferencesDialog::buildTheme()
+{
+    auto *w = new QWidget;
+    auto *layout = new QVBoxLayout(w);
+    auto *top = new QFormLayout;
+    m_startFrom = new QComboBox(w);
+    m_themeName = new QLineEdit(w);
+    top->addRow(QStringLiteral("Start from:"), m_startFrom);
+    top->addRow(QStringLiteral("Name:"), m_themeName);
+    m_themeDark = new QCheckBox(QStringLiteral("Dark theme (uses the dark icon set)"), w);
+    top->addRow(QString(), m_themeDark);
+    layout->addLayout(top);
+
+    auto *colors = new QGroupBox(QStringLiteral("Colours"), w);
+    auto *grid = new QGridLayout(colors);
+    int row = 0;
+    int col = 0;
+    for (const ColorSlot &s : colorSlots()) {
+        auto *b = new ColorButton(colors);
+        m_colorButtons.insert(QLatin1String(s.key), b);
+        grid->addWidget(new QLabel(QString::fromUtf8(s.label), colors), row, col * 2);
+        grid->addWidget(b, row, col * 2 + 1);
+        const QString key = QLatin1String(s.key);
+        connect(b, &ColorButton::colorChanged, this, [this, key](const QColor &c) { setThemeColor(key, c); });
+        if (++col == 2) {
+            col = 0;
+            ++row;
+        }
+    }
+    layout->addWidget(colors);
+
+    auto *types = new QGroupBox(QStringLiteral("File types"), w);
+    auto *tg = new QGridLayout(types);
+    m_colorTypes = new QCheckBox(QStringLiteral("Colour names by file type"), types);
+    tg->addWidget(m_colorTypes, 0, 0, 1, 4);
+    row = 1;
+    col = 0;
+    for (FileKind::Category c : typeCategories()) {
+        auto *b = new ColorButton(types);
+        const QString key = QStringLiteral("type:") + FileKind::categoryKey(c);
+        m_colorButtons.insert(key, b);
+        tg->addWidget(new QLabel(FileKind::categoryName(c), types), row, col * 2);
+        tg->addWidget(b, row, col * 2 + 1);
+        connect(b, &ColorButton::colorChanged, this, [this, key](const QColor &cc) { setThemeColor(key, cc); });
+        if (++col == 2) {
+            col = 0;
+            ++row;
+        }
+    }
+    layout->addWidget(types);
+
+    auto *actions = new QHBoxLayout;
+    auto *save = new QPushButton(QIcon::fromTheme(QStringLiteral("document-save")), QStringLiteral("Save Theme"), w);
+    auto *del = new QPushButton(QIcon::fromTheme(QStringLiteral("edit-delete")), QStringLiteral("Delete Theme"), w);
+    m_themeStatus = new QLabel(w);
+    actions->addWidget(save);
+    actions->addWidget(del);
+    actions->addWidget(m_themeStatus, 1);
+    layout->addLayout(actions);
+    auto *where = new QLabel(QStringLiteral("Saved themes are .ini files in %1, to copy and share.").arg(Style::instance()->themesDir()), w);
+    where->setWordWrap(true);
+    where->setEnabled(false);
+    layout->addWidget(where);
+    layout->addStretch(1);
+
+    connect(m_startFrom, &QComboBox::activated, this, [this](int) {
+        Theme t;
+        const QString name = m_startFrom->currentText();
+        if (Theme::builtinNames().contains(name))
+            t = Theme::builtin(name);
+        else if (!Theme::load(QDir(Style::instance()->themesDir()).filePath(safeFileName(name) + QStringLiteral(".ini")), t))
+            return;
+        if (t.followSystem) {
+            // The desktop's colours as they are now, to change from there.
+            const bool keep = m_loading;
+            m_loading = true;
+            Style::instance()->setTheme(t);
+            t = Style::instance()->theme();
+            t.followSystem = false;
+            m_loading = keep;
+        }
+        if (Theme::builtinNames().contains(name))
+            t.name = name + QStringLiteral(" (mine)");
+        loadThemeIntoEditor(t);
+        m_themeDirty = true;
+        previewTheme();
+    });
+    connect(m_themeName, &QLineEdit::textEdited, this, [this](const QString &n) {
+        m_theme.name = n.trimmed();
+        m_themeDirty = true;
+    });
+    connect(m_themeDark, &QCheckBox::toggled, this, [this](bool on) {
+        if (m_loading)
+            return;
+        m_theme.dark = on;
+        m_themeDirty = true;
+        previewTheme();
+    });
+    connect(m_colorTypes, &QCheckBox::toggled, this, [this](bool on) {
+        if (m_loading)
+            return;
+        m_theme.colorFileTypes = on;
+        m_themeDirty = true;
+        previewTheme();
+    });
+    connect(save, &QPushButton::clicked, this, [this]() {
+        QString err;
+        if (!saveTheme(&err))
+            m_themeStatus->setText(err);
+    });
+    connect(del, &QPushButton::clicked, this, [this]() {
+        const QString file = QDir(Style::instance()->themesDir()).filePath(safeFileName(m_theme.name) + QStringLiteral(".ini"));
+        if (!QFile::exists(file)) {
+            m_themeStatus->setText(QStringLiteral("Only your own saved themes can be deleted."));
+            return;
+        }
+        if (QMessageBox::question(this, QStringLiteral("Delete Theme"), QStringLiteral("Delete the theme \"%1\"?").arg(m_theme.name))
+            != QMessageBox::Yes)
+            return;
+        QFile::remove(file);
+        Style::instance()->setTheme(QStringLiteral("Follow Desktop"));
+        refreshThemeLists(QStringLiteral("Follow Desktop"));
+        loadThemeIntoEditor(Style::instance()->theme());
+        m_themeDirty = false;
+        m_themeStatus->setText(QStringLiteral("Deleted."));
+    });
+
+    refreshThemeLists(Style::instance()->theme().name);
+    loadThemeIntoEditor(Style::instance()->theme());
+    return w;
+}
+
+void PreferencesDialog::refreshThemeLists(const QString &select)
+{
+    const bool keep = m_loading;
+    m_loading = true;
+    const QStringList names = Style::instance()->themeNames();
+    for (QComboBox *box : {m_themeBox, m_startFrom}) {
+        if (!box)
+            continue;
+        box->clear();
+        box->addItems(names);
+        box->setCurrentText(select);
+    }
+    m_loading = keep;
+}
+
+void PreferencesDialog::loadThemeIntoEditor(const Theme &t)
+{
+    const bool keep = m_loading;
+    m_loading = true;
+    m_theme = t;
+    if (m_themeName)
+        m_themeName->setText(t.name);
+    if (m_themeDark)
+        m_themeDark->setChecked(t.dark);
+    if (m_colorTypes)
+        m_colorTypes->setChecked(t.colorFileTypes);
+    for (const ColorSlot &s : colorSlots()) {
+        if (ColorButton *b = m_colorButtons.value(QLatin1String(s.key)))
+            b->setColor(t.*(s.member));
+    }
+    for (FileKind::Category c : typeCategories()) {
+        if (ColorButton *b = m_colorButtons.value(QStringLiteral("type:") + FileKind::categoryKey(c)))
+            b->setColor(t.typeColor(c));
+    }
+    m_loading = keep;
+}
+
+void PreferencesDialog::setThemeColor(const QString &key, const QColor &c)
+{
+    if (key.startsWith(QLatin1String("type:"))) {
+        FileKind::Category cat;
+        if (FileKind::categoryFromKey(key.mid(5), cat))
+            m_theme.types.insert(cat, c);
+    } else {
+        for (const ColorSlot &s : colorSlots()) {
+            if (key == QLatin1String(s.key))
+                m_theme.*(s.member) = c;
+        }
+    }
+    if (ColorButton *b = m_colorButtons.value(key))
+        b->setColor(c);
+    // An edited "Follow Desktop" is a theme of its own from now on.
+    m_theme.followSystem = false;
+    m_themeDirty = true;
+    previewTheme();
+}
+
+void PreferencesDialog::setThemeName(const QString &name)
+{
+    m_themeName->setText(name);
+    m_theme.name = name.trimmed();
+    m_themeDirty = true;
+}
+
+void PreferencesDialog::previewTheme()
+{
+    if (m_loading)
+        return;
+    Style::instance()->setTheme(m_theme);
+    if (m_themeStatus)
+        m_themeStatus->setText(QStringLiteral("Not saved yet."));
+}
+
+bool PreferencesDialog::saveTheme(QString *error)
+{
+    QString name = m_theme.name.trimmed();
+    if (name.isEmpty()) {
+        if (error)
+            *error = QStringLiteral("Give the theme a name first.");
+        return false;
+    }
+    if (Theme::builtinNames().contains(name)) {
+        name += QStringLiteral(" (mine)"); // the built-ins stay as they are
+        m_theme.name = name;
+        m_themeName->setText(name);
+    }
+    QDir().mkpath(Style::instance()->themesDir());
+    const QString file = QDir(Style::instance()->themesDir()).filePath(safeFileName(name) + QStringLiteral(".ini"));
+    m_theme.followSystem = false;
+    if (!m_theme.save(file)) {
+        if (error)
+            *error = QStringLiteral("Could not write %1.").arg(file);
+        return false;
+    }
+    m_themeDirty = false;
+    Style::instance()->setTheme(name);
+    refreshThemeLists(name);
+    m_app.settings().setValue(QStringLiteral("Appearance/theme"), name);
+    if (m_themeStatus)
+        m_themeStatus->setText(QStringLiteral("Saved as %1.").arg(QFileInfo(file).fileName()));
+    return true;
+}
+
+// ---------------------------------------------------------------- labels
+
+QWidget *PreferencesDialog::buildLabels()
+{
+    auto *w = new QWidget;
+    auto *layout = new QVBoxLayout(w);
+    auto *intro = new QLabel(QStringLiteral("Names matching a pattern get their own colour and style, in every list. "
+                                            "The first matching row wins. Patterns use wildcards; ; between several."),
+                             w);
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+    m_labels = new QTableWidget(0, 6, w);
+    m_labels->setHorizontalHeaderLabels({QStringLiteral("Pattern"), QStringLiteral("Applies to"), QStringLiteral("Text"),
+                                         QStringLiteral("Background"), QStringLiteral("Bold"), QStringLiteral("Italic")});
+    QHeaderView *lh = m_labels->horizontalHeader();
+    lh->setStretchLastSection(false);
+    lh->setSectionResizeMode(QHeaderView::Fixed);
+    lh->setSectionResizeMode(0, QHeaderView::Stretch);
+    const int unit = m_labels->fontMetrics().averageCharWidth();
+    lh->resizeSection(1, unit * 14);
+    lh->resizeSection(2, unit * 9);
+    lh->resizeSection(3, unit * 12);
+    lh->resizeSection(4, unit * 7);
+    lh->resizeSection(5, unit * 7);
+    m_labels->verticalHeader()->hide();
+    m_labels->setSelectionBehavior(QAbstractItemView::SelectRows);
+    layout->addWidget(m_labels, 1);
+    auto *row = new QHBoxLayout;
+    auto *add = new QPushButton(QStringLiteral("Add"), w);
+    auto *remove = new QPushButton(QStringLiteral("Remove"), w);
+    auto *up = new QPushButton(QStringLiteral("Up"), w);
+    auto *down = new QPushButton(QStringLiteral("Down"), w);
+    for (QPushButton *b : {add, remove, up, down})
+        row->addWidget(b);
+    row->addStretch(1);
+    layout->addLayout(row);
+
+    for (const LabelRule &r : Style::instance()->labels().rules())
+        addLabelRule(r);
+    connect(add, &QPushButton::clicked, this, [this]() {
+        LabelRule r;
+        r.pattern = QStringLiteral("*.d64;*.adf");
+        r.color = QColor::fromRgb(0xe0, 0x7a, 0x10);
+        addLabelRule(r);
+        m_labels->setCurrentCell(m_labels->rowCount() - 1, 0);
+        m_labels->editItem(m_labels->item(m_labels->rowCount() - 1, 0));
+    });
+    connect(remove, &QPushButton::clicked, this, [this]() {
+        if (m_labels->currentRow() >= 0)
+            m_labels->removeRow(m_labels->currentRow());
+    });
+    auto move = [this](int delta) {
+        const int r = m_labels->currentRow();
+        const int to = r + delta;
+        if (r < 0 || to < 0 || to >= m_labels->rowCount())
+            return;
+        QList<LabelRule> rules = labelRules();
+        rules.swapItemsAt(r, to);
+        m_labels->setRowCount(0);
+        for (const LabelRule &x : rules)
+            addLabelRule(x);
+        m_labels->setCurrentCell(to, 0);
+    };
+    connect(up, &QPushButton::clicked, this, [move]() { move(-1); });
+    connect(down, &QPushButton::clicked, this, [move]() { move(1); });
+    return w;
+}
+
+void PreferencesDialog::addLabelRule(const LabelRule &r)
+{
+    const int row = m_labels->rowCount();
+    m_labels->insertRow(row);
+    fillLabelRow(row, r);
+}
+
+void PreferencesDialog::fillLabelRow(int row, const LabelRule &r)
+{
+    m_labels->setItem(row, 0, new QTableWidgetItem(r.pattern));
+    auto *applies = new QComboBox(m_labels);
+    applies->addItems({QStringLiteral("Files"), QStringLiteral("Folders"), QStringLiteral("Both")});
+    applies->setCurrentIndex(int(r.applies));
+    m_labels->setCellWidget(row, 1, applies);
+    auto *fg = new ColorButton(m_labels);
+    fg->setAllowNone(true);
+    fg->setColor(r.color);
+    m_labels->setCellWidget(row, 2, fg);
+    auto *bg = new ColorButton(m_labels);
+    bg->setAllowNone(true);
+    bg->setColor(r.background);
+    m_labels->setCellWidget(row, 3, bg);
+    for (int c : {4, 5}) {
+        auto *box = new QCheckBox(m_labels);
+        box->setChecked(c == 4 ? r.bold : r.italic);
+        m_labels->setCellWidget(row, c, box);
+    }
+}
+
+QList<LabelRule> PreferencesDialog::labelRules() const
+{
+    QList<LabelRule> out;
+    for (int r = 0; r < m_labels->rowCount(); ++r) {
+        LabelRule rule;
+        rule.pattern = m_labels->item(r, 0) ? m_labels->item(r, 0)->text().trimmed() : QString();
+        if (rule.pattern.isEmpty())
+            continue;
+        rule.applies = static_cast<LabelRule::Applies>(qobject_cast<QComboBox *>(m_labels->cellWidget(r, 1))->currentIndex());
+        rule.color = qobject_cast<ColorButton *>(m_labels->cellWidget(r, 2))->color();
+        rule.background = qobject_cast<ColorButton *>(m_labels->cellWidget(r, 3))->color();
+        rule.bold = qobject_cast<QCheckBox *>(m_labels->cellWidget(r, 4))->isChecked();
+        rule.italic = qobject_cast<QCheckBox *>(m_labels->cellWidget(r, 5))->isChecked();
+        out << rule;
+    }
+    return out;
+}
+
+// ---------------------------------------------------------------- aliases
+
+QWidget *PreferencesDialog::buildAliases()
+{
+    auto *w = new QWidget;
+    auto *layout = new QVBoxLayout(w);
+    auto *intro = new QLabel(QStringLiteral("Type /name anywhere a folder is asked for: the address bar, buttons, commands. "
+                                            "An alias can point at a server (sftp://...) too."),
+                             w);
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+    m_aliases = new QTableWidget(0, 2, w);
+    m_aliases->setHorizontalHeaderLabels({QStringLiteral("Alias"), QStringLiteral("Folder")});
+    m_aliases->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    m_aliases->verticalHeader()->hide();
+    AliasManager &aliases = m_app.aliases();
+    QStringList builtIns;
+    for (const QString &name : aliases.names()) {
+        if (aliases.isUserAlias(name)) {
+            const int r = addAliasRow();
+            setAliasRow(r, name, aliases.aliasPath(name));
+        } else {
+            builtIns << QStringLiteral("/%1 = %2").arg(name, aliases.aliasPath(name));
+        }
+    }
+    layout->addWidget(m_aliases, 1);
+    auto *row = new QHBoxLayout;
+    auto *add = new QPushButton(QStringLiteral("Add"), w);
+    auto *browse = new QPushButton(QStringLiteral("Choose Folder..."), w);
+    auto *remove = new QPushButton(QStringLiteral("Remove"), w);
+    for (QPushButton *b : {add, browse, remove})
+        row->addWidget(b);
+    row->addStretch(1);
+    layout->addLayout(row);
+    auto *builtin = new QLabel(QStringLiteral("Built in: ") + builtIns.join(QStringLiteral(", ")), w);
+    builtin->setWordWrap(true);
+    builtin->setEnabled(false);
+    builtin->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    layout->addWidget(builtin);
+
+    connect(add, &QPushButton::clicked, this, [this]() {
+        const int r = addAliasRow();
+        setAliasRow(r, QString(), m_lister ? m_lister->sourcePath() : QDir::homePath());
+        m_aliases->setCurrentCell(r, 0);
+        m_aliases->editItem(m_aliases->item(r, 0));
+    });
+    connect(browse, &QPushButton::clicked, this, [this]() {
+        const int r = m_aliases->currentRow();
+        if (r < 0)
+            return;
+        const QString d = QFileDialog::getExistingDirectory(this, QStringLiteral("Alias Folder"), m_aliases->item(r, 1)->text());
+        if (!d.isEmpty())
+            m_aliases->item(r, 1)->setText(d);
+    });
+    connect(remove, &QPushButton::clicked, this, [this]() {
+        if (m_aliases->currentRow() >= 0)
+            m_aliases->removeRow(m_aliases->currentRow());
+    });
+    return w;
+}
+
+int PreferencesDialog::addAliasRow()
+{
+    const int r = m_aliases->rowCount();
+    m_aliases->insertRow(r);
+    m_aliases->setItem(r, 0, new QTableWidgetItem);
+    m_aliases->setItem(r, 1, new QTableWidgetItem);
+    return r;
+}
+
+void PreferencesDialog::setAliasRow(int row, const QString &name, const QString &path)
+{
+    m_aliases->item(row, 0)->setText(name);
+    m_aliases->item(row, 1)->setText(path);
+}
+
+// ---------------------------------------------------------------- folder formats
+
+QWidget *PreferencesDialog::buildFormats()
+{
+    auto *w = new QWidget;
+    auto *layout = new QVBoxLayout(w);
+    auto *intro = new QLabel(QStringLiteral("Folders with a format of their own open with their saved columns, sort, grouping and view. "
+                                            "Save one from View > Folder Format while in the folder."),
+                             w);
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+    m_formats = new QTreeWidget(w);
+    m_formats->setHeaderLabels({QStringLiteral("Folder"), QStringLiteral("Subfolders too"), QStringLiteral("View"), QStringLiteral("Group by")});
+    m_formats->setRootIsDecorated(false);
+    m_formats->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    layout->addWidget(m_formats, 1);
+    auto *row = new QHBoxLayout;
+    auto *remove = new QPushButton(QStringLiteral("Remove"), w);
+    row->addWidget(remove);
+    row->addStretch(1);
+    layout->addLayout(row);
+    m_defaultFormat = new QLabel(w);
+    auto *clearDefault = new QPushButton(QStringLiteral("Clear the Default Format"), w);
+    auto *dl = new QHBoxLayout;
+    dl->addWidget(m_defaultFormat, 1);
+    dl->addWidget(clearDefault);
+    layout->addLayout(dl);
+    m_autoFormat = new QCheckBox(QStringLiteral("Folders that are mostly pictures open as icons"), w);
+    m_autoFormat->setChecked(FolderFormats::instance().autoSwitch());
+    layout->addWidget(m_autoFormat);
+
+    connect(remove, &QPushButton::clicked, this, [this]() {
+        if (QTreeWidgetItem *i = m_formats->currentItem()) {
+            FolderFormats::instance().remove(i->text(0));
+            refreshFormats();
+        }
+    });
+    connect(clearDefault, &QPushButton::clicked, this, [this]() {
+        FolderFormats::instance().clearDefault();
+        refreshFormats();
+    });
+    refreshFormats();
+    return w;
+}
+
+void PreferencesDialog::refreshFormats()
+{
+    m_formats->clear();
+    for (const FolderFormat &f : FolderFormats::instance().all())
+        new QTreeWidgetItem(m_formats, {f.path, f.subfolders ? QStringLiteral("yes") : QString(), f.view, f.groupBy});
+    FolderFormat d;
+    m_defaultFormat->setText(FolderFormats::instance().defaultFormat(d)
+                                 ? QStringLiteral("Default for other folders: %1 view, grouped by %2.").arg(d.view, d.groupBy)
+                                 : QStringLiteral("No default format: other folders keep the look they had."));
+}
+
+// ---------------------------------------------------------------- toolbars
+
+QWidget *PreferencesDialog::buildToolbars()
+{
+    auto *w = new QWidget;
+    auto *layout = new QVBoxLayout(w);
+    auto *intro = new QLabel(QStringLiteral("Toolbars are edited in place: customize mode lets you drag buttons around, "
+                                            "edit them, make new toolbars and add ready-made buttons."),
+                             w);
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+    auto *customize = new QPushButton(QIcon::fromTheme(QStringLiteral("configure-toolbars")), QStringLiteral("Customize Toolbars..."), w);
+    auto *reset = new QPushButton(QStringLiteral("Reset the Standard Toolbar"), w);
+    layout->addWidget(customize);
+    layout->addWidget(reset);
+    auto *where = new QLabel(QStringLiteral("Toolbar files: %1").arg(Paths::configFile(QStringLiteral("toolbars"))), w);
+    where->setEnabled(false);
+    where->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    layout->addWidget(where);
+    layout->addStretch(1);
+    connect(customize, &QPushButton::clicked, this, [this]() {
+        if (m_lister)
+            m_lister->customize();
+    });
+    connect(reset, &QPushButton::clicked, this, [this]() {
+        if (QMessageBox::question(this, QStringLiteral("Reset Toolbar"), QStringLiteral("Put back the standard buttons?"))
+            == QMessageBox::Yes)
+            m_app.toolbars().resetToDefault(QLatin1String(ToolbarStore::kMainId));
+    });
+    return w;
+}
+
+// ---------------------------------------------------------------- apply
+
+bool PreferencesDialog::apply(QString *error)
+{
+    // Theme: an edited theme is saved under its name, so it survives a restart.
+    if (m_themeDirty && !saveTheme(error))
+        return false;
+    const QString theme = Style::instance()->theme().name;
+    if (Style::instance()->themeNames().contains(theme))
+        m_app.settings().setValue(QStringLiteral("Appearance/theme"), theme);
+    m_app.settings().setValue(QStringLiteral("Appearance/size"), Style::sizeName(Style::instance()->sizeLevel()));
+
+    Style::instance()->setLabels(labelRules());
+
+    // Aliases: the table is the whole list of your own aliases.
+    AliasManager &aliases = m_app.aliases();
+    QStringList keep;
+    for (int r = 0; r < m_aliases->rowCount(); ++r) {
+        QString name = m_aliases->item(r, 0)->text().trimmed();
+        if (name.startsWith(QLatin1Char('/')))
+            name.remove(0, 1);
+        const QString path = m_aliases->item(r, 1)->text().trimmed();
+        if (name.isEmpty() && path.isEmpty())
+            continue;
+        QString why;
+        if (!aliases.setUserAlias(name, path, &why)) {
+            if (error)
+                *error = QStringLiteral("Alias \"%1\": %2").arg(name, why);
+            setPage(QStringLiteral("aliases"));
+            return false;
+        }
+        keep << name.toLower();
+    }
+    for (const QString &name : aliases.names()) {
+        if (aliases.isUserAlias(name) && !keep.contains(name))
+            aliases.removeUserAlias(name);
+    }
+    aliases.save();
+
+    FolderFormats::instance().setAutoSwitch(m_autoFormat->isChecked());
+    m_originalTheme = Style::instance()->theme().name;
+    m_originalThemeData = Style::instance()->theme();
+    m_originalSize = Style::instance()->sizeLevel();
+    return true;
+}
+
+void PreferencesDialog::accept()
+{
+    QString err;
+    if (!apply(&err)) {
+        QMessageBox::warning(this, QStringLiteral("Preferences"), err);
+        return;
+    }
+    QDialog::accept();
+}
+
+void PreferencesDialog::reject()
+{
+    // Put back what was showing when the window opened (or at the last Apply).
+    if (!Style::instance()->setTheme(m_originalTheme))
+        Style::instance()->setTheme(m_originalThemeData);
+    Style::instance()->setSizeLevel(m_originalSize);
+    QDialog::reject();
+}

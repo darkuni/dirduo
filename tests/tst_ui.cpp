@@ -11,6 +11,7 @@
 #include "core/Collections.h"
 #include "core/Favorites.h"
 #include "ui/FavoritesDialog.h"
+#include "ui/PreferencesDialog.h"
 #include "ui/SyncDialog.h"
 #include "ui/CommandConsole.h"
 #include "ui/CustomizeDialog.h"
@@ -1245,6 +1246,69 @@ private Q_SLOTS:
         QVERIFY(freq.actions().size() >= 4); // three folders, separator, clear
         f->setItems({});
         f->clearFrequent();
+    }
+
+    void preferencesWindow()
+    {
+        Style::instance()->setTheme(QStringLiteral("Linopus Light"));
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("theme"));
+            QCOMPARE(dlg.currentPage(), QStringLiteral("theme"));
+            QVERIFY(dlg.search(QStringLiteral("alias")).contains(QStringLiteral("aliases")));
+            QCOMPARE(dlg.search(QStringLiteral("bold")), QStringList{QStringLiteral("labels")});
+            QCOMPARE(dlg.currentPage(), QStringLiteral("labels")); // lands on the match
+            QCOMPARE(dlg.search(QString()).size(), PreferencesDialog::pageNames().size());
+
+            // Colours show at once; Cancel puts the old theme back.
+            dlg.setThemeColor(QStringLiteral("sourceAccent"), QColor(Qt::red));
+            QCOMPARE(Style::instance()->theme().sourceAccent, QColor(Qt::red));
+            dlg.reject();
+        }
+        QCOMPARE(Style::instance()->theme().name, QStringLiteral("Linopus Light"));
+        QVERIFY(Style::instance()->theme().sourceAccent != QColor(Qt::red));
+
+        {
+            // Edit a built-in: it is saved as your own copy.
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("theme"));
+            dlg.setThemeColor(QStringLiteral("type:image"), QColor(Qt::green));
+            QVERIFY(dlg.saveTheme());
+            QCOMPARE(Style::instance()->theme().name, QStringLiteral("Linopus Light (mine)"));
+            QVERIFY(Style::instance()->themeNames().contains(QStringLiteral("Linopus Light (mine)")));
+            QCOMPARE(Style::instance()->theme().typeColor(FileKind::Category::Image), QColor(Qt::green));
+            QCOMPARE(m_app->settings().value(QStringLiteral("Appearance/theme")).toString(), QStringLiteral("Linopus Light (mine)"));
+
+            // A new name for a fresh one.
+            dlg.setThemeName(QStringLiteral("Deck Night"));
+            dlg.setThemeColor(QStringLiteral("base"), QColor::fromRgb(0x101010));
+            QVERIFY(dlg.saveTheme());
+            QVERIFY(QFile::exists(Style::instance()->themesDir() + QStringLiteral("/Deck Night.ini")));
+
+            // Labels and aliases apply with OK.
+            LabelRule r;
+            r.pattern = QStringLiteral("*.sav");
+            r.color = QColor(Qt::magenta);
+            r.bold = true;
+            dlg.addLabelRule(r);
+            const int row = dlg.addAliasRow();
+            dlg.setAliasRow(row, QStringLiteral("/saves"), root + QStringLiteral("/b"));
+            dlg.accept();
+            QCOMPARE(dlg.result(), int(QDialog::Accepted));
+        }
+        QVERIFY(Style::instance()->labels().match(QStringLiteral("game.sav"), false));
+        QCOMPARE(m_app->aliases().aliasPath(QStringLiteral("saves")), root + QStringLiteral("/b"));
+
+        {
+            // A bad alias stops OK and shows the page.
+            PreferencesDialog dlg(*m_app, w);
+            const int row = dlg.addAliasRow();
+            dlg.setAliasRow(row, QStringLiteral("usr"), QStringLiteral("/tmp"));
+            QString err;
+            QVERIFY(!dlg.apply(&err));
+            QVERIFY(err.contains(QStringLiteral("usr")));
+            QCOMPARE(dlg.currentPage(), QStringLiteral("aliases"));
+            dlg.reject();
+        }
+        Style::instance()->setLabels({});
     }
 
     void sessionRoundTrip()
