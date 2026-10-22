@@ -37,6 +37,7 @@ ButtonDef catalogDef(int index)
     d.tip = c.tip;
     d.left = c.left;
     d.right = c.right;
+    d.dynamic = c.dynamic;
     return d;
 }
 

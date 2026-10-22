@@ -31,6 +31,7 @@ struct CatalogButton
     QString tip;
     QString left;
     QString right;
+    QString dynamic; // a self-filling menu: favorites, frequent, aliases, collections
 };
 
 // A word a button's "enabled when" or "checked when" condition can use.

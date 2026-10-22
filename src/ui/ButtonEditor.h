@@ -30,6 +30,7 @@ public:
     QPlainTextEdit *leftEdit() const { return m_left; }
     QLineEdit *enableEdit() const { return m_enable; }
     QCheckBox *menuCheck() const { return m_isMenu; }
+    QComboBox *dynamicBox() const { return m_dynamic; }
 
     static QStringList iconNames();
 
@@ -51,6 +52,7 @@ private:
     QPlainTextEdit *m_middle;
     QWidget *m_menuPage;
     QListWidget *m_childList;
+    QComboBox *m_dynamic;
     QLineEdit *m_enable;
     QLineEdit *m_check;
     QKeySequenceEdit *m_key;

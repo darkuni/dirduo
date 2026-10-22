@@ -11,6 +11,8 @@
 #include "ui/DuplicatesDialog.h"
 #include "ui/FindDialog.h"
 #include "core/Collections.h"
+#include "core/Favorites.h"
+#include "ui/FavoritesDialog.h"
 #include "ui/SyncDialog.h"
 #include "ui/BreadcrumbBar.h"
 #include "ui/ButtonBar.h"
@@ -384,6 +386,22 @@ void ListerWindow::buildMenus()
     m_aliasMenu = go->addMenu(QIcon::fromTheme(QStringLiteral("bookmarks")), QStringLiteral("Aliases"));
     connect(m_aliasMenu, &QMenu::aboutToShow, this, &ListerWindow::rebuildAliasMenu);
 
+    QMenu *favs = menuBar()->addMenu(QStringLiteral("F&avourites"));
+    connect(favs, &QMenu::aboutToShow, this, [this, favs]() {
+        favs->clear();
+        fillDynamicMenu(favs, QStringLiteral("favorites"));
+        favs->addSeparator();
+        QMenu *frequent = favs->addMenu(QIcon::fromTheme(QStringLiteral("document-open-recent")), QStringLiteral("Frequent Folders"));
+        fillDynamicMenu(frequent, QStringLiteral("frequent"));
+        QMenu *colls = favs->addMenu(QIcon::fromTheme(QStringLiteral("folder-favorites")), QStringLiteral("Collections"));
+        fillDynamicMenu(colls, QStringLiteral("collections"));
+    });
+    // Present from the start so its shortcut works before the menu is opened.
+    auto *addFav = new QAction(QStringLiteral("Add to Favourites"), this);
+    addFav->setShortcut(QKeySequence(QStringLiteral("Ctrl+D")));
+    connect(addFav, &QAction::triggered, this, [this]() { runCommand(QStringLiteral("Favorite ADD")); });
+    addAction(addFav);
+
     QMenu *tools = menuBar()->addMenu(QStringLiteral("&Tools"));
     tools->addAction(commandAction(QStringLiteral("Find..."), QStringLiteral("Find"), QKeySequence(QStringLiteral("Ctrl+Shift+F")),
                                    QStringLiteral("edit-find")));
@@ -465,6 +483,7 @@ void ListerWindow::createButtonBar(const QString &id, bool show)
     connect(bar, &ButtonBar::commandTriggered, this, [this](const QString &cmd) { runCommand(cmd); });
     connect(bar, &ButtonBar::filesDropped, this, &ListerWindow::runCommandWithFiles);
     bar->setEvaluator([this](const QString &cond, bool fallback) { return evaluateCondition(cond, fallback); });
+    bar->setMenuProvider([this](QMenu *menu, const QString &kind) { fillDynamicMenu(menu, kind); });
     setupToolbarMenu(bar);
     const bool main = id == QLatin1String(ToolbarStore::kMainId);
     if (main) {
@@ -585,6 +604,8 @@ std::optional<bool> ListerWindow::conditionAtom(const QString &name, const QStri
         return flag(t && !Location::isLocal(t->path()));
     if (name == QLatin1String("canup"))
         return flag(t && !t->path().isEmpty() && !Location::isRoot(t->path()));
+    if (name == QLatin1String("favorite"))
+        return flag(t && Favorites::instance()->contains(t->path()));
     if (name == QLatin1String("back"))
         return flag(t && t->canGoBack());
     if (name == QLatin1String("forward"))
@@ -1991,6 +2012,39 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
         dlg->show();
         return true;
     }
+    if (cmd.is(QStringLiteral("Favorite"))) {
+        Favorites *f = Favorites::instance();
+        if (cmd.hasArg(QStringLiteral("GO"))) {
+            const QString path = f->pathFor(cmd.value(QStringLiteral("GO")));
+            if (path.isEmpty())
+                return fail(QStringLiteral("There is no favourite called %1.").arg(cmd.value(QStringLiteral("GO"))));
+            if (FolderTab *t = sourceTab())
+                t->navigate(path);
+            return true;
+        }
+        if (cmd.hasFlag(QStringLiteral("ORGANISE")) || cmd.hasFlag(QStringLiteral("ORGANIZE"))) {
+            FavoritesDialog dlg(this);
+            dlg.exec();
+            return true;
+        }
+        const QString path = cmd.hasArg(QStringLiteral("PATH")) ? engine.resolvePath(cmd.value(QStringLiteral("PATH")), sourcePath()) : sourcePath();
+        if (path.isEmpty())
+            return fail(QStringLiteral("There is no folder to add."));
+        if (cmd.hasFlag(QStringLiteral("REMOVE"))) {
+            if (!f->removePath(path))
+                return fail(QStringLiteral("That folder is not a favourite."));
+            scheduleButtonStates();
+            return true;
+        }
+        if (cmd.hasFlag(QStringLiteral("ADD")) || cmd.positional.isEmpty()) {
+            if (f->contains(path) && !cmd.hasArg(QStringLiteral("NAME")))
+                return true; // already there
+            f->add(path, cmd.value(QStringLiteral("NAME")), cmd.value(QStringLiteral("GROUP")));
+            scheduleButtonStates();
+            return true;
+        }
+        return fail(QStringLiteral("Favorite takes ADD, REMOVE, GO= or ORGANISE."));
+    }
     // Duplicates
     DuplicateOptions o;
     const QString by = cmd.value(QStringLiteral("BY")).toLower();
@@ -2038,4 +2092,59 @@ void ListerWindow::showFindResults(const QString &collectionLocation, int count)
         }
     }
     d->addTab(collectionLocation, true);
+}
+
+void ListerWindow::fillDynamicMenu(QMenu *menu, const QString &kind)
+{
+    auto goAction = [this](QMenu *m, const QString &label, const QString &command, const QString &tip, const QString &icon) {
+        QAction *a = m->addAction(QIcon::fromTheme(icon), label);
+        a->setToolTip(tip);
+        connect(a, &QAction::triggered, this, [this, command]() { runCommand(command); });
+        return a;
+    };
+    auto quoted = [](const QString &path) { return QLatin1Char('"') + path + QLatin1Char('"'); };
+    menu->setToolTipsVisible(true);
+    if (kind == QLatin1String("favorites")) {
+        std::function<void(QMenu *, const QList<Favorite> &)> add = [&](QMenu *m, const QList<Favorite> &list) {
+            for (const Favorite &f : list) {
+                if (f.separator)
+                    m->addSeparator();
+                else if (f.isGroup())
+                    add(m->addMenu(QIcon::fromTheme(QStringLiteral("folder-favorites")), f.name), f.items);
+                else
+                    goAction(m, f.name, QStringLiteral("Go ") + quoted(f.path), Location::display(f.path),
+                             Location::isLocal(f.path) ? QStringLiteral("folder") : QStringLiteral("folder-remote"));
+            }
+        };
+        add(menu, Favorites::instance()->items());
+        if (!menu->isEmpty())
+            menu->addSeparator();
+        // The window owns Ctrl+D; a second action with it would make both ambiguous.
+        QAction *addHere = menu->addAction(QIcon::fromTheme(QStringLiteral("bookmark-new")), QStringLiteral("Add This Folder\tCtrl+D"));
+        addHere->setEnabled(sourceTab() && !Favorites::instance()->contains(sourceTab()->path()));
+        connect(addHere, &QAction::triggered, this, [this]() { runCommand(QStringLiteral("Favorite ADD")); });
+        connect(menu->addAction(QStringLiteral("Organise Favourites...")), &QAction::triggered, this,
+                [this]() { runCommand(QStringLiteral("Favorite ORGANISE")); });
+    } else if (kind == QLatin1String("frequent")) {
+        for (const FrequentFolder &f : Favorites::instance()->frequent())
+            goAction(menu, Location::title(f.path), QStringLiteral("Go ") + quoted(f.path),
+                     QStringLiteral("%1 (%2 visits)").arg(Location::display(f.path)).arg(f.visits),
+                     Location::isLocal(f.path) ? QStringLiteral("folder") : QStringLiteral("folder-remote"));
+        if (!menu->isEmpty()) {
+            menu->addSeparator();
+            connect(menu->addAction(QStringLiteral("Clear This List")), &QAction::triggered, this,
+                    []() { Favorites::instance()->clearFrequent(); });
+        }
+    } else if (kind == QLatin1String("aliases")) {
+        AliasManager &aliases = m_app.aliases();
+        for (const QString &name : aliases.names())
+            goAction(menu, QLatin1Char('/') + name, QStringLiteral("Go /") + name, aliases.aliasPath(name), QStringLiteral("folder-bookmark"));
+    } else if (kind == QLatin1String("collections")) {
+        for (const QString &name : Collections::instance()->names())
+            goAction(menu, name, QStringLiteral("Collection OPEN=") + quoted(name), Collections::location(name),
+                     QStringLiteral("folder-favorites"));
+        if (!menu->isEmpty())
+            menu->addSeparator();
+        goAction(menu, QStringLiteral("All Collections"), QStringLiteral("Collection OPEN"), QString(), QStringLiteral("folder-favorites"));
+    }
 }

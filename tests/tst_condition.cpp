@@ -75,6 +75,8 @@ private Q_SLOTS:
     void catalogButtonsAreValid()
     {
         for (const CatalogButton &b : CommandCatalog::buttons()) {
+            if (!b.dynamic.isEmpty())
+                continue; // a self-filling menu has no command
             const QString name = b.left.section(QLatin1Char(' '), 0, 0);
             QVERIFY2(CommandCatalog::find(name), qPrintable(b.label));
         }

@@ -26,9 +26,13 @@ struct ButtonDef
     QString checkWhen;  // Condition: shown pressed when true
     QString key;        // hotkey in the lister, QKeySequence portable text
     QList<ButtonDef> children;
+    // A menu that fills itself when opened: favorites, frequent, aliases,
+    // collections.
+    QString dynamic;
     bool separator = false;
 
-    bool isMenu() const { return !children.isEmpty(); }
+    bool isMenu() const { return !children.isEmpty() || !dynamic.isEmpty(); }
+    static QStringList dynamicKinds();
     QJsonObject toJson() const;
     static ButtonDef fromJson(const QJsonObject &o);
     static ButtonDef makeSeparator();
@@ -140,6 +144,11 @@ public:
     void setEditMode(bool on);
     bool editMode() const { return m_edit; }
 
+    // Fills a dynamic menu (favorites, frequent, ...) as it opens.
+    using MenuProvider = std::function<void(QMenu *menu, const QString &kind)>;
+    void setMenuProvider(MenuProvider p) { m_menuProvider = std::move(p); }
+    void fillDynamicMenu(QMenu *menu, const QString &kind) const;
+
     using Evaluator = std::function<bool(const QString &condition, bool fallback)>;
     void setEvaluator(Evaluator eval) { m_eval = std::move(eval); }
     bool evaluate(const QString &condition, bool fallback) const;
@@ -178,4 +187,5 @@ private:
     bool m_edit = false;
     int m_dropIndex = -1;
     Evaluator m_eval;
+    MenuProvider m_menuProvider;
 };

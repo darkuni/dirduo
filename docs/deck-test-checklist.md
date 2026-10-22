@@ -54,6 +54,7 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Tools > Synchronize between a folder on internal storage and one on the SD card: the list makes sense; Synchronize; Compare again says they match.
 - [ ] Ctrl+Shift+F, name `*.d64` (or any type you have), Find: results open in a tab; copy one of them to the other display.
 - [ ] Select a few files, Edit > Add to Collection > New Collection; Go > Collections opens it; Delete there leaves the real files alone.
+- [ ] Ctrl+D in a few folders, then the Favourites button: they are listed; Organise Favourites to group them.
 - [ ] Tools > Find Duplicates on a ROM folder: groups show; check copies, then Move Checked to Trash.
 
 ## Report back

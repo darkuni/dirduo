@@ -56,6 +56,7 @@ add_library(linopus_core STATIC
     src/core/FolderSync.cpp
     src/core/Collections.cpp
     src/core/FindEngine.cpp
+    src/core/Favorites.cpp
     src/core/CommandCatalog.cpp
     src/core/Condition.cpp
     src/core/DriveList.cpp
@@ -101,6 +102,7 @@ add_library(linopus_ui STATIC
     src/ui/SyncDialog.cpp
     src/ui/DuplicatesDialog.cpp
     src/ui/FindDialog.cpp
+    src/ui/FavoritesDialog.cpp
     src/ui/ListerWindow.cpp
     src/ui/AppContext.cpp
 )

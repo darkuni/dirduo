@@ -1,6 +1,7 @@
 #include "ui/FolderTab.h"
 
 #include "core/Collections.h"
+#include "core/Favorites.h"
 #include "core/DirLister.h"
 #include "core/FileKind.h"
 #include "core/FileOps.h"
@@ -219,6 +220,8 @@ void FolderTab::navigate(const QString &rawPath, bool addToHistory)
     m_path = path;
     m_error.clear();
     m_pendingSelection.clear();
+    if (addToHistory)
+        Favorites::instance()->visit(path); // frequent folders (history moves are not new visits)
     m_model->clear(path);
     applyFormatFor(path);
     updateLocationColumn();

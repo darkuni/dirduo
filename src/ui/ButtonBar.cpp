@@ -110,8 +110,9 @@ QJsonObject ButtonDef::toJson() const
     };
     put("icon", icon);
     put("tip", tip);
-    if (children.isEmpty())
+    if (!isMenu())
         o.insert(QStringLiteral("left"), left);
+    put("dynamic", dynamic);
     put("right", right);
     put("middle", middle);
     put("enableWhen", enableWhen);
@@ -141,6 +142,9 @@ ButtonDef ButtonDef::fromJson(const QJsonObject &o)
     d.enableWhen = o.value(QStringLiteral("enableWhen")).toString();
     d.checkWhen = o.value(QStringLiteral("checkWhen")).toString();
     d.key = o.value(QStringLiteral("key")).toString();
+    d.dynamic = o.value(QStringLiteral("dynamic")).toString().toLower();
+    if (!dynamicKinds().contains(d.dynamic))
+        d.dynamic.clear();
     const QJsonArray menu = o.value(QStringLiteral("menu")).toArray();
     for (const QJsonValue &v : menu) {
         const ButtonDef c = fromJson(v.toObject());
@@ -148,6 +152,11 @@ ButtonDef ButtonDef::fromJson(const QJsonObject &o)
             d.children << c;
     }
     return d;
+}
+
+QStringList ButtonDef::dynamicKinds()
+{
+    return {QStringLiteral("favorites"), QStringLiteral("frequent"), QStringLiteral("aliases"), QStringLiteral("collections")};
 }
 
 ButtonDef ButtonDef::makeSeparator()
@@ -444,6 +453,13 @@ QList<ButtonDef> ToolbarStore::defaultButtons()
         {QStringLiteral("Filter"), {{}, QStringLiteral("filter")}},
         {QStringLiteral("Sizes"), {{}, QStringLiteral("foldersizes")}},
     };
+    // Favourites as a menu that keeps itself up to date (Ctrl+D adds).
+    ButtonDef favs;
+    favs.label = QStringLiteral("Favourites");
+    favs.icon = QStringLiteral("bookmarks");
+    favs.tip = QStringLiteral("Your favourite folders (Ctrl+D adds the one you are in)");
+    favs.dynamic = QStringLiteral("favorites");
+    list << favs;
     for (ButtonDef &d : list) {
         const auto it = states.constFind(d.label);
         if (it != states.cend()) {
@@ -474,7 +490,18 @@ ThreeButton::ThreeButton(const ButtonDef &def, QWidget *parent, ButtonBar *bar)
     setAutoRaise(true);
     setFocusPolicy(Qt::NoFocus);
     setCheckable(!def.checkWhen.isEmpty());
-    if (def.isMenu()) {
+    if (!def.dynamic.isEmpty()) {
+        auto *menu = new QMenu(this);
+        menu->setToolTipsVisible(true);
+        const QString kind = def.dynamic;
+        connect(menu, &QMenu::aboutToShow, this, [this, menu, kind]() {
+            menu->clear();
+            if (m_bar)
+                m_bar->fillDynamicMenu(menu, kind);
+        });
+        setMenu(menu);
+        setPopupMode(QToolButton::InstantPopup);
+    } else if (def.isMenu()) {
         setMenu(buildMenu(def.children, this));
         setPopupMode(QToolButton::InstantPopup);
     }
@@ -686,6 +713,14 @@ void ButtonBar::setEditMode(bool on)
     }
     if (!on)
         updateStates();
+}
+
+void ButtonBar::fillDynamicMenu(QMenu *menu, const QString &kind) const
+{
+    if (m_menuProvider)
+        m_menuProvider(menu, kind);
+    if (menu->isEmpty())
+        menu->addAction(QStringLiteral("(empty)"))->setEnabled(false);
 }
 
 bool ButtonBar::evaluate(const QString &condition, bool fallback) const

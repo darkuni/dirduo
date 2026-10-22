@@ -64,6 +64,8 @@ Servers and archives (KIO):
 - Synchronize (Tools > Synchronize): compare the source and destination (or any two folders) by date, size or contents; see every difference with what will happen to it, change any of them, then copy. Update the right, mirror to it (extras go to the trash), or both ways. Allows for the 2-second timestamps of FAT SD cards. `Sync ... RUN` does it from a button without asking
 - Find (Tools > Find, Ctrl+Shift+F): by name (text, wildcards or a regular expression), text inside files, size, modified date, files or folders, under any folders. Results open in a tab as the Find Results collection, where every command works on them; searches can be saved and run again. `Find NAME=*.d64 NEWER=30 RUN` from a button
 - Collections (Go > Collections, `/collections`): virtual folders of links to files anywhere. Edit > Add to Collection, or copy into a collection shown in the other display; Delete there only takes the link out; renaming the real file keeps the link. Each is a text file in `~/.config/linopus/collections`
+- Favourites (Favourites menu, the Favourites toolbar button, Ctrl+D to add): your folders in your order, in groups if you like; Organise Favourites renames, reorders and groups them. Frequent Folders lists the folders you use most, older visits counting for less
+- Self-filling toolbar menus: a button can be a menu of your Favourites, Frequent folders, Aliases or Collections that stays up to date (customize mode, Commands > Favourites)
 - Find Duplicates (Tools > Find Duplicates): identical files by contents (renamed copies too), by name and size, or by name, across several folders; check all but the newest, oldest or shortest path in each group and send the rest to the trash
 
 ## Commands
@@ -80,6 +82,7 @@ Every button, menu item, hotkey, drop and inline rename runs one of these. Butto
 | `CreateFolder` | `NAME="A, B, C"` makes all three; no name asks; `IN=...` |
 | `Clipboard` | `COPY`, `CUT`, `PASTE` (a picture or text pastes as a new file), `AS` |
 | `Print` | `FOLDER`, `AS=text\|csv\|html`, `TO=clipboard\|ask\|<file>`, `SELECTED` |
+| `Favorite` | `ADD`, `REMOVE`, `PATH=`, `NAME=`, `GROUP=`, `GO=<name>`, `ORGANISE` |
 | `Find` | `NAME=`, `REGEX`, `CASE`, `CONTAINS=`, `MINSIZE=10M`, `MAXSIZE=`, `NEWER=<days or date>`, `OLDER=`, `TYPE=files\|folders\|both`, `IN=...`, `HIDDEN`, `NORECURSE`, `COLLECTION=`, `PRESET=`, `RUN` |
 | `Collection` | `ADD=<name>\|ask`, `REMOVE`, `CREATE=`, `DELETE=`, `OPEN=<name>`, `NEWTAB` |
 | `Sync` | `LEFT=`, `RIGHT=`, `MODE=update\|mirror\|twoway`, `COMPARE=datesize\|date\|size\|contents`, `EXCLUDE=*.tmp;...`, `RUN` |
@@ -141,6 +144,7 @@ pods=/downloads/podcasts
 | Ctrl+Shift+Z | Calculate all folder sizes |
 | Ctrl+Shift+P | Command console |
 | Ctrl+Shift+F | Find |
+| Ctrl+D | Add the source folder to Favourites |
 
 ## Toolbar files
 
@@ -162,7 +166,9 @@ Each toolbar is `~/.config/linopus/toolbars/<id>.json`. Customize mode writes th
 }
 ```
 
-`enableWhen` greys a button out when false; `checkWhen` shows it pressed when true. They combine these words with `&&`, `||`, `!` and parentheses: `selection`, `files`, `folders`, `single`, `multiple`, `dual`, `dest`, `destlocked`, `navlock`, `remote`, `canup`, `back`, `forward`, `clipboard`, `hidden`, `tree`, `flat`, `grouped`, `filter`, `checkboxes`, `foldersizes`, and `view=`, `layout=`, `groupby=`, `treemode=`, `theme=`.
+A button with `"dynamic": "favorites"` (or `frequent`, `aliases`, `collections`) is a menu that fills itself.
+
+`enableWhen` greys a button out when false; `checkWhen` shows it pressed when true. They combine these words with `&&`, `||`, `!` and parentheses: `selection`, `files`, `folders`, `single`, `multiple`, `dual`, `dest`, `destlocked`, `navlock`, `remote`, `canup`, `favorite`, `back`, `forward`, `clipboard`, `hidden`, `tree`, `flat`, `grouped`, `filter`, `checkboxes`, `foldersizes`, and `view=`, `layout=`, `groupby=`, `treemode=`, `theme=`.
 
 ## Files
 
@@ -175,6 +181,7 @@ Each toolbar is `~/.config/linopus/toolbars/<id>.json`. Customize mode writes th
 - `~/.config/linopus/rename.ini`: Advanced Rename presets
 - `~/.config/linopus/find.ini`: saved searches
 - `~/.config/linopus/collections/`: collections, one path per line
+- `~/.config/linopus/favorites.json`, `frequent.ini`: favourites and folder visit counts
 
 Inside the Flatpak these are still the real `~/.config/linopus`, so the configuration copies straight to another machine.
 

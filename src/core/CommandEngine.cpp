@@ -67,7 +67,7 @@ void CommandEngine::recordRename(const QList<QPair<QString, QString>> &done)
 QStringList CommandEngine::commandNames()
 {
     return {QStringLiteral("Clipboard"), QStringLiteral("Collection"), QStringLiteral("Copy"), QStringLiteral("CreateFolder"),
-            QStringLiteral("Delete"), QStringLiteral("Duplicates"), QStringLiteral("Find"), QStringLiteral("Go"), QStringLiteral("Move"), QStringLiteral("Print"),
+            QStringLiteral("Delete"), QStringLiteral("Duplicates"), QStringLiteral("Favorite"), QStringLiteral("Find"), QStringLiteral("Go"), QStringLiteral("Move"), QStringLiteral("Print"),
             QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Set"), QStringLiteral("Settings"),
             QStringLiteral("Sync"), QStringLiteral("Toolbar")};
 }
@@ -183,7 +183,8 @@ bool CommandEngine::execute(const ParsedCommand &cmd, CommandContext &ctx, QStri
         return ctx.printFolder(cmd, error);
     if (cmd.is(QStringLiteral("Settings")))
         return ctx.settings(cmd, error);
-    if (cmd.is(QStringLiteral("Sync")) || cmd.is(QStringLiteral("Duplicates")) || cmd.is(QStringLiteral("Find")))
+    if (cmd.is(QStringLiteral("Sync")) || cmd.is(QStringLiteral("Duplicates")) || cmd.is(QStringLiteral("Find"))
+        || cmd.is(QStringLiteral("Favorite")))
         return ctx.tool(cmd, error);
     if (error)
         *error = QStringLiteral("Unknown command \"%1\".").arg(cmd.name);

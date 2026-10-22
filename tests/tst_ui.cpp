@@ -9,6 +9,8 @@
 #include "ui/DuplicatesDialog.h"
 #include "ui/FindDialog.h"
 #include "core/Collections.h"
+#include "core/Favorites.h"
+#include "ui/FavoritesDialog.h"
 #include "ui/SyncDialog.h"
 #include "ui/CommandConsole.h"
 #include "ui/CustomizeDialog.h"
@@ -1182,6 +1184,67 @@ private Q_SLOTS:
         QVERIFY(dlg.status().startsWith(QStringLiteral("1 found")));
         Collections::instance()->remove(QStringLiteral("Mine"));
         Collections::instance()->remove(QStringLiteral("Find Results"));
+    }
+
+    void favouritesAndFrequentFolders()
+    {
+        Favorites *f = Favorites::instance();
+        QVERIFY(f->items().isEmpty());
+        QVERIFY(w->runCommand(QStringLiteral("Favorite ADD")));
+        QVERIFY(w->runCommand(QStringLiteral("Favorite ADD PATH=\"%1\" NAME=Box GROUP=Mine").arg(root + QStringLiteral("/b"))));
+        QCOMPARE(f->items().size(), 2);
+        QCOMPARE(f->items().at(0).path, root + QStringLiteral("/a"));
+        QVERIFY(f->items().at(1).isGroup());
+        QCOMPARE(f->pathFor(QStringLiteral("box")), root + QStringLiteral("/b"));
+        QVERIFY(w->evaluateCondition(QStringLiteral("favorite"), false));
+        QVERIFY(w->runCommand(QStringLiteral("Favorite GO=Box")));
+        QCOMPARE(w->display(0)->currentTab()->path(), root + QStringLiteral("/b"));
+        QVERIFY(!runFailing(QStringLiteral("Favorite GO=Nope")));
+
+        // A self-filling menu button shows them.
+        ButtonDef d;
+        d.label = QStringLiteral("Favs");
+        d.dynamic = QStringLiteral("favorites");
+        m_app->toolbars().insertButton(QStringLiteral("buttons"), 0, d);
+        ButtonBar *bar = w->buttonBar(QStringLiteral("buttons"));
+        QTRY_VERIFY(bar->buttonAt(0) && bar->buttonAt(0)->menu());
+        QMenu *menu = bar->buttonAt(0)->menu();
+        Q_EMIT menu->aboutToShow();
+        QStringList texts;
+        for (QAction *a : menu->actions())
+            texts << a->text();
+        QVERIFY(texts.contains(QStringLiteral("a")));
+        QVERIFY(texts.contains(QStringLiteral("Mine")));
+        QAction *goA = menu->actions().first();
+        goA->trigger();
+        QCOMPARE(w->display(0)->currentTab()->path(), root + QStringLiteral("/a"));
+
+        // Organise: what the dialog holds is what gets saved.
+        FavoritesDialog dlg(w);
+        QCOMPARE(dlg.favorites(), f->items());
+        delete dlg.tree()->topLevelItem(0);
+        dlg.accept();
+        QCOMPARE(f->items().size(), 1);
+        QVERIFY(w->runCommand(QStringLiteral("Favorite REMOVE PATH=\"%1\"").arg(root + QStringLiteral("/b"))));
+        QVERIFY(f->items().first().items.isEmpty());
+
+        // Frequent folders: b visited more than a.
+        f->clearFrequent();
+        FolderTab *t = w->display(0)->currentTab();
+        for (int i = 0; i < 3; ++i) {
+            t->navigate(root + QStringLiteral("/b"));
+            t->navigate(root);
+        }
+        t->navigate(root + QStringLiteral("/a"));
+        const QList<FrequentFolder> top = f->frequent();
+        QCOMPARE(top.first().path, root);
+        QCOMPARE(top.at(1).path, root + QStringLiteral("/b"));
+        QCOMPARE(top.at(1).visits, 3);
+        QMenu freq;
+        w->fillDynamicMenu(&freq, QStringLiteral("frequent"));
+        QVERIFY(freq.actions().size() >= 4); // three folders, separator, clear
+        f->setItems({});
+        f->clearFrequent();
     }
 
     void sessionRoundTrip()

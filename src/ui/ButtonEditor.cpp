@@ -110,7 +110,20 @@ ButtonEditor::ButtonEditor(const ButtonDef &def, QWidget *parent)
     layout->addWidget(m_commands);
 
     m_menuPage = new QGroupBox(QStringLiteral("Menu items"), this);
-    auto *ml = new QHBoxLayout(m_menuPage);
+    auto *menuOuter = new QVBoxLayout(m_menuPage);
+    auto *dynRow = new QHBoxLayout;
+    dynRow->addWidget(new QLabel(QStringLiteral("Fill with:"), m_menuPage));
+    m_dynamic = new QComboBox(m_menuPage);
+    m_dynamic->addItem(QStringLiteral("The items below"), QString());
+    m_dynamic->addItem(QStringLiteral("Favourites (kept up to date)"), QStringLiteral("favorites"));
+    m_dynamic->addItem(QStringLiteral("Frequent folders"), QStringLiteral("frequent"));
+    m_dynamic->addItem(QStringLiteral("Aliases"), QStringLiteral("aliases"));
+    m_dynamic->addItem(QStringLiteral("Collections"), QStringLiteral("collections"));
+    m_dynamic->setCurrentIndex(qMax(0, m_dynamic->findData(def.dynamic)));
+    dynRow->addWidget(m_dynamic, 1);
+    menuOuter->addLayout(dynRow);
+    auto *ml = new QHBoxLayout;
+    menuOuter->addLayout(ml);
     m_childList = new QListWidget(m_menuPage);
     ml->addWidget(m_childList, 1);
     auto *mb = new QVBoxLayout;
@@ -210,6 +223,13 @@ ButtonEditor::ButtonEditor(const ButtonDef &def, QWidget *parent)
     layout->addWidget(buttons);
 
     connect(m_isMenu, &QCheckBox::toggled, this, &ButtonEditor::updateMode);
+    connect(m_dynamic, &QComboBox::currentIndexChanged, this, [this]() {
+        const bool fixed = m_dynamic->currentData().toString().isEmpty();
+        m_childList->setEnabled(fixed);
+        for (QPushButton *b : m_menuPage->findChildren<QPushButton *>())
+            b->setEnabled(fixed);
+    });
+    Q_EMIT m_dynamic->currentIndexChanged(m_dynamic->currentIndex());
     connect(m_icon, &QComboBox::currentTextChanged, this, &ButtonEditor::updatePreview);
     refreshChildren();
     updateMode();
@@ -251,7 +271,9 @@ ButtonDef ButtonEditor::button() const
     d.icon = m_icon->currentText().trimmed();
     d.tip = m_tip->text().trimmed();
     if (m_isMenu->isChecked()) {
-        d.children = m_children;
+        d.dynamic = m_dynamic->currentData().toString();
+        if (d.dynamic.isEmpty())
+            d.children = m_children;
     } else {
         d.left = m_left->toPlainText().trimmed();
         d.right = m_right->toPlainText().trimmed();
@@ -268,7 +290,7 @@ QString ButtonEditor::validationError() const
     const ButtonDef d = button();
     if (d.label.isEmpty())
         return QStringLiteral("The button needs a label.");
-    if (m_isMenu->isChecked() && d.children.isEmpty())
+    if (m_isMenu->isChecked() && d.children.isEmpty() && d.dynamic.isEmpty())
         return QStringLiteral("A menu needs at least one item.");
     if (!m_isMenu->isChecked() && d.left.isEmpty())
         return QStringLiteral("Left-click needs a command.");

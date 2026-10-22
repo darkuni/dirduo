@@ -57,6 +57,8 @@ public:
     void updateButtonStates();
     // Opens (or refreshes) the tab showing a Find result collection.
     void showFindResults(const QString &collectionLocation, int count);
+    // Favourites, frequent folders, aliases or collections, as menu entries.
+    void fillDynamicMenu(QMenu *menu, const QString &kind);
 
     FileDisplay *sourceDisplay() const;
     FileDisplay *destDisplay() const; // null in single mode
