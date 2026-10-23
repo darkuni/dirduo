@@ -135,6 +135,19 @@ modules:
         url: https://download.kde.org/stable/kdsoap-ws-discovery-client/kdsoap-ws-discovery-client-0.4.0.tar.xz
         sha256: 2cd247c013e75f410659bac372aff93d22d71c5a54c059e137b9444af8b3427a
 
+  # Zero-configuration discovery (Avahi) for KIO's network:/ worker: the
+  # Network place lists what announces itself (SMB, SFTP, NFS, WebDAV).
+  - name: kdnssd
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_TESTING=OFF
+    sources:
+      - type: git
+        url: https://invent.kde.org/frameworks/kdnssd.git
+        tag: v6.18.0
+
   # The KIO workers that are not part of the KDE runtime: sftp, smb, fish,
   # archive (zip, tar, 7z as folders) and more.
   - name: kio-extras
@@ -146,6 +159,7 @@ modules:
     # Fail here, not on the Deck, if the smb worker was left out.
     post-install:
       - find /app/lib -path '*kio*' -name '*smb*.so' | grep -q . || (echo 'kio-extras built without smb' && exit 1)
+      - find /app/lib -path '*kio*' -name '*network*.so' | grep -q . || (echo 'kio-extras built without network' && exit 1)
     sources:
       - type: git
         url: https://invent.kde.org/network/kio-extras.git
