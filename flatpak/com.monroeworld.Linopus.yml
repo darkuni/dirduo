@@ -4,6 +4,12 @@ runtime-version: '6.10'
 sdk: org.kde.Sdk
 command: linopus
 
+# Perl modules (needed to build Samba) install into /app, not the read-only /usr.
+build-options:
+  env:
+    PERL5LIB: /app/lib/perl5:/app/lib/perl5/arch
+    PERL_MM_OPT: INSTALL_BASE=/app
+
 finish-args:
   - --share=ipc
   - --share=network
@@ -60,10 +66,12 @@ modules:
     make-install-args:
       - prefix=/app
     subdir: libraries/liblmdb
+    # From LMDB's GitHub mirror: OpenLDAP's own server turns away CI downloads.
     sources:
-      - type: archive
-        url: https://git.openldap.org/openldap/openldap/-/archive/LMDB_1.0.0/openldap-LMDB_1.0.0.tar.bz2
-        sha256: 9ab73cda2ca2132d10256a63b655981af4860f6dc8315a933175ff9b598ffab2
+      - type: git
+        url: https://github.com/LMDB/lmdb.git
+        tag: LMDB_1.0.0
+        commit: 2562c3297402d82bbc049c7e645515edb4079eba
 
   - name: perl-modules
     buildsystem: simple
