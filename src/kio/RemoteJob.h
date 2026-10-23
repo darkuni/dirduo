@@ -80,7 +80,7 @@ private:
 
     JobState m_state = JobState::Queued;
     bool m_paused = false;
-    bool m_cancelled = false;
+    bool m_canceled = false;
     bool m_finished = false;
     bool m_bypassQueue = false;
 

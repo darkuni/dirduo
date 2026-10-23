@@ -682,7 +682,7 @@ void FileListModel::dropRows(QSet<int> rows)
         return;
     QList<int> sorted(rows.cbegin(), rows.cend());
     std::sort(sorted.begin(), sorted.end());
-    // From the bottom, a run of neighbouring rows at a time.
+    // From the bottom, a run of neighboring rows at a time.
     int i = int(sorted.size()) - 1;
     while (i >= 0) {
         const int last = sorted.at(i);

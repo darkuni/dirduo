@@ -146,10 +146,10 @@ SyncDialog::SyncDialog(CommandEngine &engine, const QString &left, const QString
         m_tick.stop();
         m_busy = false;
         m_compareButton->setText(QStringLiteral("Compare"));
-        const bool cancelled = m_progress && m_progress->cancel.load();
-        m_entries = cancelled ? QList<SyncEntry>() : m_watcher.result();
+        const bool canceled = m_progress && m_progress->cancel.load();
+        m_entries = canceled ? QList<SyncEntry>() : m_watcher.result();
         fill();
-        if (cancelled)
+        if (canceled)
             m_status->setText(QStringLiteral("Comparison stopped."));
     });
     m_tick.setInterval(200);

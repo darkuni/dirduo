@@ -72,9 +72,9 @@ bool hasQuality(const QString &format);
 bool hasAlpha(const QString &format);
 // "jpg" for jpeg and so on: the extension to give a converted file.
 QString extensionFor(const QString &format);
-// Normalises a format name the user typed ("JPEG" -> "jpg"); empty if unknown
+// Normalizes a format name the user typed ("JPEG" -> "jpg"); empty if unknown
 // or not writable.
-QString normaliseFormat(const QString &name);
+QString normalizeFormat(const QString &name);
 
 QSize targetSize(const QSize &source, const ImageOptions &o);
 // Where a picture will go, before collisions are dealt with.

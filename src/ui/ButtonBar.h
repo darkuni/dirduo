@@ -22,7 +22,7 @@ struct ButtonDef
     QString left;
     QString right;
     QString middle;
-    QString enableWhen; // Condition: greyed out when false
+    QString enableWhen; // Condition: grayed out when false
     QString checkWhen;  // Condition: shown pressed when true
     QString key;        // hotkey in the lister, QKeySequence portable text
     QList<ButtonDef> children;

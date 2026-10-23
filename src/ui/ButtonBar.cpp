@@ -435,7 +435,7 @@ QList<ButtonDef> ToolbarStore::defaultButtons()
         b("Sizes", "folder-stats", "Calculate the size of every folder", "Set FOLDERSIZES=toggle"),
         b("Theme", "color-management", "Next theme (Linopus Light, Dark, Workbench...)", "Set THEME=next"),
     };
-    // Greyed out when there is nothing to act on; pressed while switched on.
+    // Grayed out when there is nothing to act on; pressed while switched on.
     const QHash<QString, QPair<QString, QString>> states = {
         {QStringLiteral("Copy"), {QStringLiteral("selection && dest"), {}}},
         {QStringLiteral("Move"), {QStringLiteral("selection && dest"), {}}},
@@ -453,11 +453,11 @@ QList<ButtonDef> ToolbarStore::defaultButtons()
         {QStringLiteral("Filter"), {{}, QStringLiteral("filter")}},
         {QStringLiteral("Sizes"), {{}, QStringLiteral("foldersizes")}},
     };
-    // Favourites as a menu that keeps itself up to date (Ctrl+D adds).
+    // Favorites as a menu that keeps itself up to date (Ctrl+D adds).
     ButtonDef favs;
-    favs.label = QStringLiteral("Favourites");
+    favs.label = QStringLiteral("Favorites");
     favs.icon = QStringLiteral("bookmarks");
-    favs.tip = QStringLiteral("Your favourite folders (Ctrl+D adds the one you are in)");
+    favs.tip = QStringLiteral("Your favorite folders (Ctrl+D adds the one you are in)");
     favs.dynamic = QStringLiteral("favorites");
     list << favs;
     for (ButtonDef &d : list) {
@@ -505,7 +505,7 @@ ThreeButton::ThreeButton(const ButtonDef &def, QWidget *parent, ButtonBar *bar)
         setMenu(buildMenu(def.children, this));
         setPopupMode(QToolButton::InstantPopup);
     }
-    // Files dropped on a button are handled by the bar (a greyed-out button
+    // Files dropped on a button are handled by the bar (a grayed-out button
     // takes no events, but Copy should still take dropped files).
     setAcceptDrops(false);
 }
@@ -708,7 +708,7 @@ void ButtonBar::setEditMode(bool on)
     m_edit = on;
     for (QWidget *w : std::as_const(m_items)) {
         if (on)
-            w->setEnabled(true); // greyed-out buttons can still be edited
+            w->setEnabled(true); // grayed-out buttons can still be edited
         w->update();
     }
     if (!on)

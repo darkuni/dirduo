@@ -32,7 +32,7 @@ private Q_SLOTS:
 
     void steamDeckMounts()
     {
-        // A Deck with a labelled SD card and a USB stick plugged in.
+        // A Deck with a labeled SD card and a USB stick plugged in.
         const QList<MountInfo> mounts = {
             mount("/", "/dev/nvme0n1p4", "btrfs"),
             mount("/home", "/dev/nvme0n1p8"),
@@ -50,7 +50,7 @@ private Q_SLOTS:
         QCOMPARE(drives.at(3).kind, DriveEntry::Kind::Usb);
     }
 
-    void unlabelledCardGetsAFriendlyName()
+    void unlabeledCardGetsAFriendlyName()
     {
         const QList<MountInfo> mounts = {mount("/run/media/mmcblk0p1", "/dev/mmcblk0p1"),
                                          mount("/run/media/deck/0a1b2c3d-9f8e-4d7c-b6a5-112233445566", "/dev/sdb1")};

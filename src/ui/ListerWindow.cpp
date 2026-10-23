@@ -118,7 +118,7 @@ ListerWindow::ListerWindow(AppContext &app, QWidget *parent)
             if (from == sourceDisplay())
                 updateViewer();
         });
-        connect(d, &FileDisplay::zoomRequested, this, [this](FileDisplay *, int steps) { zoomBy(steps, true); });
+        connect(d, &FileDisplay::zoomRequested, this, [this](FileDisplay *from, int steps) { zoomBy(steps, true, from); });
         connect(d, &FileDisplay::commandRequested, this, [this](FileDisplay *from, const QString &c) {
             makeSource(from);
             runCommand(c);
@@ -502,7 +502,7 @@ void ListerWindow::buildMenus()
         fillDynamicMenu(colls, QStringLiteral("collections"));
     });
     // Present from the start so its shortcut works before the menu is opened.
-    auto *addFav = new QAction(QStringLiteral("Add to Favourites"), this);
+    auto *addFav = new QAction(QStringLiteral("Add to Favorites"), this);
     addFav->setShortcut(QKeySequence(QStringLiteral("Ctrl+D")));
     connect(addFav, &QAction::triggered, this, [this]() { runCommand(QStringLiteral("Favorite ADD")); });
     addAction(addFav);
@@ -1077,6 +1077,7 @@ void ListerWindow::makeSource(FileDisplay *d)
         return; // a locked destination stays the destination
     m_source = idx;
     updateRoles();
+    zoomChanged(); // the tree and the menu follow the source's zoom
 }
 
 void ListerWindow::updateRoles()
@@ -1105,7 +1106,7 @@ void ListerWindow::setTreeMode(TreeMode mode)
     if (mode == TreeMode::Shared && !m_sharedTree) {
         m_sharedTree = new FolderTree(&m_app.aliases(), m_outer);
         m_sharedTree->setShowHidden(sourceDisplay()->showHidden());
-        m_sharedTree->setZoom(m_zoom);
+        m_sharedTree->setZoom(zoom());
         m_outer->insertWidget(0, m_sharedTree);
         m_outer->setStretchFactor(0, 0);
         m_outer->setStretchFactor(1, 1);
@@ -1915,9 +1916,10 @@ void ListerWindow::saveListerState(QSettings &s) const
     s.setValue(QStringLiteral("lastTree"), int(m_lastTreeMode));
     s.setValue(QStringLiteral("outer"), m_outer->saveState());
     s.setValue(QStringLiteral("hidden"), m_displays[0]->showHidden());
-    s.setValue(QStringLiteral("zoom"), m_zoom);
+    s.remove(QStringLiteral("zoom"));
     for (int i = 0; i < 2; ++i) {
         const FileDisplay *d = m_displays[i];
+        s.setValue(QStringLiteral("display%1/zoom").arg(i), d->zoom());
         QStringList paths;
         QStringList modes;
         QStringList groups;
@@ -1953,7 +1955,10 @@ void ListerWindow::saveListerState(QSettings &s) const
 bool ListerWindow::restoreListerState(QSettings &s)
 {
     const bool hidden = s.value(QStringLiteral("hidden"), false).toBool();
-    setZoom(s.value(QStringLiteral("zoom"), 100).toInt());
+    // Older sessions kept one zoom for the whole lister.
+    const int oldZoom = s.value(QStringLiteral("zoom"), 100).toInt();
+    for (int i = 0; i < 2; ++i)
+        setZoom(s.value(QStringLiteral("display%1/zoom").arg(i), oldZoom).toInt(), m_displays[i]);
     for (int i = 0; i < 2; ++i) {
         const QString prefix = QStringLiteral("display%1/").arg(i);
         const QStringList paths = s.value(prefix + QStringLiteral("tabs")).toStringList();
@@ -2099,7 +2104,7 @@ bool ListerWindow::printFolder(const ParsedCommand &cmd, QString *error)
         const QString suggested = QDir(QDir::homePath()).filePath(Location::title(t->path()) + QLatin1Char('.') + ext);
         to = QFileDialog::getSaveFileName(this, QStringLiteral("Save Folder Listing"), suggested);
         if (to.isEmpty())
-            return fail(CommandEngine::kCancelled);
+            return fail(CommandEngine::kCanceled);
     } else {
         to = m_app.engine().resolvePath(to, t->path());
     }
@@ -2128,7 +2133,7 @@ bool ListerWindow::settings(const ParsedCommand &cmd, QString *error)
                                           .filePath(QStringLiteral("Linopus settings %1.zip").arg(QDate::currentDate().toString(Qt::ISODate)));
             file = QFileDialog::getSaveFileName(this, QStringLiteral("Back Up Settings"), suggested, zipFilter);
             if (file.isEmpty())
-                return fail(CommandEngine::kCancelled);
+                return fail(CommandEngine::kCanceled);
         } else {
             file = m_app.engine().resolvePath(file, sourcePath());
         }
@@ -2143,7 +2148,7 @@ bool ListerWindow::settings(const ParsedCommand &cmd, QString *error)
         if (file.isEmpty() || file.compare(QLatin1String("ask"), Qt::CaseInsensitive) == 0) {
             file = QFileDialog::getOpenFileName(this, QStringLiteral("Restore Settings"), QDir::homePath(), zipFilter);
             if (file.isEmpty())
-                return fail(CommandEngine::kCancelled);
+                return fail(CommandEngine::kCanceled);
         } else {
             file = m_app.engine().resolvePath(file, sourcePath());
         }
@@ -2151,7 +2156,7 @@ bool ListerWindow::settings(const ParsedCommand &cmd, QString *error)
             && !confirm(QStringLiteral("Restore Settings"),
                         QStringLiteral("Replace your toolbars, aliases, themes, labels and folder formats with the ones in %1?")
                             .arg(QFileInfo(file).fileName())))
-            return fail(CommandEngine::kCancelled);
+            return fail(CommandEngine::kCanceled);
         QString err;
         if (!m_app.restoreSettings(file, &err))
             return fail(QStringLiteral("The restore failed: %1").arg(err));
@@ -2178,7 +2183,7 @@ bool ListerWindow::advancedRename(const QStringList &paths, const RenameOptions 
     AdvancedRenameDialog dlg(paths, initial, this);
     if (dlg.exec() != QDialog::Accepted) {
         if (error)
-            *error = CommandEngine::kCancelled;
+            *error = CommandEngine::kCanceled;
         return false;
     }
     if (!dlg.done().isEmpty())
@@ -2327,7 +2332,7 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
             if (name.isEmpty() || name.compare(QLatin1String("ask"), Qt::CaseInsensitive) == 0) {
                 name = QStringLiteral("My Layout");
                 if (!promptText(QStringLiteral("Save Layout"), QStringLiteral("Layout name:"), name))
-                    return fail(CommandEngine::kCancelled);
+                    return fail(CommandEngine::kCanceled);
                 withFolders = withFolders
                     || QMessageBox::question(this, QStringLiteral("Save Layout"),
                                              QStringLiteral("Keep the folders and tabs in the layout too?\n"
@@ -2357,12 +2362,12 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
         if (cmd.hasArg(QStringLiteral("GO"))) {
             const QString path = f->pathFor(cmd.value(QStringLiteral("GO")));
             if (path.isEmpty())
-                return fail(QStringLiteral("There is no favourite called %1.").arg(cmd.value(QStringLiteral("GO"))));
+                return fail(QStringLiteral("There is no favorite called %1.").arg(cmd.value(QStringLiteral("GO"))));
             if (FolderTab *t = sourceTab())
                 t->navigate(path);
             return true;
         }
-        if (cmd.hasFlag(QStringLiteral("ORGANISE")) || cmd.hasFlag(QStringLiteral("ORGANIZE"))) {
+        if (cmd.hasFlag(QStringLiteral("ORGANIZE")) || cmd.hasFlag(QStringLiteral("ORGANISE"))) {
             FavoritesDialog dlg(this);
             dlg.exec();
             return true;
@@ -2372,7 +2377,7 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
             return fail(QStringLiteral("There is no folder to add."));
         if (cmd.hasFlag(QStringLiteral("REMOVE"))) {
             if (!f->removePath(path))
-                return fail(QStringLiteral("That folder is not a favourite."));
+                return fail(QStringLiteral("That folder is not a favorite."));
             scheduleButtonStates();
             return true;
         }
@@ -2383,7 +2388,7 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
             scheduleButtonStates();
             return true;
         }
-        return fail(QStringLiteral("Favorite takes ADD, REMOVE, GO= or ORGANISE."));
+        return fail(QStringLiteral("Favorite takes ADD, REMOVE, GO= or ORGANIZE."));
     }
     // Duplicates
     DuplicateOptions o;
@@ -2463,8 +2468,8 @@ void ListerWindow::fillDynamicMenu(QMenu *menu, const QString &kind)
         QAction *addHere = menu->addAction(QIcon::fromTheme(QStringLiteral("bookmark-new")), QStringLiteral("Add This Folder\tCtrl+D"));
         addHere->setEnabled(sourceTab() && !Favorites::instance()->contains(sourceTab()->path()));
         connect(addHere, &QAction::triggered, this, [this]() { runCommand(QStringLiteral("Favorite ADD")); });
-        connect(menu->addAction(QStringLiteral("Organise Favourites...")), &QAction::triggered, this,
-                [this]() { runCommand(QStringLiteral("Favorite ORGANISE")); });
+        connect(menu->addAction(QStringLiteral("Organize Favorites...")), &QAction::triggered, this,
+                [this]() { runCommand(QStringLiteral("Favorite ORGANIZE")); });
     } else if (kind == QLatin1String("frequent")) {
         for (const FrequentFolder &f : Favorites::instance()->frequent())
             goAction(menu, Location::title(f.path), QStringLiteral("Go ") + quoted(f.path),
@@ -2535,7 +2540,7 @@ bool ListerWindow::imageCommand(const ParsedCommand &cmd, QString *error)
         if (f.compare(QLatin1String("keep"), Qt::CaseInsensitive) == 0) {
             o.format.clear();
         } else {
-            o.format = ImageConvert::normaliseFormat(f);
+            o.format = ImageConvert::normalizeFormat(f);
             if (o.format.isEmpty()) {
                 QStringList names;
                 for (const QString &w : ImageConvert::writableFormats())
@@ -2637,12 +2642,22 @@ QList<int> ListerWindow::zoomLevels()
     return {50, 60, 70, 80, 90, 100, 110, 125, 140, 160, 180, 200, 225, 250, 300};
 }
 
-void ListerWindow::setZoom(int percent)
+int ListerWindow::zoom() const
 {
-    percent = qBound(50, percent, 300);
-    m_zoom = percent;
-    for (FileDisplay *d : m_displays)
-        d->setZoom(percent);
+    return sourceDisplay()->zoom();
+}
+
+void ListerWindow::setZoom(int percent, FileDisplay *display)
+{
+    if (!display)
+        display = sourceDisplay();
+    display->setZoom(qBound(50, percent, 300));
+    zoomChanged();
+}
+
+void ListerWindow::zoomChanged()
+{
+    const int percent = zoom();
     if (m_sharedTree)
         m_sharedTree->setZoom(percent);
     if (m_actZoomReset)
@@ -2650,19 +2665,22 @@ void ListerWindow::setZoom(int percent)
     scheduleButtonStates();
 }
 
-void ListerWindow::zoomBy(int steps, bool showLevel)
+void ListerWindow::zoomBy(int steps, bool showLevel, FileDisplay *display)
 {
+    if (!display)
+        display = sourceDisplay();
+    const int current = display->zoom();
     const QList<int> levels = zoomLevels();
     // The nearest level at or past the current zoom, then steps along.
     int at = 0;
-    while (at < levels.size() - 1 && levels.at(at) < m_zoom)
+    while (at < levels.size() - 1 && levels.at(at) < current)
         ++at;
-    if (steps < 0 && levels.at(at) > m_zoom && at > 0)
+    if (steps < 0 && levels.at(at) > current && at > 0)
         --at; // between two levels: zooming out goes to the lower one first
-    if (levels.at(at) != m_zoom)
+    if (levels.at(at) != current)
         steps -= steps > 0 ? 1 : (steps < 0 ? -1 : 0);
     at = qBound(0, int(at + steps), int(levels.size() - 1));
-    setZoom(levels.at(at));
+    setZoom(levels.at(at), display);
     if (showLevel)
-        QToolTip::showText(QCursor::pos(), QStringLiteral("%1%").arg(m_zoom), this, {}, 900);
+        QToolTip::showText(QCursor::pos(), QStringLiteral("%1%").arg(display->zoom()), this, {}, 900);
 }

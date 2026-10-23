@@ -68,9 +68,9 @@ JobSnapshot RemoteJob::snapshot() const
     JobSnapshot s;
     fillCommon(s);
     if (m_finished)
-        s.state = m_cancelled ? JobState::Cancelled : (m_errors.isEmpty() ? JobState::Finished : JobState::Failed);
-    else if (m_cancelled && !m_current)
-        s.state = JobState::Cancelled;
+        s.state = m_canceled ? JobState::Canceled : (m_errors.isEmpty() ? JobState::Finished : JobState::Failed);
+    else if (m_canceled && !m_current)
+        s.state = JobState::Canceled;
     else if (m_waiting)
         s.state = JobState::WaitingForUser;
     else if (m_paused)
@@ -92,7 +92,7 @@ void RemoteJob::start(const CollisionNotifier &notifier, const DoneCallback &don
 {
     m_notifier = notifier;
     m_done = done;
-    if (m_cancelled) {
+    if (m_canceled) {
         finish();
         return;
     }
@@ -119,6 +119,10 @@ void RemoteJob::start(const CollisionNotifier &notifier, const DoneCallback &don
         break;
     case JobType::Trash:
         attach(KIO::trash(sources, KIO::HideProgressInfo));
+        break;
+    case JobType::Pack:
+    case JobType::Unpack:
+        finish(); // never routed here (archives are local)
         break;
     }
 }
@@ -189,11 +193,11 @@ void RemoteJob::onResult(KJob *job)
     m_current.clear();
     if (job->error()) {
         if (job->error() == KJob::KilledJobError)
-            m_cancelled = true;
+            m_canceled = true;
         else
             m_errors << job->errorString();
     }
-    if (m_oneAtATime && !m_queue.isEmpty() && !m_cancelled) {
+    if (m_oneAtATime && !m_queue.isEmpty() && !m_canceled) {
         m_bytesBefore = m_doneBytes;
         m_itemsBefore = m_doneItems + 1;
         m_doneItems = m_itemsBefore;
@@ -210,7 +214,7 @@ void RemoteJob::finish()
     m_finished = true;
     m_waiting = false;
     m_currentItem.clear();
-    if (!m_cancelled && m_totalBytes > 0)
+    if (!m_canceled && m_totalBytes > 0)
         m_doneBytes = m_totalBytes;
     if (m_done)
         m_done();
@@ -238,7 +242,7 @@ void RemoteJob::cancel()
 {
     if (m_finished)
         return;
-    m_cancelled = true;
+    m_canceled = true;
     if (m_current)
         m_current->kill(KJob::EmitResult); // onResult finishes the job
 }
@@ -330,7 +334,7 @@ void RemoteJob::answerRename(const PendingRename &p, const CollisionDecision &d)
         break;
     }
     case CollisionAction::CancelJob:
-        m_cancelled = true;
+        m_canceled = true;
         result = KIO::Result_Cancel;
         break;
     }

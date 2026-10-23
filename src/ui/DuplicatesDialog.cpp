@@ -148,10 +148,10 @@ DuplicatesDialog::DuplicatesDialog(CommandEngine &engine, const QStringList &fol
         m_tick.stop();
         m_busy = false;
         m_find->setText(QStringLiteral("Find"));
-        const bool cancelled = m_progress && m_progress->cancel.load();
-        m_groups = cancelled ? QList<DuplicateGroup>() : m_watcher.result();
+        const bool canceled = m_progress && m_progress->cancel.load();
+        m_groups = canceled ? QList<DuplicateGroup>() : m_watcher.result();
         fill();
-        if (cancelled)
+        if (canceled)
             m_status->setText(QStringLiteral("Search stopped."));
     });
     m_tick.setInterval(200);

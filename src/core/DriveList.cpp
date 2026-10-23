@@ -45,7 +45,7 @@ QString nameFor(DriveEntry::Kind kind, const QString &label, const QString &path
     if (!label.isEmpty())
         return label;
     const QString leaf = QFileInfo(path).fileName();
-    // SteamOS mounts an unlabelled card as /run/media/mmcblk0p1 or by UUID.
+    // SteamOS mounts an unlabeled card as /run/media/mmcblk0p1 or by UUID.
     const bool looksGenerated = leaf.startsWith(QLatin1String("mmcblk")) || leaf.startsWith(QLatin1String("sd"))
         || (leaf.size() >= 8 && leaf.count(QLatin1Char('-')) >= 1 && leaf.at(0).isLetterOrNumber()
             && leaf.toLower() == leaf && leaf.contains(QRegularExpression(QStringLiteral("^[0-9a-f-]+$"))));

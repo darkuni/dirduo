@@ -49,8 +49,8 @@ Servers and archives (KIO):
 ## Phase 3 (in progress)
 
 - Customize mode (Window > Customize Toolbars, or right-click a toolbar > Customize): drag buttons within a toolbar or to another one (Ctrl+drag copies), double-click to edit, right-click to duplicate, delete, add a separator or a new button. The dialog makes new toolbars, shows and hides them, and lists ready-made buttons to drag onto any bar
-- Button editor: label, icon, tooltip, commands for left, right and middle click, a hotkey, and conditions for when the button is greyed out or shown pressed. A button can be a menu of other buttons, nested as deep as you like
-- Buttons follow the lister: Copy and Move grey out without a selection or destination, toggles like Tree and Hidden show pressed while on
+- Button editor: label, icon, tooltip, commands for left, right and middle click, a hotkey, and conditions for when the button is grayed out or shown pressed. A button can be a menu of other buttons, nested as deep as you like
+- Buttons follow the lister: Copy and Move gray out without a selection or destination, toggles like Tree and Hidden show pressed while on
 - Drop files on a button to run it on those files instead of the selection
 - Command console (Ctrl+Shift+P): type any command and run it in the lister; Tab completes, Up/Down for history, `help` and `help Set` explain
 
@@ -66,9 +66,9 @@ Servers and archives (KIO):
 - Collections (Go > Collections, `/collections`): virtual folders of links to files anywhere. Edit > Add to Collection, or copy into a collection shown in the other display; Delete there only takes the link out; renaming the real file keeps the link. Each is a text file in `~/.config/linopus/collections`
 - Viewer pane (F3, View > Viewer Pane): shows the file in focus beside or below the displays. Pictures fit the pane (click for actual size, photos the right way up), text and code as text, `.nfo` and `.diz` in the DOS code page with their box drawing, other files as hex (the Hex button shows any file's bytes), zips as a list of what is inside, folders as a count. Arrowing through a folder only loads where you stop
 - Layouts (Window > Layouts): save a lister's whole arrangement (single or dual, trees, toolbars and where they sit, viewer pane, views) under a name and switch to it in one click; with or without its folders. `Layout LOAD="ROM sorting"` from a button
-- Preferences (File > Preferences, Ctrl+,): a search box over every setting; Appearance (theme, size); a Theme Editor for every colour, the SOURCE/DEST accents and each file type, live, saved as your own theme (a built-in is never overwritten: edits become "Name (mine)"); Labels; Aliases; Folder Formats; Toolbars. Cancel undoes what you previewed
-- Favourites (Favourites menu, the Favourites toolbar button, Ctrl+D to add): your folders in your order, in groups if you like; Organise Favourites renames, reorders and groups them. Frequent Folders lists the folders you use most, older visits counting for less
-- Self-filling toolbar menus: a button can be a menu of your Favourites, Frequent folders, Aliases or Collections that stays up to date (customize mode, Commands > Favourites)
+- Preferences (File > Preferences, Ctrl+,): a search box over every setting; Appearance (theme, size); a Theme Editor for every color, the SOURCE/DEST accents and each file type, live, saved as your own theme (a built-in is never overwritten: edits become "Name (mine)"); Labels; Aliases; Folder Formats; Toolbars. Cancel undoes what you previewed
+- Favorites (Favorites menu, the Favorites toolbar button, Ctrl+D to add): your folders in your order, in groups if you like; Organize Favorites renames, reorders and groups them. Frequent Folders lists the folders you use most, older visits counting for less
+- Self-filling toolbar menus: a button can be a menu of your Favorites, Frequent folders, Aliases or Collections that stays up to date (customize mode, Commands > Favorites)
 - Find Duplicates (Tools > Find Duplicates): identical files by contents (renamed copies too), by name and size, or by name, across several folders; check all but the newest, oldest or shortest path in each group and send the rest to the trash
 - Convert Images (Tools > Convert Images): PNG, JPEG, WebP, BMP and whatever else the image plugins write; resize by percentage, to fit, by width or height, or exactly; turn and flip; save next to each picture or in another folder. A row per picture shows its new name and size before anything is written. The format, quality and size are remembered
 - Starting from outside: `linopus <folders, files, aliases, file:// links or server addresses>` opens each in a new lister; a file opens its folder with the file selected ("Show in folder"); `--tab` opens them as tabs in the active lister; `--cmd "Go /sdcard"` runs commands there (DOpusRT-style). When Linopus is already running, a new launch hands everything to it and quits; `--new-instance` starts a separate copy
@@ -97,7 +97,7 @@ Every button, menu item, hotkey, drop and inline rename runs one of these. Butto
 | `Clipboard` | `COPY`, `CUT`, `PASTE` (a picture or text pastes as a new file), `AS` |
 | `Print` | `FOLDER`, `AS=text\|csv\|html`, `TO=clipboard\|ask\|<file>`, `SELECTED` |
 | `Layout` | `SAVE=<name>\|ask` (`FOLDERS` to keep folders and tabs), `LOAD=<name>`, `DELETE=<name>` |
-| `Favorite` | `ADD`, `REMOVE`, `PATH=`, `NAME=`, `GROUP=`, `GO=<name>`, `ORGANISE` |
+| `Favorite` | `ADD`, `REMOVE`, `PATH=`, `NAME=`, `GROUP=`, `GO=<name>`, `ORGANIZE` |
 | `Find` | `NAME=`, `REGEX`, `CASE`, `CONTAINS=`, `MINSIZE=10M`, `MAXSIZE=`, `NEWER=<days or date>`, `OLDER=`, `TYPE=files\|folders\|both`, `IN=...`, `HIDDEN`, `NORECURSE`, `COLLECTION=`, `PRESET=`, `RUN` |
 | `Collection` | `ADD=<name>\|ask`, `REMOVE`, `CREATE=`, `DELETE=`, `OPEN=<name>`, `NEWTAB` |
 | `Metadata` | `TITLE=`, `ARTIST=`, `ALBUMARTIST=`, `ALBUM=`, `GENRE=`, `COMMENT=`, `YEAR=`, `TRACK=<n>\|auto` (`START=`), `DISC=`, `TAKEN=`, `SHIFT=+1h\|-30m\|+2d`, `DESCRIPTION=`, `COPYRIGHT=` (empty clears), `COPY`, `PASTE` (`ALL`), `FILE=`, `PANE=toggle\|on\|off` |
@@ -164,7 +164,7 @@ pods=/downloads/podcasts
 | Ctrl+Shift+Z | Calculate all folder sizes |
 | Ctrl+Shift+P | Command console |
 | Ctrl+Shift+F | Find |
-| Ctrl+D | Add the source folder to Favourites |
+| Ctrl+D | Add the source folder to Favorites |
 | Ctrl+, | Preferences |
 | F3 | Viewer pane |
 
@@ -190,7 +190,7 @@ Each toolbar is `~/.config/linopus/toolbars/<id>.json`. Customize mode writes th
 
 A button with `"dynamic": "favorites"` (or `frequent`, `aliases`, `collections`) is a menu that fills itself.
 
-`enableWhen` greys a button out when false; `checkWhen` shows it pressed when true. They combine these words with `&&`, `||`, `!` and parentheses: `selection`, `files`, `folders`, `single`, `multiple`, `dual`, `dest`, `destlocked`, `navlock`, `remote`, `canup`, `favorite`, `back`, `forward`, `clipboard`, `hidden`, `tree`, `flat`, `grouped`, `filter`, `checkboxes`, `foldersizes`, and `view=`, `layout=`, `groupby=`, `treemode=`, `theme=`.
+`enableWhen` grays a button out when false; `checkWhen` shows it pressed when true. They combine these words with `&&`, `||`, `!` and parentheses: `selection`, `files`, `folders`, `single`, `multiple`, `dual`, `dest`, `destlocked`, `navlock`, `remote`, `canup`, `favorite`, `back`, `forward`, `clipboard`, `hidden`, `tree`, `flat`, `grouped`, `filter`, `checkboxes`, `foldersizes`, and `view=`, `layout=`, `groupby=`, `treemode=`, `theme=`.
 
 ## Files
 
@@ -203,7 +203,7 @@ A button with `"dynamic": "favorites"` (or `frequent`, `aliases`, `collections`)
 - `~/.config/linopus/rename.ini`: Advanced Rename presets
 - `~/.config/linopus/find.ini`: saved searches
 - `~/.config/linopus/collections/`: collections, one path per line
-- `~/.config/linopus/favorites.json`, `frequent.ini`: favourites and folder visit counts
+- `~/.config/linopus/favorites.json`, `frequent.ini`: favorites and folder visit counts
 - `~/.config/linopus/layouts/`: saved layouts
 
 Inside the Flatpak these are still the real `~/.config/linopus`, so the configuration copies straight to another machine.

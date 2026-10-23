@@ -58,16 +58,19 @@ public:
     void updateButtonStates();
     // Opens (or refreshes) the tab showing a Find result collection.
     void showFindResults(const QString &collectionLocation, int count);
-    // Favourites, frequent folders, aliases or collections, as menu entries.
+    // Favorites, frequent folders, aliases or collections, as menu entries.
     void fillDynamicMenu(QMenu *menu, const QString &kind);
     ViewerPane *viewer() const { return m_viewer; }
 
     FileDisplay *sourceDisplay() const;
-    // This lister's zoom over the app's text size, in percent (Shift+wheel).
-    int zoom() const { return m_zoom; }
-    void setZoom(int percent);
-    void zoomBy(int steps, bool showLevel = false);
+    // Each file display's zoom over the app's text size, in percent
+    // (Shift+wheel zooms the display under the mouse). Without a display,
+    // these work on the source; zoom() is the source's.
+    int zoom() const;
+    void setZoom(int percent, FileDisplay *display = nullptr);
+    void zoomBy(int steps, bool showLevel = false, FileDisplay *display = nullptr);
     static QList<int> zoomLevels();
+    void zoomChanged();
     FileDisplay *destDisplay() const; // null in single mode
     FileDisplay *display(int index) const { return m_displays[index]; }
     bool isDual() const { return m_dual; }
@@ -200,5 +203,4 @@ private:
 public:
     MetadataPane *metadataPane() const { return m_metaPane; }
 private:
-    int m_zoom = 100;
 };

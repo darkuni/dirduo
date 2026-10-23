@@ -74,7 +74,7 @@ void ColorButton::contextMenuEvent(QContextMenuEvent *event)
     if (!m_allowNone)
         return QToolButton::contextMenuEvent(event);
     QMenu menu(this);
-    connect(menu.addAction(QStringLiteral("No Colour")), &QAction::triggered, this, [this]() {
+    connect(menu.addAction(QStringLiteral("No Color")), &QAction::triggered, this, [this]() {
         setColor(QColor());
         Q_EMIT colorChanged(QColor());
     });
@@ -149,7 +149,7 @@ PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, cons
 
     auto *layout = new QVBoxLayout(this);
     m_search = new QLineEdit(this);
-    m_search->setPlaceholderText(QStringLiteral("Search settings (colour, alias, label, size...)"));
+    m_search->setPlaceholderText(QStringLiteral("Search settings (color, alias, label, size...)"));
     m_search->setClearButtonEnabled(true);
     layout->addWidget(m_search);
     auto *body = new QHBoxLayout;
@@ -174,17 +174,17 @@ PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, cons
             {QStringLiteral("theme"), QStringLiteral("size"), QStringLiteral("font"), QStringLiteral("icon"), QStringLiteral("dark"),
              QStringLiteral("light"), QStringLiteral("workbench"), QStringLiteral("scale")});
     addPage(QStringLiteral("theme"), QStringLiteral("Theme Editor"), QStringLiteral("color-management"), buildTheme(),
-            {QStringLiteral("colour"), QStringLiteral("color"), QStringLiteral("accent"), QStringLiteral("file type"),
+            {QStringLiteral("color"), QStringLiteral("colour"), QStringLiteral("accent"), QStringLiteral("file type"),
              QStringLiteral("skin"), QStringLiteral("palette")});
     addPage(QStringLiteral("labels"), QStringLiteral("Labels"), QStringLiteral("tag"), buildLabels(),
-            {QStringLiteral("wildcard"), QStringLiteral("bold"), QStringLiteral("italic"), QStringLiteral("highlight"), QStringLiteral("colour"),
+            {QStringLiteral("wildcard"), QStringLiteral("bold"), QStringLiteral("italic"), QStringLiteral("highlight"), QStringLiteral("color"),
              QStringLiteral("color")});
     addPage(QStringLiteral("aliases"), QStringLiteral("Aliases"), QStringLiteral("folder-bookmark"), buildAliases(),
             {QStringLiteral("shortcut"), QStringLiteral("path"), QStringLiteral("folder"), QStringLiteral("server")});
     addPage(QStringLiteral("formats"), QStringLiteral("Folder Formats"), QStringLiteral("view-list-details"), buildFormats(),
             {QStringLiteral("columns"), QStringLiteral("view"), QStringLiteral("group"), QStringLiteral("icons"), QStringLiteral("pictures")});
     addPage(QStringLiteral("toolbars"), QStringLiteral("Toolbars"), QStringLiteral("configure-toolbars"), buildToolbars(),
-            {QStringLiteral("button"), QStringLiteral("customize"), QStringLiteral("customise")});
+            {QStringLiteral("button"), QStringLiteral("customize"), QStringLiteral("customize")});
 
     connect(m_nav, &QListWidget::currentRowChanged, this, [this](int row) {
         if (row >= 0)
@@ -277,7 +277,7 @@ QWidget *PreferencesDialog::buildAppearance()
     form->addRow(QStringLiteral("Theme:"), m_themeBox);
     form->addRow(QStringLiteral("Text and icon size:"), m_sizeBox);
     auto *hint = new QLabel(QStringLiteral("Changes show at once; Cancel puts back what you had. The Theme Editor page "
-                                           "changes any colour and saves the result as your own theme."),
+                                           "changes any color and saves the result as your own theme."),
                             w);
     hint->setWordWrap(true);
     hint->setEnabled(false);
@@ -310,7 +310,7 @@ QWidget *PreferencesDialog::buildTheme()
     top->addRow(QString(), m_themeDark);
     layout->addLayout(top);
 
-    auto *colors = new QGroupBox(QStringLiteral("Colours"), w);
+    auto *colors = new QGroupBox(QStringLiteral("Colors"), w);
     auto *grid = new QGridLayout(colors);
     int row = 0;
     int col = 0;
@@ -330,7 +330,7 @@ QWidget *PreferencesDialog::buildTheme()
 
     auto *types = new QGroupBox(QStringLiteral("File types"), w);
     auto *tg = new QGridLayout(types);
-    m_colorTypes = new QCheckBox(QStringLiteral("Colour names by file type"), types);
+    m_colorTypes = new QCheckBox(QStringLiteral("Color names by file type"), types);
     tg->addWidget(m_colorTypes, 0, 0, 1, 4);
     row = 1;
     col = 0;
@@ -370,7 +370,7 @@ QWidget *PreferencesDialog::buildTheme()
         else if (!Theme::load(QDir(Style::instance()->themesDir()).filePath(safeFileName(name) + QStringLiteral(".ini")), t))
             return;
         if (t.followSystem) {
-            // The desktop's colours as they are now, to change from there.
+            // The desktop's colors as they are now, to change from there.
             const bool keep = m_loading;
             m_loading = true;
             Style::instance()->setTheme(t);
@@ -538,7 +538,7 @@ QWidget *PreferencesDialog::buildLabels()
 {
     auto *w = new QWidget;
     auto *layout = new QVBoxLayout(w);
-    auto *intro = new QLabel(QStringLiteral("Names matching a pattern get their own colour and style, in every list. "
+    auto *intro = new QLabel(QStringLiteral("Names matching a pattern get their own color and style, in every list. "
                                             "The first matching row wins. Patterns use wildcards; ; between several."),
                              w);
     intro->setWordWrap(true);

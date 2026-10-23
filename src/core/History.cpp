@@ -208,6 +208,8 @@ void UndoHistory::onJobFinished(int id)
     const QString action = spec->type == JobType::Copy   ? QStringLiteral("Copy")
         : spec->type == JobType::Move                    ? QStringLiteral("Move")
         : spec->type == JobType::Trash                   ? QStringLiteral("Trash")
+        : spec->type == JobType::Pack                    ? QStringLiteral("Pack")
+        : spec->type == JobType::Unpack                  ? QStringLiteral("Extract")
                                                          : QStringLiteral("Delete");
     if (spec->type == JobType::Delete) {
         for (const QString &s : spec->sources)
@@ -217,10 +219,10 @@ void UndoHistory::onJobFinished(int id)
         log << FileLog::Entry{QDateTime::currentDateTime(), prefix + action, err, {}, QStringLiteral("failed")};
     if (outcomes.isEmpty() && spec->type != JobType::Delete) {
         // Remote jobs: no per-item record, so log the sources.
-        if (!log.isEmpty() || snap.state != JobState::Cancelled) {
+        if (!log.isEmpty() || snap.state != JobState::Canceled) {
             for (const QString &s : spec->sources)
                 log << FileLog::Entry{QDateTime::currentDateTime(), prefix + action, s, spec->destDir,
-                                      snap.state == JobState::Cancelled ? QStringLiteral("cancelled") : QString()};
+                                      snap.state == JobState::Canceled ? QStringLiteral("canceled") : QString()};
         }
     }
     FileLog::append(log);
@@ -228,9 +230,10 @@ void UndoHistory::onJobFinished(int id)
     if (outcomes.isEmpty() || spec->type == JobType::Delete)
         return;
     UndoEntry e;
-    e.kind = spec->type == JobType::Copy ? UndoEntry::Kind::Copy
-        : spec->type == JobType::Move    ? UndoEntry::Kind::Move
-                                         : UndoEntry::Kind::Trash;
+    // A new archive, or what came out of one, goes away like a copy.
+    e.kind = (spec->type == JobType::Copy || spec->type == JobType::Pack || spec->type == JobType::Unpack) ? UndoEntry::Kind::Copy
+        : spec->type == JobType::Move                                                                      ? UndoEntry::Kind::Move
+                                                                                                           : UndoEntry::Kind::Trash;
     e.isUndo = byUndo;
     for (const JobOutcome &o : outcomes) {
         e.items << qMakePair(o.source, o.target);
@@ -243,7 +246,13 @@ void UndoHistory::onJobFinished(int id)
                                              : QStringLiteral("%1 items").arg(e.items.size());
     switch (e.kind) {
     case UndoEntry::Kind::Copy:
-        e.title = QStringLiteral("Copy %1 to %2").arg(what, Location::fileName(spec->destDir));
+        if (spec->type == JobType::Pack)
+            e.title = QStringLiteral("Pack %1").arg(Location::fileName(e.items.first().second));
+        else if (spec->type == JobType::Unpack)
+            e.title = QStringLiteral("Extract %1").arg(spec->sources.size() == 1 ? Location::fileName(spec->sources.first())
+                                                                                : QStringLiteral("%1 archives").arg(spec->sources.size()));
+        else
+            e.title = QStringLiteral("Copy %1 to %2").arg(what, Location::fileName(spec->destDir));
         break;
     case UndoEntry::Kind::Move:
         e.title = QStringLiteral("Move %1 to %2").arg(what, Location::fileName(spec->destDir));

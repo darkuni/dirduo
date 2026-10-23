@@ -34,9 +34,9 @@ private Q_SLOTS:
         QVERIFY(w.contains(QStringLiteral("bmp")));
         QVERIFY(!w.contains(QStringLiteral("jpeg"))); // one name per format
         QCOMPARE(w.first(), QStringLiteral("png"));
-        QCOMPARE(ImageConvert::normaliseFormat(QStringLiteral("JPEG")), QStringLiteral("jpg"));
-        QCOMPARE(ImageConvert::normaliseFormat(QStringLiteral(".png")), QStringLiteral("png"));
-        QVERIFY(ImageConvert::normaliseFormat(QStringLiteral("doc")).isEmpty());
+        QCOMPARE(ImageConvert::normalizeFormat(QStringLiteral("JPEG")), QStringLiteral("jpg"));
+        QCOMPARE(ImageConvert::normalizeFormat(QStringLiteral(".png")), QStringLiteral("png"));
+        QVERIFY(ImageConvert::normalizeFormat(QStringLiteral("doc")).isEmpty());
         QCOMPARE(ImageConvert::displayName(QStringLiteral("jpeg")), QStringLiteral("JPEG"));
         QVERIFY(ImageConvert::hasQuality(QStringLiteral("jpg")));
         QVERIFY(!ImageConvert::hasQuality(QStringLiteral("png")));

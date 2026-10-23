@@ -292,7 +292,7 @@ int main(int argc, char *argv[])
     if (CommandConsole *c = w->console()) {
         c->submit(QStringLiteral("help"));
         c->submit(QStringLiteral("Set VIEW=list"));
-        c->submit(QStringLiteral("Set GROUPBY=colour"));
+        c->submit(QStringLiteral("Set GROUPBY=color"));
         c->input()->setText(QStringLiteral("Go /downloads NEW"));
         QTest::qWait(300);
         c->grab().save(out + QStringLiteral("/20-command-console.png"));

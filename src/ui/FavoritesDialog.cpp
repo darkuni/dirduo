@@ -15,7 +15,7 @@ constexpr int kKindRole = Qt::UserRole + 2; // 0 entry, 1 group, 2 separator
 FavoritesDialog::FavoritesDialog(QWidget *parent)
     : QDialog(parent)
 {
-    setWindowTitle(QStringLiteral("Organise Favourites"));
+    setWindowTitle(QStringLiteral("Organize Favorites"));
     auto *layout = new QVBoxLayout(this);
     auto *row = new QHBoxLayout;
     m_tree = new QTreeWidget(this);

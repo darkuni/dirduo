@@ -115,7 +115,7 @@ ButtonEditor::ButtonEditor(const ButtonDef &def, QWidget *parent)
     dynRow->addWidget(new QLabel(QStringLiteral("Fill with:"), m_menuPage));
     m_dynamic = new QComboBox(m_menuPage);
     m_dynamic->addItem(QStringLiteral("The items below"), QString());
-    m_dynamic->addItem(QStringLiteral("Favourites (kept up to date)"), QStringLiteral("favorites"));
+    m_dynamic->addItem(QStringLiteral("Favorites (kept up to date)"), QStringLiteral("favorites"));
     m_dynamic->addItem(QStringLiteral("Frequent folders"), QStringLiteral("frequent"));
     m_dynamic->addItem(QStringLiteral("Aliases"), QStringLiteral("aliases"));
     m_dynamic->addItem(QStringLiteral("Collections"), QStringLiteral("collections"));

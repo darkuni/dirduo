@@ -218,8 +218,8 @@ private:
     QList<QModelIndex> typeAheadMatches() const;
     void updateExpandable();
     bool expanderHit(const QPoint &viewportPos, QModelIndex *index) const;
-    int m_wheelZoom = 0;     // wheel units towards the next step (trackpads send small ones)
-    qreal m_pinchZoom = 1.0; // pinch scale towards the next step
+    int m_wheelZoom = 0;     // wheel units toward the next step (trackpads send small ones)
+    qreal m_pinchZoom = 1.0; // pinch scale toward the next step
     ViewMode m_modeBeforeAuto = ViewMode::Details;
     FileListModel::GroupBy m_groupBeforeFlat = FileListModel::GroupBy::None;
     QListView *m_list;

@@ -180,7 +180,7 @@ QString extensionFor(const QString &format)
     return canonical(format);
 }
 
-QString normaliseFormat(const QString &name)
+QString normalizeFormat(const QString &name)
 {
     QString f = canonical(name.trimmed());
     if (f.startsWith(QLatin1Char('.')))
@@ -380,7 +380,7 @@ QList<ImageResult> run(const QList<ImagePlan> &plans, const ImageOptions &o, Ima
             ImageResult r;
             r.source = p.source;
             r.skipped = true;
-            r.error = QStringLiteral("Cancelled");
+            r.error = QStringLiteral("Canceled");
             out << r;
             continue;
         }

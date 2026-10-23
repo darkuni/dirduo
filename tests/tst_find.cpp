@@ -138,18 +138,18 @@ private Q_SLOTS:
     {
         Collections *c = Collections::instance();
         QSignalSpy changed(c, &Collections::changed);
-        QVERIFY(c->create(QStringLiteral("C64 favourites")));
-        QVERIFY(!c->create(QStringLiteral("C64 favourites")));
+        QVERIFY(c->create(QStringLiteral("C64 favorites")));
+        QVERIFY(!c->create(QStringLiteral("C64 favorites")));
         QVERIFY(!c->create(QStringLiteral("a/b")));
-        QCOMPARE(c->add(QStringLiteral("C64 favourites"), {root + QStringLiteral("/c64/Galaga.d64"), root + QStringLiteral("/c64")}), 2);
-        QCOMPARE(c->add(QStringLiteral("C64 favourites"), {root + QStringLiteral("/c64/Galaga.d64")}), 0); // once only
+        QCOMPARE(c->add(QStringLiteral("C64 favorites"), {root + QStringLiteral("/c64/Galaga.d64"), root + QStringLiteral("/c64")}), 2);
+        QCOMPARE(c->add(QStringLiteral("C64 favorites"), {root + QStringLiteral("/c64/Galaga.d64")}), 0); // once only
         QVERIFY(changed.count() >= 2);
         // Renames follow, including things inside a renamed folder.
         c->renamed(root + QStringLiteral("/c64"), root + QStringLiteral("/commodore"));
-        QCOMPARE(c->items(QStringLiteral("C64 favourites")),
+        QCOMPARE(c->items(QStringLiteral("C64 favorites")),
                  (QStringList{root + QStringLiteral("/commodore/Galaga.d64"), root + QStringLiteral("/commodore")}));
-        QCOMPARE(c->removeItems(QStringLiteral("C64 favourites"), {root + QStringLiteral("/commodore")}), 1);
-        QVERIFY(c->rename(QStringLiteral("C64 favourites"), QStringLiteral("Keepers")));
+        QCOMPARE(c->removeItems(QStringLiteral("C64 favorites"), {root + QStringLiteral("/commodore")}), 1);
+        QVERIFY(c->rename(QStringLiteral("C64 favorites"), QStringLiteral("Keepers")));
         QCOMPARE(c->names(), QStringList{QStringLiteral("Keepers")});
         // Locations.
         const QString loc = Collections::location(QStringLiteral("Find Results"));

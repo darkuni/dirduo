@@ -348,7 +348,7 @@ private Q_SLOTS:
         QCOMPARE(t->view()->model()->rowCount(), 3);
         QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=none")));
         QVERIFY(!view->grouping());
-        QVERIFY(!runFailing(QStringLiteral("Set GROUPBY=colour")));
+        QVERIFY(!runFailing(QStringLiteral("Set GROUPBY=color")));
     }
 
     void columnsHiddenByDefaultAndToggle()
@@ -1008,7 +1008,7 @@ private Q_SLOTS:
         QCOMPARE(dlg.previewTree()->topLevelItem(0)->text(1), QStringLiteral("one.txt")); // no match
         QCOMPARE(dlg.previewTree()->topLevelItem(1)->text(1), QStringLiteral("Disk hree.d64"));
         QVERIFY(dlg.renameButton()->isEnabled());
-        // Switch to find and replace with a clash: Rename greys out.
+        // Switch to find and replace with a clash: Rename grays out.
         dlg.modeBox()->setCurrentIndex(1);
         dlg.oldEdit()->setText(QStringLiteral("o"));
         dlg.newEdit()->setText(QStringLiteral("x"));
@@ -1199,7 +1199,7 @@ private Q_SLOTS:
         Collections::instance()->remove(QStringLiteral("Find Results"));
     }
 
-    void favouritesAndFrequentFolders()
+    void favoritesAndFrequentFolders()
     {
         Favorites *f = Favorites::instance();
         QVERIFY(f->items().isEmpty());
@@ -1232,7 +1232,7 @@ private Q_SLOTS:
         goA->trigger();
         QCOMPARE(w->display(0)->currentTab()->path(), root + QStringLiteral("/a"));
 
-        // Organise: what the dialog holds is what gets saved.
+        // Organize: what the dialog holds is what gets saved.
         FavoritesDialog dlg(w);
         QCOMPARE(dlg.favorites(), f->items());
         delete dlg.tree()->topLevelItem(0);
@@ -1271,7 +1271,7 @@ private Q_SLOTS:
             QCOMPARE(dlg.currentPage(), QStringLiteral("labels")); // lands on the match
             QCOMPARE(dlg.search(QString()).size(), PreferencesDialog::pageNames().size());
 
-            // Colours show at once; Cancel puts the old theme back.
+            // Colors show at once; Cancel puts the old theme back.
             dlg.setThemeColor(QStringLiteral("sourceAccent"), QColor(Qt::red));
             QCOMPARE(Style::instance()->theme().sourceAccent, QColor(Qt::red));
             dlg.reject();
@@ -1642,11 +1642,27 @@ private Q_SLOTS:
         QApplication::sendEvent(vp, &plain);
         QCOMPARE(w->zoom(), 110);
 
-        // Both displays, new tabs and the tree follow; other listers do not.
+        // Each display zooms on its own: Shift+wheel over the other one
+        // leaves this one alone, and commands work on the source.
+        FolderTab *right = w->display(1)->currentTab();
+        if (right) {
+            QWidget *rvp = right->view()->viewport();
+            const QPoint rat = rvp->rect().center();
+            QWheelEvent rup(rat, rvp->mapToGlobal(rat), QPoint(), QPoint(0, 240), Qt::NoButton, Qt::ShiftModifier, Qt::NoScrollPhase, false);
+            QApplication::sendEvent(rvp, &rup);
+            QCOMPARE(w->display(1)->zoom(), 125);
+            QCOMPARE(w->display(0)->zoom(), 110);
+            QCOMPARE(t->zoom(), 110);
+            QCOMPARE(right->zoom(), 125);
+        }
+        QCOMPARE(w->sourceDisplay(), w->display(0));
+
+        // New tabs and the tree follow the display; other listers do not.
         const int sizeWidth = t->detailsView()->header()->sectionSize(FileListModel::SizeColumn);
         QVERIFY(w->runCommand(QStringLiteral("Set ZOOM=150")));
         QCOMPARE(t->detailsView()->header()->sectionSize(FileListModel::SizeColumn), qRound(sizeWidth * 150.0 / 110));
-        QCOMPARE(w->display(1)->currentTab()->zoom(), 150);
+        if (right)
+            QCOMPARE(right->zoom(), 125);
         FolderTab *fresh = w->display(0)->addTab(root + QStringLiteral("/b"));
         QCOMPARE(fresh->zoom(), 150);
         QVERIFY(w->runCommand(QStringLiteral("Set TREE=shared")));
@@ -1666,6 +1682,7 @@ private Q_SLOTS:
         QVERIFY(w->runCommand(QStringLiteral("Set SIZE=larger")));
         QVERIFY(t->view()->font().pointSizeF() > base);
         QVERIFY(w->runCommand(QStringLiteral("Set SIZE=normal\nSet TREE=off")));
+        w->setZoom(100, w->display(1));
     }
 
     void expandableFolders()

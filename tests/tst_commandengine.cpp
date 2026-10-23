@@ -137,7 +137,7 @@ private Q_SLOTS:
         QVERIFY(m_engine->run(QStringLiteral("Copy AS"), ctx));
         QVERIFY(m_jobs->waitForIdle(5000));
         QVERIFY(QFile::exists(ctx.dest + QStringLiteral("/Beach1.jpg")));
-        // Cancelling the prompt stops quietly.
+        // Canceling the prompt stops quietly.
         ctx.promptAnswers.clear();
         ctx.errors.clear();
         QVERIFY(!m_engine->run(QStringLiteral("Copy AS"), ctx));

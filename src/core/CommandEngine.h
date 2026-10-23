@@ -27,7 +27,7 @@ public:
     virtual bool promptText(const QString &title, const QString &label, QString &value) = 0;
     virtual bool confirm(const QString &title, const QString &text) = 0;
     virtual void showError(const QString &title, const QString &text) = 0;
-    virtual QString chooseDestination(const QString &title) = 0; // empty when cancelled
+    virtual QString chooseDestination(const QString &title) = 0; // empty when canceled
 
     // Commands that change the lister itself. cmd carries PATH= already
     // resolved to an absolute path where one was given.
@@ -116,7 +116,7 @@ public:
     CommandEngine(AliasManager &aliases, JobManager &jobs, QObject *parent = nullptr);
 
     // Runs every line in order; stops at the first failure and reports it
-    // through ctx.showError (cancelled prompts stop silently).
+    // through ctx.showError (canceled prompts stop silently).
     bool run(const QString &script, CommandContext &ctx);
     bool execute(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
 
@@ -147,8 +147,8 @@ public:
     // Everything that can be undone, and the file log.
     UndoHistory &history() { return m_history; }
 
-    // Set when the last run stopped because the user cancelled a prompt.
-    static const QString kCancelled;
+    // Set when the last run stopped because the user canceled a prompt.
+    static const QString kCanceled;
 
 private:
     bool cmdGo(const ParsedCommand &cmd, CommandContext &ctx, QString *error);

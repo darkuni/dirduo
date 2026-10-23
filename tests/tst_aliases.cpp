@@ -95,7 +95,7 @@ private Q_SLOTS:
 
     void readsUserDirsFile()
     {
-        // XDG_CONFIG_HOME is honoured outside Flatpak.
+        // XDG_CONFIG_HOME is honored outside Flatpak.
         QTemporaryDir cfg;
         QFile f(cfg.filePath(QStringLiteral("user-dirs.dirs")));
         QVERIFY(f.open(QIODevice::WriteOnly));

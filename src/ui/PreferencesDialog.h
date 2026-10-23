@@ -17,7 +17,7 @@ class QStackedWidget;
 class QTableWidget;
 class QTreeWidget;
 
-// A button showing a colour; click to pick another.
+// A button showing a color; click to pick another.
 class ColorButton : public QToolButton
 {
     Q_OBJECT

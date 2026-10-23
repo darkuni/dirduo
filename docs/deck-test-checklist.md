@@ -63,8 +63,8 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Select a few files, Edit > Add to Collection > New Collection; Go > Collections opens it; Delete there leaves the real files alone.
 - [ ] F3 opens the viewer pane; arrow through a folder of screenshots; View > Viewer Position > Bottom.
 - [ ] Window > Layouts > Save This Layout; change things around; load it back.
-- [ ] Ctrl+, opens Preferences; type "colour" in the search box; change the SOURCE colour in the Theme Editor (it shows at once); Cancel puts it back.
-- [ ] Ctrl+D in a few folders, then the Favourites button: they are listed; Organise Favourites to group them.
+- [ ] Ctrl+, opens Preferences; type "color" in the search box; change the SOURCE color in the Theme Editor (it shows at once); Cancel puts it back.
+- [ ] Ctrl+D in a few folders, then the Favorites button: they are listed; Organize Favorites to group them.
 - [ ] Tools > Find Duplicates on a ROM folder: groups show; check copies, then Move Checked to Trash.
 - [ ] Select a few podcast MP3s, Alt+Enter: type an album name, Apply; Edit > Tags > Number Tracks. Ctrl+Z undoes it.
 - [ ] A music folder: right-click the column header > Music > Artist and Album; they fill in. Group By > Artist. F3 on a song shows its tags.

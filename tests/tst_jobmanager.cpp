@@ -274,10 +274,10 @@ private Q_SLOTS:
         jm.pause(first);
         const int second = jm.enqueue(spec(JobType::Copy, {src + QStringLiteral("/big.bin")}, dst));
         jm.cancel(second);
-        QCOMPARE(jm.snapshot(second).state, JobState::Cancelled);
+        QCOMPARE(jm.snapshot(second).state, JobState::Canceled);
         jm.cancel(first);
         QVERIFY(jm.waitForIdle(5000));
-        QCOMPARE(jm.snapshot(first).state, JobState::Cancelled);
+        QCOMPARE(jm.snapshot(first).state, JobState::Canceled);
         QVERIFY(!QFile::exists(dst + QStringLiteral("/big.bin.linopus-part")));
     }
 

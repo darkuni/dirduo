@@ -15,7 +15,7 @@
 
 class QThread;
 
-enum class JobType { Copy, Move, Trash, Delete };
+enum class JobType { Copy, Move, Trash, Delete, Pack, Unpack };
 
 enum class JobState {
     Queued,         // waiting for another job on the same device
@@ -25,7 +25,7 @@ enum class JobState {
     WaitingForUser, // a collision needs a decision
     Finished,
     Failed,         // finished, but some items could not be processed
-    Cancelled,
+    Canceled,
 };
 
 enum class CollisionAction { Ask, Replace, ReplaceIfNewer, Skip, Rename, CancelJob };
@@ -54,6 +54,13 @@ struct JobSpec
     QString destDir;                     // Copy and Move only
     QMap<QString, QString> targetNames;  // source path -> name at the destination (Copy AS)
     CollisionAction whenExists = CollisionAction::Ask;
+    // Pack: the archive to make in destDir, and its format ("zip", "tar.gz"...).
+    QString archiveName;
+    QString archiveFormat;
+    // Unpack: into its own folder unless it holds one folder (Smart), always
+    // (Folder), or straight into destDir (Here).
+    enum class ExtractMode { Smart, Folder, Here };
+    ExtractMode extractMode = ExtractMode::Smart;
 };
 
 // What a finished job did with one item, for undo and the file log. For
@@ -95,7 +102,7 @@ struct JobSnapshot
     }
     bool isDone() const
     {
-        return state == JobState::Finished || state == JobState::Failed || state == JobState::Cancelled;
+        return state == JobState::Finished || state == JobState::Failed || state == JobState::Canceled;
     }
 };
 
@@ -177,7 +184,7 @@ private:
     };
 
     void setState(JobState s);
-    bool checkpoint(); // honours pause; false once cancelled
+    bool checkpoint(); // honors pause; false once canceled
     void addError(const QString &message);
     void setCurrent(const QString &item, qint64 size = 0);
     void addDone(qint64 bytes, int items);
@@ -188,6 +195,8 @@ private:
     void runCopyMove();
     void runTrash();
     void runDelete();
+    void runPack();
+    void runUnpack();
     bool copyFile(const QString &src, const QString &dst, QString *error);
     bool copySymlink(const QString &src, const QString &dst, QString *error);
 
@@ -199,7 +208,7 @@ private:
     JobState m_state = JobState::Queued;
     JobState m_stateBeforePause = JobState::Running;
     bool m_paused = false;
-    std::atomic<bool> m_cancelled{false};
+    std::atomic<bool> m_canceled{false};
     bool m_bypassQueue = false;
 
     bool m_hasDecision = false;

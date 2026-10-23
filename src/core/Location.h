@@ -23,7 +23,7 @@ QUrl toUrl(const QString &loc);
 QString fromUrl(const QUrl &url);
 QList<QUrl> toUrls(const QStringList &locs);
 
-// Normalised: "/a/./b/" -> "/a/b"; "sftp://h/a//b/" -> "sftp://h/a/b"; a
+// Normalized: "/a/./b/" -> "/a/b"; "sftp://h/a//b/" -> "sftp://h/a/b"; a
 // server root keeps its slash ("sftp://h/").
 QString clean(const QString &loc);
 

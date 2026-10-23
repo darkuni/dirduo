@@ -14,7 +14,7 @@ class QPlainTextEdit;
 class QWidget;
 
 // Edits one button: what it shows, what each mouse button runs, when it is
-// greyed out or pressed, its hotkey, or the buttons in its menu.
+// grayed out or pressed, its hotkey, or the buttons in its menu.
 class ButtonEditor : public QDialog
 {
     Q_OBJECT

@@ -18,7 +18,7 @@
 #include <QMimeData>
 #include <QUrl>
 
-const QString CommandEngine::kCancelled = QStringLiteral("__cancelled__");
+const QString CommandEngine::kCanceled = QStringLiteral("__canceled__");
 
 namespace {
 
@@ -144,7 +144,7 @@ bool CommandEngine::run(const QString &script, CommandContext &ctx)
             QString value;
             if (!ctx.promptText(QStringLiteral("Linopus"), extra.isEmpty() ? QStringLiteral("Enter a value:") : extra, value)) {
                 if (err)
-                    *err = kCancelled;
+                    *err = kCanceled;
                 return false;
             }
             out << value;
@@ -163,14 +163,14 @@ bool CommandEngine::run(const QString &script, CommandContext &ctx)
 
     const QVector<ParsedCommand> commands = CommandParser::parse(script, expander, &error);
     if (commands.isEmpty()) {
-        if (!error.isEmpty() && error != kCancelled)
+        if (!error.isEmpty() && error != kCanceled)
             ctx.showError(QStringLiteral("Command failed"), error);
         return error.isEmpty();
     }
     for (const ParsedCommand &cmd : commands) {
         QString err;
         if (!execute(cmd, ctx, &err)) {
-            if (!err.isEmpty() && err != kCancelled)
+            if (!err.isEmpty() && err != kCanceled)
                 ctx.showError(QStringLiteral("%1 failed").arg(cmd.name), err);
             return false;
         }
@@ -298,7 +298,7 @@ bool CommandEngine::cmdCopy(const ParsedCommand &cmd, CommandContext &ctx, bool 
     if (sources.isEmpty()) {
         // Pressing a key with nothing selected is not worth a dialog.
         if (error)
-            *error = kCancelled;
+            *error = kCanceled;
         return false;
     }
 
@@ -311,7 +311,7 @@ bool CommandEngine::cmdCopy(const ParsedCommand &cmd, CommandContext &ctx, bool 
         dest = ctx.chooseDestination(move ? QStringLiteral("Move to") : QStringLiteral("Copy to"));
     if (dest.isEmpty()) {
         if (error)
-            *error = kCancelled;
+            *error = kCanceled;
         return false;
     }
     if (Collections::isCollectionLocation(dest)) {
@@ -345,7 +345,7 @@ bool CommandEngine::cmdCopy(const ParsedCommand &cmd, CommandContext &ctx, bool 
             const QString label = QStringLiteral("%1 \"%2\" as:").arg(move ? QStringLiteral("Move") : QStringLiteral("Copy"), name);
             if (!ctx.promptText(move ? QStringLiteral("Move As") : QStringLiteral("Copy As"), label, name)) {
                 if (error)
-                    *error = kCancelled;
+                    *error = kCanceled;
                 return false;
             }
             QString why;
@@ -367,7 +367,7 @@ bool CommandEngine::cmdDelete(const ParsedCommand &cmd, CommandContext &ctx, QSt
     const QStringList sources = sourcesFor(cmd, ctx, kDeleteFlags);
     if (sources.isEmpty()) {
         if (error)
-            *error = kCancelled;
+            *error = kCanceled;
         return false;
     }
     if (Collections::isCollectionLocation(ctx.sourcePath()) && !cmd.hasArg(QStringLiteral("FILE"))) {
@@ -379,7 +379,7 @@ bool CommandEngine::cmdDelete(const ParsedCommand &cmd, CommandContext &ctx, QSt
                 && !ctx.confirm(QStringLiteral("Delete collections"),
                                 QStringLiteral("Delete %1 collection(s)? The files in them are not touched.").arg(sources.size()))) {
                 if (error)
-                    *error = kCancelled;
+                    *error = kCanceled;
                 return false;
             }
             for (const QString &s : sources)
@@ -404,7 +404,7 @@ bool CommandEngine::cmdDelete(const ParsedCommand &cmd, CommandContext &ctx, QSt
                 : QStringLiteral("Permanently delete %1? This cannot be undone.").arg(what);
             if (!ctx.confirm(QStringLiteral("Delete permanently"), text)) {
                 if (error)
-                    *error = kCancelled;
+                    *error = kCanceled;
                 return false;
             }
         }
@@ -560,7 +560,7 @@ bool CommandEngine::cmdCreateFolder(const ParsedCommand &cmd, CommandContext &ct
             QString value = QStringLiteral("New Collection");
             if (!ctx.promptText(QStringLiteral("New Collection"), QStringLiteral("Collection name:"), value)) {
                 if (error)
-                    *error = kCancelled;
+                    *error = kCanceled;
                 return false;
             }
             names = value;
@@ -586,7 +586,7 @@ bool CommandEngine::cmdCreateFolder(const ParsedCommand &cmd, CommandContext &ct
         if (!ctx.promptText(QStringLiteral("Create Folder"),
                             QStringLiteral("Folder name (separate several with commas):"), value)) {
             if (error)
-                *error = kCancelled;
+                *error = kCanceled;
             return false;
         }
         names = value;
@@ -641,7 +641,7 @@ bool CommandEngine::pasteAsFile(const QMimeData *mime, bool askName, CommandCont
     if (askName) {
         if (!ctx.promptText(QStringLiteral("Paste as File"), QStringLiteral("File name:"), name)) {
             if (error)
-                *error = kCancelled;
+                *error = kCanceled;
             return false;
         }
         name = name.trimmed();
@@ -722,9 +722,9 @@ bool CommandEngine::cmdCollection(const ParsedCommand &cmd, CommandContext &ctx,
     if (cmd.hasArg(QStringLiteral("ADD"))) {
         QString name = cmd.value(QStringLiteral("ADD"));
         if (name.isEmpty() || name == QLatin1String("ask")) {
-            name = QStringLiteral("Favourites");
+            name = QStringLiteral("Favorites");
             if (!ctx.promptText(QStringLiteral("Add to Collection"), QStringLiteral("Collection (new or existing):"), name))
-                return fail(kCancelled);
+                return fail(kCanceled);
         }
         const QStringList paths = sourcesFor(cmd, ctx, {QStringLiteral("ADD")});
         if (paths.isEmpty())
@@ -778,7 +778,7 @@ bool CommandEngine::cmdClipboard(const ParsedCommand &cmd, CommandContext &ctx, 
         const QStringList paths = ctx.selectedPaths();
         if (paths.isEmpty()) {
             if (error)
-                *error = kCancelled;
+                *error = kCanceled;
             return false;
         }
         auto *mime = new QMimeData;

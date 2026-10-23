@@ -218,11 +218,11 @@ QImage road(const QSize &s, int seed)
         p.setPen(Qt::NoPen);
         p.setBrush(i % 2 ? QColor(70, 70, 80) : QColor(60, 60, 70));
         p.drawPolygon(band);
-        QPolygonF kerb({QPointF(s.width() / 2 - w0 - 10, y0), QPointF(s.width() / 2 - w0, y0), QPointF(s.width() / 2 - w1, y1),
+        QPolygonF curb({QPointF(s.width() / 2 - w0 - 10, y0), QPointF(s.width() / 2 - w0, y0), QPointF(s.width() / 2 - w1, y1),
                         QPointF(s.width() / 2 - w1 - 14, y1)});
         p.setBrush(i % 2 ? QColor(230, 30, 40) : QColor(250, 250, 250));
-        p.drawPolygon(kerb);
-        p.drawPolygon(QTransform().translate(s.width(), 0).scale(-1, 1).map(kerb));
+        p.drawPolygon(curb);
+        p.drawPolygon(QTransform().translate(s.width(), 0).scale(-1, 1).map(curb));
         if (i % 2)
             p.fillRect(QRectF(s.width() / 2 - 3 - i * 0.3, y0, 6 + i * 0.6, y1 - y0), QColor(255, 255, 255));
     }
@@ -420,7 +420,7 @@ void shot(QWidget *w, const QString &name, int wait = 700)
 }
 
 // A dialog over its window, the way it looks on screen: the window dimmed a
-// little, the dialog centred with a soft shadow.
+// little, the dialog centered with a soft shadow.
 void shotWithDialog(QWidget *w, QWidget *dlg, const QString &name, QPoint offset = {})
 {
     QTest::qWait(700);

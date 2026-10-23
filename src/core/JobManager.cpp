@@ -33,7 +33,9 @@ public:
         fillCommon(s);
         s.state = m_done ? JobState::Failed : JobState::Queued;
         if (m_done)
-            s.errors << QStringLiteral("Remote locations need the KIO build of Linopus.");
+            s.errors << ((m_spec.type == JobType::Pack || m_spec.type == JobType::Unpack)
+                             ? QStringLiteral("Archives are made and extracted in local folders (SD cards and drives too); copy it here first.")
+                             : QStringLiteral("Remote locations need the KIO build of Linopus."));
         return s;
     }
     void pause() override {}
@@ -53,7 +55,7 @@ private:
 
 bool involvesRemote(const JobSpec &spec)
 {
-    if ((spec.type == JobType::Copy || spec.type == JobType::Move) && Location::isRemote(spec.destDir))
+    if (spec.type != JobType::Trash && spec.type != JobType::Delete && Location::isRemote(spec.destDir))
         return true;
     for (const QString &s : spec.sources) {
         if (Location::isRemote(s))
@@ -75,8 +77,8 @@ JobManager::~JobManager()
 QString JobManager::queueKeyFor(const JobSpec &spec)
 {
     QString where;
-    if (spec.type == JobType::Copy || spec.type == JobType::Move)
-        where = spec.destDir;
+    if (spec.type == JobType::Copy || spec.type == JobType::Move || spec.type == JobType::Pack || spec.type == JobType::Unpack)
+        where = spec.destDir; // the drive written to
     else if (!spec.sources.isEmpty())
         where = spec.sources.first();
     if (Location::isRemote(where))
@@ -89,7 +91,10 @@ int JobManager::enqueue(const JobSpec &spec)
     const int id = m_nextId++;
     Entry e;
     const QString key = queueKeyFor(spec);
-    if (involvesRemote(spec)) {
+    const bool archive = spec.type == JobType::Pack || spec.type == JobType::Unpack;
+    if (archive && involvesRemote(spec)) {
+        e.job = std::make_shared<UnsupportedJob>(id, spec, key); // archives: local folders only
+    } else if (involvesRemote(spec)) {
         if (RemoteBackend *backend = RemoteBackend::instance())
             e.job = backend->createJob(id, spec, key);
         else
@@ -158,7 +163,7 @@ void JobManager::cancel(int id)
     if (auto it = m_jobs.find(id); it != m_jobs.end()) {
         it->job->cancel();
         Q_EMIT jobChanged(id);
-        // A job cancelled before it started never gets a thread; finish it here.
+        // A job canceled before it started never gets a thread; finish it here.
         if (!it->started && !it->reportedDone) {
             it->reportedDone = true;
             Q_EMIT jobFinished(id);
@@ -210,7 +215,7 @@ void JobManager::schedule()
             continue;
         const JobSnapshot s = e.job->snapshot();
         if (s.state != JobState::Queued)
-            continue; // paused while waiting, or cancelled
+            continue; // paused while waiting, or canceled
         if (busy.contains(e.job->queueKey()) && !s.bypassQueue)
             continue;
 

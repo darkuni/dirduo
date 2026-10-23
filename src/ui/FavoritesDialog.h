@@ -7,7 +7,7 @@
 class QTreeWidget;
 class QTreeWidgetItem;
 
-// Organise Favourites: rename by editing, drag to reorder or into a group,
+// Organize Favorites: rename by editing, drag to reorder or into a group,
 // add groups and separators, remove.
 class FavoritesDialog : public QDialog
 {

@@ -149,11 +149,11 @@ struct Comparer
     QList<SyncEntry> out;
     QCollator coll;
 
-    bool cancelled() const { return progress && progress->cancel.load(); }
+    bool canceled() const { return progress && progress->cancel.load(); }
 
     void walk(const QString &rel)
     {
-        if (cancelled())
+        if (canceled())
             return;
         const QString l = rel.isEmpty() ? left : left + QLatin1Char('/') + rel;
         const QString r = rel.isEmpty() ? right : right + QLatin1Char('/') + rel;
@@ -166,7 +166,7 @@ struct Comparer
         }
         std::sort(names.begin(), names.end(), [this](const QString &a, const QString &b) { return coll.compare(a, b) < 0; });
         for (const QString &name : std::as_const(names)) {
-            if (cancelled())
+            if (canceled())
                 return;
             const QString childRel = rel.isEmpty() ? name : rel + QLatin1Char('/') + name;
             const bool inL = ls.contains(name);
@@ -366,7 +366,7 @@ int FolderSync::run(const Plan &p, CommandEngine &engine)
 QList<DuplicateGroup> Duplicates::find(const QStringList &roots, const DuplicateOptions &o, ScanProgress *progress)
 {
     const QList<QRegularExpression> ex = compileExcludes(o.exclude);
-    auto cancelled = [progress]() { return progress && progress->cancel.load(); };
+    auto canceled = [progress]() { return progress && progress->cancel.load(); };
 
     // Every file once, even when roots overlap or files are hard links.
     QSet<QPair<quint64, quint64>> seenInodes;
@@ -378,7 +378,7 @@ QList<DuplicateGroup> Duplicates::find(const QStringList &roots, const Duplicate
             f |= QDir::Hidden;
         QDirIterator it(Location::clean(root), f, QDirIterator::Subdirectories);
         while (it.hasNext()) {
-            if (cancelled())
+            if (canceled())
                 return {};
             const QString path = it.next();
             const QFileInfo fi = it.fileInfo();
@@ -429,7 +429,7 @@ QList<DuplicateGroup> Duplicates::find(const QStringList &roots, const Duplicate
             // The first 64 KB weeds out most candidates cheaply; then the whole file.
             QHash<QByteArray, QStringList> byHead;
             for (const QString &p : it.value()) {
-                if (cancelled())
+                if (canceled())
                     return {};
                 const QByteArray h = FileHash::of(p, 64 * 1024, progress ? &progress->cancel : nullptr);
                 if (!h.isEmpty())
@@ -444,7 +444,7 @@ QList<DuplicateGroup> Duplicates::find(const QStringList &roots, const Duplicate
                 }
                 QHash<QByteArray, QStringList> byFull;
                 for (const QString &p : same) {
-                    if (cancelled())
+                    if (canceled())
                         return {};
                     const QByteArray h = FileHash::of(p, -1, progress ? &progress->cancel : nullptr);
                     if (!h.isEmpty())

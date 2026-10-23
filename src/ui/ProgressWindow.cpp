@@ -47,6 +47,10 @@ QString verb(JobType t)
         return QStringLiteral("Trashing");
     case JobType::Delete:
         return QStringLiteral("Deleting");
+    case JobType::Pack:
+        return QStringLiteral("Packing");
+    case JobType::Unpack:
+        return QStringLiteral("Extracting");
     }
     return {};
 }
@@ -66,8 +70,8 @@ QString stateText(JobState s)
         return QStringLiteral("Done.");
     case JobState::Failed:
         return QStringLiteral("Finished, but some items could not be processed:");
-    case JobState::Cancelled:
-        return QStringLiteral("Cancelled.");
+    case JobState::Canceled:
+        return QStringLiteral("Canceled.");
     case JobState::Running:
         return {};
     }
@@ -193,7 +197,7 @@ void ProgressWindow::refresh()
         return;
     const JobSnapshot s = m_jobs.snapshot(m_id);
     const bool bytes = s.totalBytes > 0;
-    const bool copying = s.type == JobType::Copy || s.type == JobType::Move;
+    const bool copying = s.type == JobType::Copy || s.type == JobType::Move || s.type == JobType::Pack || s.type == JobType::Unpack;
 
     m_title->setText(s.title);
     setElided(m_from, s.fromFolder);
@@ -210,7 +214,7 @@ void ProgressWindow::refresh()
         m_totalBar->setRange(0, 0);
     } else {
         m_totalBar->setRange(0, 1000);
-        if (s.isDone() && s.state != JobState::Cancelled)
+        if (s.isDone() && s.state != JobState::Canceled)
             m_totalBar->setValue(1000);
         else if (bytes)
             m_totalBar->setValue(percentOf(s.doneBytes, s.totalBytes));
@@ -262,8 +266,8 @@ void ProgressWindow::jobFinished()
         raise();
         return; // stays until read
     }
-    if (s.state == JobState::Cancelled || m_autoClose->isChecked())
-        QTimer::singleShot(s.state == JobState::Cancelled ? 0 : kCloseDelayMs, this, &QWidget::close);
+    if (s.state == JobState::Canceled || m_autoClose->isChecked())
+        QTimer::singleShot(s.state == JobState::Canceled ? 0 : kCloseDelayMs, this, &QWidget::close);
 }
 
 void ProgressWindow::closeEvent(QCloseEvent *event)
@@ -342,7 +346,7 @@ void ProgressWindows::open(int id)
 
 void ProgressWindows::place(ProgressWindow *w)
 {
-    // Centred over the lister that started it, each new one stepped down so
+    // Centered over the lister that started it, each new one stepped down so
     // several jobs are all visible.
     QRect area;
     if (m_anchor)

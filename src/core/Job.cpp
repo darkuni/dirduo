@@ -1,5 +1,7 @@
 #include "core/Job.h"
 
+#include "core/Archive.h"
+
 #include "core/FileOps.h"
 #include "core/Location.h"
 #include "core/Trash.h"
@@ -110,6 +112,10 @@ QString JobBase::describe(const JobSpec &spec)
         return QStringLiteral("Moving %1 to the trash").arg(what);
     case JobType::Delete:
         return QStringLiteral("Deleting %1 permanently").arg(what);
+    case JobType::Pack:
+        return QStringLiteral("Packing %1 into %2").arg(what, spec.archiveName);
+    case JobType::Unpack:
+        return QStringLiteral("Extracting %1 to %2").arg(what, Location::title(spec.destDir));
     }
     return {};
 }
@@ -152,7 +158,7 @@ void Job::setState(JobState s)
 void Job::pause()
 {
     QMutexLocker lock(&m_mutex);
-    if (m_paused || m_state == JobState::Finished || m_state == JobState::Failed || m_state == JobState::Cancelled)
+    if (m_paused || m_state == JobState::Finished || m_state == JobState::Failed || m_state == JobState::Canceled)
         return;
     m_paused = true;
     if (m_state == JobState::Running || m_state == JobState::Scanning) {
@@ -181,10 +187,10 @@ void Job::resume()
 
 void Job::cancel()
 {
-    m_cancelled = true;
+    m_canceled = true;
     QMutexLocker lock(&m_mutex);
     if (m_state == JobState::Queued || (m_state == JobState::Paused && !m_runClock.isValid()))
-        m_state = JobState::Cancelled;
+        m_state = JobState::Canceled;
     m_wake.wakeAll();
 }
 
@@ -205,9 +211,9 @@ void Job::provideDecision(const CollisionDecision &decision)
 bool Job::checkpoint()
 {
     QMutexLocker lock(&m_mutex);
-    while (m_paused && !m_cancelled)
+    while (m_paused && !m_canceled)
         m_wake.wait(&m_mutex);
-    return !m_cancelled;
+    return !m_canceled;
 }
 
 QList<JobOutcome> Job::outcomes() const
@@ -267,9 +273,9 @@ CollisionDecision Job::askCollision(const CollisionRequest &req)
     CollisionDecision d;
     {
         QMutexLocker lock(&m_mutex);
-        while (!m_hasDecision && !m_cancelled)
+        while (!m_hasDecision && !m_canceled)
             m_wake.wait(&m_mutex);
-        if (m_cancelled) {
+        if (m_canceled) {
             d.action = CollisionAction::CancelJob;
         } else {
             d = m_decision;
@@ -278,7 +284,7 @@ CollisionDecision Job::askCollision(const CollisionRequest &req)
             m_state = m_paused ? JobState::Paused : previous;
     }
     if (d.action == CollisionAction::CancelJob)
-        m_cancelled = true;
+        m_canceled = true;
     if (d.applyToAll && d.action != CollisionAction::CancelJob) {
         m_hasStickyDecision = true;
         m_stickyDecision = d;
@@ -289,7 +295,7 @@ CollisionDecision Job::askCollision(const CollisionRequest &req)
 
 bool Job::scan(const QString &path, const QString &name, int parent, std::vector<Entry> &out)
 {
-    if (m_cancelled)
+    if (m_canceled)
         return false;
     struct stat st;
     if (::lstat(enc(path).constData(), &st) != 0) {
@@ -335,8 +341,8 @@ void Job::run(const CollisionNotifier &notifier)
     m_notifier = notifier;
     {
         QMutexLocker lock(&m_mutex);
-        if (m_cancelled) {
-            m_state = JobState::Cancelled;
+        if (m_canceled) {
+            m_state = JobState::Canceled;
             return;
         }
         m_runClock.start();
@@ -344,7 +350,7 @@ void Job::run(const CollisionNotifier &notifier)
             m_pauseClock.start();
     }
     if (!checkpoint()) {
-        setState(JobState::Cancelled);
+        setState(JobState::Canceled);
         return;
     }
 
@@ -359,13 +365,19 @@ void Job::run(const CollisionNotifier &notifier)
     case JobType::Delete:
         runDelete();
         break;
+    case JobType::Pack:
+        runPack();
+        break;
+    case JobType::Unpack:
+        runUnpack();
+        break;
     }
 
     QMutexLocker lock(&m_mutex);
     m_current.clear();
     m_paused = false;
-    if (m_cancelled)
-        m_state = JobState::Cancelled;
+    if (m_canceled)
+        m_state = JobState::Canceled;
     else
         m_state = m_errors.isEmpty() ? JobState::Finished : JobState::Failed;
 }
@@ -402,7 +414,7 @@ void Job::runCopyMove()
         if (!scan(source, name, -1, entries))
             break;
     }
-    if (m_cancelled)
+    if (m_canceled)
         return;
     setState(JobState::Running);
 
@@ -559,7 +571,7 @@ void Job::runCopyMove()
         } else {
             ok = copyFile(e.src, target, &error);
         }
-        if (m_cancelled)
+        if (m_canceled)
             return;
         if (!ok) {
             addError(QStringLiteral("%1: %2").arg(e.src, error));
@@ -726,5 +738,142 @@ void Job::runDelete()
                 failed[static_cast<size_t>(p)] = 1;
         }
         addDone(0, 1);
+    }
+}
+
+// ---- Archives ----------------------------------------------------------------
+
+void Job::runPack()
+{
+    Archive::Format format;
+    if (!Archive::formatFromKey(m_spec.archiveFormat, format) && !Archive::formatFromName(m_spec.archiveName, format)) {
+        addError(QStringLiteral("Unknown archive format \"%1\".").arg(m_spec.archiveFormat));
+        return;
+    }
+    const QString dest = QDir::cleanPath(m_spec.destDir);
+    if (!isRealDir(dest)) {
+        addError(QStringLiteral("The destination \"%1\" is not a folder.").arg(dest));
+        return;
+    }
+    // Counting first, for progress.
+    setState(JobState::Scanning);
+    std::vector<Entry> entries;
+    for (const QString &s : m_spec.sources) {
+        if (!scan(QDir::cleanPath(s), QFileInfo(s).fileName(), -1, entries))
+            return;
+    }
+    QString target = dest + QLatin1Char('/') + m_spec.archiveName;
+    if (existsNoFollow(target)) {
+        if (m_spec.whenExists == CollisionAction::Skip) {
+            addError(QStringLiteral("%1 is already there.").arg(m_spec.archiveName));
+            return;
+        }
+        if (m_spec.whenExists != CollisionAction::Replace)
+            target = dest + QLatin1Char('/') + FileOps::uniqueName(dest, m_spec.archiveName);
+    }
+    setState(JobState::Running);
+    // Written beside it under another name, swapped in when complete: a
+    // canceled or failed archive never looks like a finished one.
+    const QString part = target + QStringLiteral(".linopus-part");
+    Archive::Hooks hooks;
+    hooks.keepGoing = [this]() { return checkpoint(); };
+    hooks.current = [this](const QString &item, qint64 size) {
+        setCurrent(item, size);
+        addDone(0, 1);
+    };
+    hooks.advanced = [this](qint64 bytes) { addDone(bytes, 0); };
+    hooks.problem = [this](const QString &m) { addError(m); };
+    QString error;
+    const bool ok = Archive::pack(m_spec.sources, part, format, hooks, &error);
+    if (!ok || m_canceled) {
+        QFile::remove(part);
+        if (!m_canceled && !error.isEmpty())
+            addError(error);
+        return;
+    }
+    if (existsNoFollow(target))
+        ::unlink(enc(target).constData());
+    if (::rename(enc(part).constData(), enc(target).constData()) != 0) {
+        addError(QStringLiteral("%1: %2").arg(target, errnoText()));
+        QFile::remove(part);
+        return;
+    }
+    addOutcome(m_spec.sources.value(0), target);
+}
+
+void Job::runUnpack()
+{
+    const QString dest = QDir::cleanPath(m_spec.destDir);
+    if (!isRealDir(dest)) {
+        addError(QStringLiteral("The destination \"%1\" is not a folder.").arg(dest));
+        return;
+    }
+    qint64 total = 0;
+    for (const QString &s : m_spec.sources)
+        total += QFileInfo(s).size();
+    {
+        QMutexLocker lock(&m_mutex);
+        m_totalBytes = total;
+        m_totalItems = 0; // entries are counted as they come
+    }
+    setState(JobState::Running);
+    const bool replace = m_spec.whenExists == CollisionAction::Replace;
+    for (const QString &raw : m_spec.sources) {
+        if (!checkpoint())
+            return;
+        const QString archive = QDir::cleanPath(raw);
+        const QString shown = QFileInfo(archive).fileName();
+        QString error;
+        const QStringList tops = Archive::topLevelNames(archive, &error);
+        if (tops.isEmpty()) {
+            addError(QStringLiteral("%1: %2").arg(shown, error.isEmpty() ? QStringLiteral("empty, or not an archive") : error));
+            addDone(QFileInfo(archive).size(), 0);
+            continue;
+        }
+        // Where it goes: one folder (or file) inside goes straight in;
+        // anything else gets a folder named after the archive.
+        QString into = dest;
+        QMap<QString, QString> rename;
+        const bool own = m_spec.extractMode == JobSpec::ExtractMode::Folder
+            || (m_spec.extractMode == JobSpec::ExtractMode::Smart && tops.size() > 1);
+        if (own) {
+            QString folder = Archive::baseName(archive);
+            if (existsNoFollow(dest + QLatin1Char('/') + folder) && !replace)
+                folder = FileOps::uniqueName(dest, folder);
+            into = dest + QLatin1Char('/') + folder;
+            if (!QDir().mkpath(into)) {
+                addError(QStringLiteral("%1: cannot make %2").arg(shown, into));
+                continue;
+            }
+            if (!replace || !QFileInfo(dest + QLatin1Char('/') + folder).exists())
+                addOutcome(archive, into);
+        } else if (!replace) {
+            for (const QString &t : tops) {
+                if (existsNoFollow(dest + QLatin1Char('/') + t))
+                    rename.insert(t, FileOps::uniqueName(dest, t));
+            }
+        }
+        Archive::Hooks hooks;
+        hooks.keepGoing = [this]() { return checkpoint(); };
+        hooks.current = [this](const QString &item, qint64 size) {
+            {
+                QMutexLocker lock(&m_mutex);
+                ++m_totalItems;
+            }
+            setCurrent(item, size);
+            addDone(0, 1);
+        };
+        hooks.advanced = [this](qint64 bytes) { addDone(bytes, 0); };
+        hooks.problem = [this](const QString &m) { addError(m); };
+        QStringList created;
+        const bool ok = Archive::unpack(archive, into, rename, replace, hooks, &created, &error);
+        if (!own) {
+            for (const QString &c : std::as_const(created))
+                addOutcome(archive, c);
+        }
+        if (m_canceled)
+            return;
+        if (!ok)
+            addError(QStringLiteral("%1: %2").arg(shown, error));
     }
 }

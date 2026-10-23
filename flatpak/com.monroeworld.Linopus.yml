@@ -108,6 +108,7 @@ modules:
     config-opts:
       - -DCMAKE_BUILD_TYPE=Release
       - -DLINOPUS_BUILD_TESTS=OFF
+      - -DLINOPUS_REQUIRE_LIBARCHIVE=ON
     sources:
       - type: dir
         path: ..

@@ -63,6 +63,7 @@ add_library(linopus_core STATIC
     src/core/Thumbnails.cpp
     src/core/History.cpp
     src/core/SelectRules.cpp
+    src/core/Archive.cpp
     src/core/Condition.cpp
     src/core/DriveList.cpp
     src/core/FileKind.cpp
@@ -78,6 +79,22 @@ find_package(ZLIB QUIET)
 if(ZLIB_FOUND)
     target_link_libraries(linopus_core PRIVATE ZLIB::ZLIB)
     target_compile_definitions(linopus_core PRIVATE LINOPUS_HAVE_ZLIB)
+endif()
+
+# Creating and extracting archives. Optional, but the Flatpak requires it.
+option(LINOPUS_REQUIRE_LIBARCHIVE "Fail when libarchive is missing" OFF)
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(LIBARCHIVE QUIET IMPORTED_TARGET libarchive)
+endif()
+if(LIBARCHIVE_FOUND)
+    target_link_libraries(linopus_core PRIVATE PkgConfig::LIBARCHIVE)
+    target_compile_definitions(linopus_core PRIVATE LINOPUS_HAVE_LIBARCHIVE)
+    message(STATUS "libarchive ${LIBARCHIVE_VERSION}: archives on")
+elseif(LINOPUS_REQUIRE_LIBARCHIVE)
+    message(FATAL_ERROR "libarchive not found (LINOPUS_REQUIRE_LIBARCHIVE is on)")
+else()
+    message(WARNING "libarchive not found: no Add to Archive or Extract")
 endif()
 
 # Music tags and photo details. Both optional: without them the columns stay

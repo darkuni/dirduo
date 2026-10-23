@@ -5,7 +5,7 @@
 #include <QObject>
 #include <QString>
 
-// Favourites: folders you picked, in your order, optionally in groups (one
+// Favorites: folders you picked, in your order, optionally in groups (one
 // menu level each). Kept in favorites.json.
 struct Favorite
 {
@@ -20,7 +20,7 @@ struct Favorite
     }
 };
 
-// Frequent folders ("smart favourites"): every folder read is counted; the
+// Frequent folders ("smart favorites"): every folder read is counted; the
 // list ranks them by visits, with older visits counting for less.
 struct FrequentFolder
 {

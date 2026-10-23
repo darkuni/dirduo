@@ -22,7 +22,7 @@ struct ScanProgress
 
 namespace FileHash {
 // MD5 of the file (or of its first limit bytes). Empty when unreadable or
-// cancelled.
+// canceled.
 QByteArray of(const QString &path, qint64 limit = -1, const std::atomic<bool> *cancel = nullptr);
 }
 

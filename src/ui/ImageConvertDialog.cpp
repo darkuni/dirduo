@@ -401,7 +401,7 @@ ImageOptions ImageConvertDialog::savedOptions()
     s.beginGroup(QStringLiteral("ImageConvert"));
     ImageOptions o;
     o.format = s.value(QStringLiteral("format"), QStringLiteral("jpg")).toString();
-    if (!o.format.isEmpty() && ImageConvert::normaliseFormat(o.format).isEmpty())
+    if (!o.format.isEmpty() && ImageConvert::normalizeFormat(o.format).isEmpty())
         o.format = QStringLiteral("png");
     o.quality = s.value(QStringLiteral("quality"), o.quality).toInt();
     ImageOptions::resizeFromName(s.value(QStringLiteral("resize")).toString(), o.resize);
