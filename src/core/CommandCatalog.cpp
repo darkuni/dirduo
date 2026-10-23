@@ -125,7 +125,7 @@ QList<CommandInfo> buildCommands()
         arg("MOVE", {}, "Move instead of copy"),
         arg("AS", {}, "Ask for a new name for each item"),
         arg("FILE=", {}, "What to copy instead of the selection"),
-        arg("TO=", {}, "Where to copy instead of the destination"),
+        arg("TO=", {QStringLiteral("ask")}, "Where to copy instead of the destination (ask: choose a folder)"),
         arg("WHENEXISTS=", {QStringLiteral("ask"), QStringLiteral("replace"), QStringLiteral("newer"), QStringLiteral("skip"), QStringLiteral("rename")},
             "What to do when a name is taken"),
         arg("STRUCTURE=", {QStringLiteral("ask"), QStringLiteral("keep"), QStringLiteral("flat")},
@@ -320,9 +320,10 @@ QList<CommandInfo> buildCommands()
                      QStringLiteral("Sync LEFT=/roms RIGHT=/sdcard/roms MODE=update")};
     c << CommandInfo{QStringLiteral("Toolbar"), QStringLiteral("Place, show or customize toolbars"),
                      {arg("NAME=", {}, "Which toolbar (buttons, drives, or one you made)"),
-                      arg("PLACE=", {QStringLiteral("top"), QStringLiteral("bottom"), QStringLiteral("left"), QStringLiteral("right"), QStringLiteral("between")},
-                          "Where it goes"),
+                      arg("PLACE=", {QStringLiteral("top"), QStringLiteral("bottom"), QStringLiteral("left"), QStringLiteral("right"), QStringLiteral("between"), QStringLiteral("menubar")},
+                          "Where it goes (menubar: at the right end of the menu bar)"),
                       arg("NEWROW", {}, "Start a new row instead of sharing one"),
+                      arg("SAMEROW", {}, "Between the displays: run on after the toolbar before it, in its row or column"),
                       arg("STATE=", onOff(), "Show or hide it"),
                       arg("CUSTOMIZE", {}, "Enter customize mode")},
                      QStringLiteral("Toolbar NAME=drives PLACE=between")};

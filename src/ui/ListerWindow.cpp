@@ -603,6 +603,13 @@ void ListerWindow::buildMenus()
     connect(window, &QMenu::aboutToShow, this, [this, jobs]() { jobs->setEnabled(m_app.progress().count() > 0); });
     connect(jobs, &QAction::triggered, this, [this]() { m_app.progress().showAll(); });
 
+    m_menuCorner = new QWidget(menuBar());
+    m_menuCorner->setObjectName(QStringLiteral("menubar-toolbars"));
+    auto *cornerLayout = new QHBoxLayout(m_menuCorner);
+    cornerLayout->setContentsMargins(0, 0, 0, 0);
+    cornerLayout->setSpacing(0);
+    menuBar()->setCornerWidget(m_menuCorner, Qt::TopRightCorner);
+    m_menuCorner->hide();
     QMenu *help = menuBar()->addMenu(QStringLiteral("&Help"));
     QAction *about = help->addAction(QStringLiteral("About Linopus"));
     connect(about, &QAction::triggered, this, [this]() {
@@ -665,6 +672,15 @@ void ListerWindow::createButtonBar(const QString &id, bool show)
     connect(bar, &ButtonBar::filesDropped, this, &ListerWindow::runCommandWithFiles);
     bar->setEvaluator([this](const QString &cond, bool fallback) { return evaluateCondition(cond, fallback); });
     bar->setMenuProvider([this](QMenu *menu, const QString &kind) { fillDynamicMenu(menu, kind); });
+    bar->setFieldProvider([this](const QString &kind) {
+        FolderTab *t = sourceTab();
+        return kind == QLatin1String("filter") && t ? t->filterText() : QString();
+    });
+    connect(bar, &ButtonBar::fieldEdited, this, &ListerWindow::onToolbarField);
+    connect(bar, &ButtonBar::fillChanged, this, [this, bar]() {
+        if (m_strip->contains(bar))
+            m_strip->refreshLayout();
+    });
     setupToolbarMenu(bar);
     const bool main = id == QLatin1String(ToolbarStore::kMainId);
     if (main) {
@@ -894,6 +910,8 @@ ListerWindow::ToolbarPlace ListerWindow::toolbarPlace(QToolBar *bar) const
 {
     if (m_strip->contains(bar))
         return ToolbarPlace::Between;
+    if (m_menuBars.contains(bar))
+        return ToolbarPlace::MenuBar;
     switch (toolBarArea(bar)) {
     case Qt::BottomToolBarArea:
         return ToolbarPlace::Bottom;
@@ -906,17 +924,35 @@ ListerWindow::ToolbarPlace ListerWindow::toolbarPlace(QToolBar *bar) const
     }
 }
 
-void ListerWindow::placeToolbar(QToolBar *bar, ToolbarPlace place, bool newRow)
+void ListerWindow::placeToolbar(QToolBar *bar, ToolbarPlace place, bool newRow, bool joinRow)
 {
     if (m_strip->contains(bar)) {
         m_strip->removeBar(bar);
+    } else if (m_menuBars.removeOne(bar)) {
+        m_menuCorner->layout()->removeWidget(bar);
+        m_menuCorner->setVisible(!m_menuBars.isEmpty());
     } else if (toolBarArea(bar) != Qt::NoToolBarArea) {
         removeToolBarBreak(bar);
         removeToolBar(bar);
     }
 
+    if (place == ToolbarPlace::MenuBar) {
+        // At the right end of the menu bar, as Opus lets its menu bar hold buttons.
+        m_menuBars << bar;
+        bar->setParent(m_menuCorner);
+        bar->setMovable(false);
+        bar->setOrientation(Qt::Horizontal);
+        m_menuCorner->layout()->addWidget(bar);
+        bar->setVisible(true);
+        m_menuCorner->show();
+        menuBar()->adjustSize();
+        menuBar()->updateGeometry();
+        m_strip->updateGeometryForBars();
+        return;
+    }
+
     if (place == ToolbarPlace::Between) {
-        m_strip->addBar(bar);
+        m_strip->addBar(bar, -1, joinRow);
         bar->setVisible(true);
         m_strip->updateGeometryForBars();
         return;
@@ -942,6 +978,34 @@ void ListerWindow::placeToolbar(QToolBar *bar, ToolbarPlace place, bool newRow)
     addToolBar(area, bar);
     bar->show();
     m_strip->updateGeometryForBars();
+}
+
+void ListerWindow::onToolbarField(const QString &kind, const QString &text, const QString &command, bool entered)
+{
+    const QString t = text.trimmed();
+    if (kind == QLatin1String("filter")) {
+        if (FolderTab *tab = sourceTab()) {
+            QString f = t;
+            const bool invert = f.startsWith(QLatin1Char('!'));
+            if (invert)
+                f.remove(0, 1);
+            tab->setFilter(f, invert, FileSortProxy::FilterScope::Files);
+            if (entered)
+                tab->focusView();
+        }
+        return;
+    }
+    if (!entered || t.isEmpty())
+        return;
+    QString value = t;
+    value.remove(QLatin1Char('"'));
+    const QString quoted = QLatin1Char('"') + value + QLatin1Char('"');
+    if (kind == QLatin1String("find"))
+        runCommand(QStringLiteral("Find NAME=%1 RUN").arg(quoted));
+    else if (kind == QLatin1String("go"))
+        runCommand(QStringLiteral("Go %1").arg(quoted));
+    else if (!command.isEmpty())
+        runCommand(QString(command).replace(QLatin1String("{text}"), value.contains(QLatin1Char(' ')) ? quoted : value));
 }
 
 void ListerWindow::setupToolbarMenu(QToolBar *bar)
@@ -978,17 +1042,30 @@ void ListerWindow::fillToolbarMenu(QMenu *menu, QToolBar *bar)
     add(QStringLiteral("Bottom"), ToolbarPlace::Bottom);
     add(QStringLiteral("Left"), ToolbarPlace::Left);
     add(QStringLiteral("Right"), ToolbarPlace::Right);
+    add(QStringLiteral("In the Menu Bar"), ToolbarPlace::MenuBar);
     menu->addSeparator();
     if (current == ToolbarPlace::Between) {
-        const int idx = m_strip->bars().indexOf(bar);
         const bool sideBySide = m_split->orientation() == Qt::Horizontal;
-        QAction *earlier = menu->addAction(sideBySide ? QStringLiteral("Move Left") : QStringLiteral("Move Up"));
-        earlier->setEnabled(idx > 0);
+        bool shared = false;
+        for (const auto &line : m_strip->lines())
+            shared = shared || (line.contains(bar) && line.size() > 1);
+        // Along a shared line, or line by line.
+        const bool upDown = shared ? sideBySide : !sideBySide;
+        QAction *earlier = menu->addAction(upDown ? QStringLiteral("Move Up") : QStringLiteral("Move Left"));
+        earlier->setEnabled(m_strip->canMove(bar, -1));
         connect(earlier, &QAction::triggered, this, [this, bar]() { m_strip->moveBar(bar, -1); });
-        QAction *later = menu->addAction(sideBySide ? QStringLiteral("Move Right") : QStringLiteral("Move Down"));
-        later->setEnabled(idx >= 0 && idx < m_strip->bars().size() - 1);
+        QAction *later = menu->addAction(upDown ? QStringLiteral("Move Down") : QStringLiteral("Move Right"));
+        later->setEnabled(m_strip->canMove(bar, 1));
         connect(later, &QAction::triggered, this, [this, bar]() { m_strip->moveBar(bar, 1); });
-    } else {
+        const QString lineWord = sideBySide ? QStringLiteral("Column") : QStringLiteral("Row");
+        QAction *join = menu->addAction(QStringLiteral("Same %1 as the Toolbar Before").arg(lineWord));
+        join->setCheckable(true);
+        join->setChecked(m_strip->isJoined(bar));
+        join->setEnabled(m_strip->isJoined(bar) || m_strip->bars().indexOf(bar) > 0);
+        join->setToolTip(QStringLiteral("Run on after the toolbar before it instead of starting a %1 of its own (or drag it by an empty spot)")
+                             .arg(lineWord.toLower()));
+        connect(join, &QAction::toggled, this, [this, bar](bool on) { m_strip->setJoined(bar, on); });
+    } else if (current != ToolbarPlace::MenuBar) {
         QAction *row = menu->addAction(QStringLiteral("Start a New Row"));
         row->setToolTip(QStringLiteral("Stack this toolbar on its own row instead of sharing one"));
         connect(row, &QAction::triggered, this, [this, bar, current]() { placeToolbar(bar, current, true); });
@@ -1061,9 +1138,15 @@ bool ListerWindow::toolbar(const ParsedCommand &cmd, QString *error)
             place = ToolbarPlace::Right;
         else if (p == QLatin1String("between") || p == QLatin1String("middle") || p == QLatin1String("center"))
             place = ToolbarPlace::Between;
+        else if (p == QLatin1String("menubar") || p == QLatin1String("menu"))
+            place = ToolbarPlace::MenuBar;
         else
-            return fail(QStringLiteral("PLACE takes top, bottom, left, right or between."));
-        placeToolbar(bar, place, cmd.hasFlag(QStringLiteral("NEWROW")));
+            return fail(QStringLiteral("PLACE takes top, bottom, left, right, between or menubar."));
+        placeToolbar(bar, place, cmd.hasFlag(QStringLiteral("NEWROW")), cmd.hasFlag(QStringLiteral("SAMEROW")));
+    } else if (cmd.hasFlag(QStringLiteral("SAMEROW")) || cmd.hasFlag(QStringLiteral("NEWROW"))) {
+        if (!m_strip->contains(bar))
+            return fail(QStringLiteral("SAMEROW and NEWROW without PLACE= work on toolbars between the displays."));
+        m_strip->setJoined(bar, cmd.hasFlag(QStringLiteral("SAMEROW")));
     }
     if (cmd.hasArg(QStringLiteral("STATE"))) {
         bool on = !bar->isHidden();
@@ -2212,8 +2295,17 @@ void ListerWindow::saveListerState(QSettings &s) const
     s.setValue(QStringLiteral("sideBySide"), m_sideBySide);
     s.setValue(QStringLiteral("splitter3"), m_split->saveState()); // display, strip, display
     QStringList between;
-    for (QToolBar *bar : m_strip->bars())
+    QStringList joined;
+    for (QToolBar *bar : m_strip->bars()) {
         between << bar->objectName();
+        if (m_strip->isJoined(bar))
+            joined << bar->objectName();
+    }
+    s.setValue(QStringLiteral("toolbarsBetweenJoined"), joined);
+    QStringList inMenu;
+    for (QToolBar *bar : m_menuBars)
+        inMenu << bar->objectName();
+    s.setValue(QStringLiteral("toolbarsMenuBar"), inMenu);
     QStringList hiddenBars;
     for (QToolBar *bar : toolbars()) {
         if (bar->isHidden())
@@ -2317,14 +2409,23 @@ bool ListerWindow::restoreListerState(QSettings &s)
     // saved, so take the between-displays ones out of the strip first.
     for (QToolBar *bar : m_strip->bars())
         placeToolbar(bar, ToolbarPlace::Top);
+    for (QToolBar *bar : QList<QToolBar *>(m_menuBars))
+        placeToolbar(bar, ToolbarPlace::Top);
     QMainWindow::restoreState(s.value(QStringLiteral("windowState")).toByteArray());
     const QStringList between = s.contains(QStringLiteral("toolbarsBetween"))
         ? s.value(QStringLiteral("toolbarsBetween")).toStringList()
         : QStringList{m_drives->objectName()}; // sessions from before the strip existed
+    const QStringList joined = s.value(QStringLiteral("toolbarsBetweenJoined")).toStringList();
     for (const QString &name : between) {
         for (QToolBar *bar : toolbars()) {
             if (bar->objectName() == name)
-                placeToolbar(bar, ToolbarPlace::Between);
+                placeToolbar(bar, ToolbarPlace::Between, false, joined.contains(name));
+        }
+    }
+    for (const QString &name : s.value(QStringLiteral("toolbarsMenuBar")).toStringList()) {
+        for (QToolBar *bar : toolbars()) {
+            if (bar->objectName() == name)
+                placeToolbar(bar, ToolbarPlace::MenuBar);
         }
     }
     const QStringList hiddenBars = s.value(QStringLiteral("toolbarsHidden")).toStringList();

@@ -537,6 +537,58 @@ int main(int argc, char *argv[])
     }
 #endif
 
+    // Toolbars arranged like an Opus work setup: split buttons with Help at
+    // the far end; the drives and a custom toolbar sharing a row; a filter box;
+    // view buttons in the menu bar.
+    {
+        ToolbarStore &store = context.toolbars();
+        auto item = [](const char *label, const char *icon, const char *left) {
+            ButtonDef d;
+            d.label = QString::fromUtf8(label);
+            d.icon = QString::fromUtf8(icon);
+            d.left = QString::fromUtf8(left);
+            return d;
+        };
+        ButtonDef copy = item("Copy Files", "edit-copy", "Copy");
+        copy.split = true;
+        copy.children = {item("Copy As...", "edit-copy", "Copy AS"), item("Copy to...", "folder-open", "Copy TO=ask")};
+        ButtonDef move = item("Move", "transform-move", "Copy MOVE");
+        move.split = true;
+        move.children = {item("Move As...", "transform-move", "Copy MOVE AS")};
+        ButtonDef del = item("Delete", "edit-delete", "Delete");
+        del.split = true;
+        del.children = {item("Delete Permanently", "edit-delete", "Delete NORECYCLE")};
+        ButtonDef rename = item("Rename", "edit-rename", "Rename");
+        rename.split = true;
+        rename.children = {item("Advanced Rename...", "edit-rename", "Rename ADVANCED")};
+        store.setButtons(QStringLiteral("buttons"),
+                         {copy, move, rename, item("New Folder", "folder-new", "CreateFolder"), del, ButtonDef::makeSeparator(),
+                          item("Archive", "archive-insert", "Archive CREATE"), item("Properties", "document-properties", "Properties"),
+                          ButtonDef::makeSpacer(), item("Help", "help-contents", "Go ~"), item("Clean Junk", "edit-clear", "Clean")});
+        const QString work = store.create(QStringLiteral("Work"));
+        ButtonDef servers = item("Servers", "network-server", "");
+        servers.children = {item("Build box", "network-server", "Go ~"), item("Web host", "network-server", "Go ~")};
+        ButtonDef local = item("Local Files", "folder", "");
+        local.children = {item("ROMs", "folder", "Go ~")};
+        ButtonDef automation = item("Automation", "system-run", "");
+        automation.children = {item("Rebuild index", "system-run", "Go ~")};
+        store.setButtons(work, {ButtonDef::makeSeparator(), item("Codex", "", "Go ~"), servers, local, automation, item("RDPs", "", "Go ~"),
+                                ButtonDef::makeSpacer(), ButtonDef::makeField(QStringLiteral("filter"))});
+        const QString views = store.create(QStringLiteral("Views"));
+        store.setButtons(views, {item("Details", "view-list-details", "Set VIEW=details"), item("Icons", "view-list-icons", "Set VIEW=icons"),
+                                 item("Thumbs", "view-preview", "Set VIEW=thumbnails")});
+        store.setStyle(views, QStringLiteral("icons"), 0);
+        QTest::qWait(200);
+        w->runCommand(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet DUAL=horizontal\nToolbar NAME=buttons PLACE=between\n"
+                                     "Toolbar NAME=drives PLACE=between\nToolbar NAME=work PLACE=between SAMEROW\n"
+                                     "Toolbar NAME=views PLACE=menubar"));
+        QTest::qWait(500);
+        shot(w, out, QStringLiteral("40-work-style-toolbars"));
+        w->runCommand(QStringLiteral("Set DUAL=vertical"));
+        QTest::qWait(500);
+        shot(w, out, QStringLiteral("41-work-style-toolbars-side-by-side"));
+    }
+
     w->close();
     return 0;
 }

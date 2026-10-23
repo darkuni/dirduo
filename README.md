@@ -65,6 +65,11 @@ Servers and archives (KIO):
 - Button editor: label, icon, tooltip, commands for left, right and middle click, a hotkey, and conditions for when the button is grayed out or shown pressed. A button can be a menu of other buttons, nested as deep as you like
 - Buttons follow the lister: Copy and Move gray out without a selection or destination, toggles like Tree and Hidden show pressed while on
 - Drop files on a button to run it on those files instead of the selection
+- Toolbars between the displays share rows, as in Opus: the drives and your own toolbar on one row (right-click a toolbar > Same Row as the Toolbar Before, or drag a toolbar by an empty spot onto a row or between rows; Move Left/Right orders them). Works side by side (columns) and top and bottom (rows); saved per lister and in layouts
+- Split buttons (Copy Files ▾): a click runs the command, the arrow opens a menu of variations. Tick "Split button" in the button editor, or drag the ready-made Copy, Move and Delete ones from Customize > Commands > Toolbar pieces
+- Spacers push the buttons after them to the far end of a toolbar (Help at the right, like Opus); fields put a text box on a toolbar: Filter (the source list as you type), Find (by name, on Enter), Go To, or a Command box that runs any command with `{text}`. In customize mode, right-click a toolbar > Add Spacer / Add Field
+- Button Style per toolbar (customize mode, right-click > Button Style): icons only, labels only, label beside or under the icon, and icon size
+- Toolbars in the menu bar (right-click a toolbar > In the Menu Bar): buttons at the right end of the menu bar, like Opus's View and Lister groups
 - Command console (Ctrl+Shift+P): type any command and run it in the lister; Tab completes, Up/Down for history, `help` and `help Set` explain
 
 ## Also in
@@ -138,7 +143,7 @@ Every button, menu item, hotkey, drop and inline rename runs one of these. Butto
 | `Settings` | no arguments: Preferences; `PAGE=appearance\|theme\|labels\|aliases\|formats\|toolbars`; `BACKUP=<file>\|ask`, `RESTORE=<file>\|ask`, `QUIET` |
 | `Set` | `DUAL=on\|off\|toggle\|vertical\|horizontal\|flip`, `SOURCE=toggle`, `DESTLOCK=`, `NAVLOCK=`, `VIEW=details\|list\|icons\|thumbnails`, `HIDDEN=`, `VIEWER=`, `VIEWERPOS=right\|bottom\|left`, `THEME=<name>\|next`, `SIZE=normal\|large\|larger\|bigger\|smaller`, `ZOOM=in\|out\|reset\|<50-300>`, `EXPAND=toggle\|on\|off\|none`, `GROUPBY=none\|type\|name\|size\|modified\|extension\|folder\|artist\|album\|genre\|year\|camera\|taken\|label\|rating`, `GROUPCOLLAPSE=all\|none\|toggle`, `FILTERBAR=`, `FILTER=<text>` (a leading `!` hides matches), `CHECKBOXES=`, `FOLDERSIZES=`, `FLATVIEW=off\|grouped\|ungrouped\|nofolders\|toggle`, `TREE=off\|shared\|separate\|toggle`, `FORMAT=save\|savesub\|clear\|savedefault\|cleardefault`, `AUTOFORMAT=`, `COLUMNSTOGGLE=<column>`. Switches take `on\|off\|toggle` |
 | `Select` | `ALL`, `NONE`, `INVERT`, `PATTERN=*.mp3`, `COMPARE=newerormissing\|missing\|newer\|older\|same\|different` (`BOTH`), `KIND=`, `TYPE=`, `MINSIZE=`, `MAXSIZE=`, `NEWER=`, `OLDER=`, `LABEL=<name>\|none\|*`, `RATING=4` (at least) or `RATING=2-3`, `TAG=<tag>\|none`, `ADD`, `DESELECT`, `DIALOG` |
-| `Toolbar` | `NAME=buttons\|drives\|<yours>`, `PLACE=top\|bottom\|left\|right\|between`, `NEWROW`, `STATE=on\|off\|toggle`, `CUSTOMIZE` |
+| `Toolbar` | `NAME=buttons\|drives\|<yours>`, `PLACE=top\|bottom\|left\|right\|between`, `NEWROW`, `SAMEROW` (between the displays: on the row of the toolbar before it), `STATE=on\|off\|toggle`, `CUSTOMIZE`; `PLACE=menubar` too |
 
 Argument codes: `{sourcepath}`, `{destpath}`, `{filepath}` (every selected item), `{file}` (names only), `{focusedpath}`, `{dlgstring|Prompt text}`. Add `$` to require a value: `{filepath$}` stops the function when nothing is selected. Codes expand to whole arguments, so paths with spaces need no quoting.
 
@@ -221,6 +226,8 @@ Each toolbar is `~/.config/linopus/toolbars/<id>.json`. Customize mode writes th
   ]
 }
 ```
+
+A toolbar file can also have `"style": "icons"` (or `text`, `beside`, `under`) and `"iconSize": 24`. Besides buttons and `{ "separator": true }`, a toolbar can hold `{ "spacer": true }` and fields: `{ "field": "filter", "label": "Filter" }` (`find`, `go`, or `command` with `"left": "Select PATTERN={text}"`). A menu button with `"split": true` and a `"left"` command runs it on a click and opens the menu from its arrow.
 
 A button with `"dynamic": "favorites"` (or `frequent`, `aliases`, `collections`) is a menu that fills itself.
 

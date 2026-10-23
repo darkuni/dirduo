@@ -349,6 +349,133 @@ private Q_SLOTS:
         QCOMPARE(w->toolbarPlace(w->drivesBar()), ListerWindow::ToolbarPlace::Bottom);
     }
 
+    void toolbarsShareRowsInTheMiddle()
+    {
+        ToolbarStore &store = m_app->toolbars();
+        const QString id = store.create(QStringLiteral("Work"));
+        QTRY_VERIFY(w->buttonBar(id));
+        ButtonBar *work = w->buttonBar(id);
+        QVERIFY(w->runCommand(QStringLiteral("Set DUAL=horizontal")));
+        QVERIFY(w->runCommand(QStringLiteral("Toolbar NAME=drives PLACE=between\nToolbar NAME=work PLACE=between SAMEROW")));
+        ToolbarStrip *strip = w->toolbarStrip();
+        int line = -1;
+        for (int i = 0; i < strip->lines().size(); ++i) {
+            if (strip->lines().at(i).contains(work))
+                line = i;
+        }
+        QVERIFY(line >= 0);
+        QVERIFY(strip->lines().at(line).contains(w->drivesBar())); // one row, drives then Work
+        QVERIFY(strip->isJoined(work));
+        QCOMPARE(work->orientation(), Qt::Horizontal);
+        // Its own row again, then back by moving it there.
+        QVERIFY(w->runCommand(QStringLiteral("Toolbar NAME=work NEWROW")));
+        QVERIFY(!strip->isJoined(work));
+        const int drivesLine = [&] {
+            for (int i = 0; i < strip->lines().size(); ++i)
+                if (strip->lines().at(i).contains(w->drivesBar()))
+                    return i;
+            return -1;
+        }();
+        strip->placeBar(work, drivesLine, 0, false);
+        QCOMPARE(strip->lines().at(drivesLine).first(), work); // before the drives now
+        strip->moveBar(work, 1);
+        QCOMPARE(strip->lines().at(drivesLine).last(), work);
+        // A spacer makes the bar take the rest of the row.
+        store.setButtons(id, {ButtonDef::makeSpacer(), ButtonDef::makeField(QStringLiteral("go"))});
+        QTRY_VERIFY(work->hasSpacer());
+        QVERIFY(work->fieldAt(1));
+        // Saved with the session.
+        m_app->saveSession({w});
+        w->close();
+        w = nullptr;
+        QApplication::processEvents();
+        m_app->restoreSession();
+        w = m_app->activeLister();
+        QVERIFY(w);
+        work = w->buttonBar(id);
+        QVERIFY(work);
+        QVERIFY(w->toolbarStrip()->isJoined(work));
+        // The Go To box goes there on Enter.
+        QLineEdit *go = work->fieldAt(1);
+        QVERIFY(go);
+        go->setText(root + QStringLiteral("/b"));
+        QTest::keyClick(go, Qt::Key_Return);
+        QTRY_COMPARE(w->sourceTabForTesting()->path(), root + QStringLiteral("/b"));
+        QVERIFY(store.remove(id));
+        QTRY_VERIFY(!w->buttonBar(id));
+        QVERIFY(w->runCommand(QStringLiteral("Set DUAL=vertical")));
+    }
+
+    void splitButtonsFieldsAndStyles()
+    {
+        ToolbarStore &store = m_app->toolbars();
+        const QString id = store.create(QStringLiteral("Pieces"));
+        QTRY_VERIFY(w->buttonBar(id));
+        ButtonBar *bar = w->buttonBar(id);
+        ButtonDef split;
+        split.label = QStringLiteral("Lists");
+        split.icon = QStringLiteral("view-list-details");
+        split.left = QStringLiteral("Set VIEW=list");
+        split.split = true;
+        ButtonDef icons;
+        icons.label = QStringLiteral("Icons");
+        icons.left = QStringLiteral("Set VIEW=icons");
+        split.children = {icons};
+        // Round trip through JSON keeps all of it.
+        const ButtonDef back = ButtonDef::fromJson(split.toJson());
+        QVERIFY(back.isSplit());
+        QCOMPARE(back.left, split.left);
+        QCOMPARE(back.children.size(), 1);
+        QVERIFY(ButtonDef::fromJson(ButtonDef::makeSpacer().toJson()).spacer);
+        QCOMPARE(ButtonDef::fromJson(ButtonDef::makeField(QStringLiteral("find")).toJson()).field, QStringLiteral("find"));
+        store.setButtons(id, {split, ButtonDef::makeField(QStringLiteral("filter"))});
+        QTRY_VERIFY(bar->buttonAt(0));
+        ThreeButton *b = bar->buttonAt(0);
+        QCOMPARE(b->popupMode(), QToolButton::MenuButtonPopup);
+        // A click on the button itself runs it; the menu has the rest.
+        QSignalSpy ran(bar, &ButtonBar::commandTriggered);
+        QTest::mouseClick(b, Qt::LeftButton, {}, QPoint(4, b->height() / 2));
+        QCOMPARE(ran.size(), 1);
+        QCOMPARE(ran.first().first().toString(), QStringLiteral("Set VIEW=list"));
+        QTRY_COMPARE(w->sourceTabForTesting()->viewMode(), FolderTab::ViewMode::List);
+        b->menu()->actions().first()->trigger();
+        QCOMPARE(ran.size(), 2);
+        // The filter box filters the source as you type.
+        QLineEdit *filter = bar->fieldAt(1);
+        QVERIFY(filter);
+        QTest::keyClicks(filter, QStringLiteral("*.txt"));
+        QTRY_COMPARE(w->sourceTabForTesting()->filterText(), QStringLiteral("*.txt"));
+        filter->clear();
+        Q_EMIT filter->textEdited(QString());
+        QTRY_COMPARE(w->sourceTabForTesting()->filterText(), QString());
+        // Style: icons only, bigger icons.
+        store.setStyle(id, QStringLiteral("icons"), 32);
+        // (Icons only; a button with no icon here keeps its label.)
+        QTRY_VERIFY(bar->buttonAt(0)
+                    && bar->buttonAt(0)->toolButtonStyle()
+                        == (bar->buttonAt(0)->icon().isNull() ? Qt::ToolButtonTextOnly : Qt::ToolButtonIconOnly));
+        store.setStyle(id, QStringLiteral("text"), 32);
+        QTRY_VERIFY(bar->buttonAt(0) && bar->buttonAt(0)->toolButtonStyle() == Qt::ToolButtonTextOnly);
+        store.setStyle(id, QStringLiteral("icons"), 32);
+        QCOMPARE(bar->iconSize().width() >= 32, true);
+        QCOMPARE(store.toolbar(id).style, QStringLiteral("icons"));
+        QString name;
+        bool ok = false;
+        ToolbarDef read;
+        ToolbarStore::loadFile(store.fileFor(id), &name, &ok, &read);
+        QVERIFY(ok);
+        QCOMPARE(read.style, QStringLiteral("icons"));
+        QCOMPARE(read.iconSize, 32);
+        // In the menu bar.
+        QVERIFY(w->runCommand(QStringLiteral("Toolbar NAME=pieces PLACE=menubar")));
+        QCOMPARE(w->toolbarPlace(bar), ListerWindow::ToolbarPlace::MenuBar);
+        QVERIFY(w->menuBarCorner()->isVisibleTo(w));
+        QVERIFY(w->runCommand(QStringLiteral("Toolbar NAME=pieces PLACE=top")));
+        QVERIFY(!w->menuBarCorner()->isVisibleTo(w));
+        QVERIFY(store.remove(id));
+        QTRY_VERIFY(!w->buttonBar(id));
+    }
+
     void groupingAndFilter()
     {
         FolderTab *t = w->display(0)->currentTab();

@@ -30,6 +30,7 @@ public:
     QPlainTextEdit *leftEdit() const { return m_left; }
     QLineEdit *enableEdit() const { return m_enable; }
     QCheckBox *menuCheck() const { return m_isMenu; }
+    QCheckBox *splitCheck() const { return m_split; }
     QComboBox *dynamicBox() const { return m_dynamic; }
 
     static QStringList iconNames();
@@ -46,6 +47,9 @@ private:
     QLabel *m_iconPreview;
     QLineEdit *m_tip;
     QCheckBox *m_isMenu;
+    QCheckBox *m_split;
+    QString m_field; // a text box: its kind
+    QComboBox *m_fieldKind = nullptr;
     QWidget *m_commands;
     QPlainTextEdit *m_left;
     QPlainTextEdit *m_right;

@@ -23,9 +23,61 @@ namespace {
 
 constexpr int kCatalogRole = Qt::UserRole + 1; // index into CommandCatalog::buttons(), -1 for a blank button
 
+// Toolbar pieces and split buttons, listed under "Toolbar pieces" with
+// these negative indexes.
+ButtonDef pieceDef(int index)
+{
+    auto item = [](const char *label, const char *icon, const char *left, const char *enable = "") {
+        ButtonDef c;
+        c.label = QString::fromUtf8(label);
+        c.icon = QString::fromUtf8(icon);
+        c.left = QString::fromUtf8(left);
+        c.enableWhen = QString::fromUtf8(enable);
+        return c;
+    };
+    ButtonDef d;
+    switch (index) {
+    case -2: return ButtonDef::makeSpacer();
+    case -3: return ButtonDef::makeSeparator();
+    case -4: return ButtonDef::makeField(QStringLiteral("filter"));
+    case -5: return ButtonDef::makeField(QStringLiteral("find"));
+    case -6: return ButtonDef::makeField(QStringLiteral("go"));
+    case -7: return ButtonDef::makeField(QStringLiteral("command"));
+    case -8:
+        d = item("Copy Files", "edit-copy", "Copy", "selection && dest");
+        d.tip = QStringLiteral("Copy to the destination (the arrow: other ways to copy)");
+        d.right = QStringLiteral("Copy AS");
+        d.children = {item("Copy As...", "edit-copy", "Copy AS", "selection && dest"),
+                      item("Copy to...", "folder-open", "Copy TO=ask", "selection"),
+                      item("Duplicate Here as...", "edit-copy", "Copy AS TO={sourcepath}", "selection"),
+                      item("Copy Flat", "view-list-text", "Copy STRUCTURE=flat", "selection && dest"),
+                      item("Copy Newer Only", "edit-copy", "Copy WHENEXISTS=newer", "selection && dest")};
+        break;
+    case -9:
+        d = item("Move", "transform-move", "Copy MOVE", "selection && dest");
+        d.tip = QStringLiteral("Move to the destination (the arrow: other ways to move)");
+        d.right = QStringLiteral("Copy MOVE AS");
+        d.children = {item("Move As...", "transform-move", "Copy MOVE AS", "selection && dest"),
+                      item("Move to...", "folder-open", "Copy MOVE TO=ask", "selection")};
+        break;
+    case -10:
+        d = item("Delete", "edit-delete", "Delete", "selection");
+        d.tip = QStringLiteral("Move to the trash (the arrow: delete for good, clean junk)");
+        d.children = {item("Delete Permanently", "edit-delete-shred", "Delete NORECYCLE", "selection"),
+                      item("Clean Junk Files", "edit-clear", "Clean")};
+        break;
+    default:
+        return d;
+    }
+    d.split = true;
+    return d;
+}
+
 ButtonDef catalogDef(int index)
 {
     ButtonDef d;
+    if (index <= -2)
+        return pieceDef(index);
     if (index < 0 || index >= CommandCatalog::buttons().size()) {
         d.label = QStringLiteral("New Button");
         d.left = QStringLiteral("Go ~");
@@ -174,6 +226,19 @@ CustomizeDialog::CustomizeDialog(ListerWindow *lister, ToolbarStore &store)
         item->setData(0, kCatalogRole, i);
         item->setToolTip(0, c.left);
     }
+    auto *pieces = new QTreeWidgetItem(m_commands, {QStringLiteral("Toolbar pieces")});
+    pieces->setFlags(Qt::ItemIsEnabled);
+    const QList<QPair<int, QString>> pieceNames = {
+        {-2, QStringLiteral("Spacer (pushes what follows to the far end)")}, {-3, QStringLiteral("Separator")},
+        {-4, QStringLiteral("Filter box")}, {-5, QStringLiteral("Find box")}, {-6, QStringLiteral("Go To box")},
+        {-7, QStringLiteral("Command box")}, {-8, QStringLiteral("Copy Files \u25BE (split button)")},
+        {-9, QStringLiteral("Move \u25BE (split button)")}, {-10, QStringLiteral("Delete \u25BE (split button)")}};
+    for (const auto &pn : pieceNames) {
+        auto *item = new QTreeWidgetItem(pieces, {pn.second});
+        const ButtonDef d = pieceDef(pn.first);
+        item->setIcon(0, QIcon::fromTheme(d.icon.isEmpty() ? QStringLiteral("insert-horizontal-rule") : d.icon));
+        item->setData(0, kCatalogRole, pn.first);
+    }
     auto *blank = new QTreeWidgetItem(m_commands, {QStringLiteral("Blank button (write your own command)")});
     blank->setIcon(0, QIcon::fromTheme(QStringLiteral("list-add")));
     blank->setData(0, kCatalogRole, -1);
@@ -265,7 +330,7 @@ void CustomizeDialog::addCatalogButton(int catalogIndex)
 {
     const QString id = currentToolbar();
     ButtonDef d = catalogDef(catalogIndex);
-    if (catalogIndex < 0) {
+    if (catalogIndex == -1) {
         ButtonEditor editor(d, this);
         if (editor.exec() != QDialog::Accepted)
             return;

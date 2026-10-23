@@ -101,9 +101,26 @@ ButtonEditor::ButtonEditor(const ButtonDef &def, QWidget *parent)
     look->addRow(QStringLiteral("Tooltip:"), m_tip);
     layout->addLayout(look);
 
+    m_field = def.field;
+    if (!m_field.isEmpty()) {
+        setWindowTitle(QStringLiteral("Edit Field"));
+        auto *fl = new QFormLayout;
+        m_fieldKind = new QComboBox(this);
+        const QStringList names = {QStringLiteral("Filter: the source list as you type"), QStringLiteral("Find: by name, on Enter"),
+                                   QStringLiteral("Go to: a folder, alias or server, on Enter"),
+                                   QStringLiteral("Command: runs Left-click with {text} replaced, on Enter")};
+        for (int i = 0; i < names.size(); ++i)
+            m_fieldKind->addItem(names.at(i), ButtonDef::fieldKinds().at(i));
+        m_fieldKind->setCurrentIndex(qMax(0, int(ButtonDef::fieldKinds().indexOf(m_field))));
+        fl->addRow(QStringLiteral("Field:"), m_fieldKind);
+        layout->addLayout(fl);
+    }
     m_isMenu = new QCheckBox(QStringLiteral("Menu: opens a list of buttons instead of running a command"), this);
     m_isMenu->setChecked(def.isMenu());
     layout->addWidget(m_isMenu);
+    m_split = new QCheckBox(QStringLiteral("Split button: a click runs Left-click; the arrow beside it opens the menu"), this);
+    m_split->setChecked(def.split);
+    layout->addWidget(m_split);
 
     m_commands = new QGroupBox(QStringLiteral("Commands (one per line; {filepath} and the other codes work)"), this);
     auto *cl = new QFormLayout(m_commands);
@@ -248,6 +265,9 @@ ButtonEditor::ButtonEditor(const ButtonDef &def, QWidget *parent)
     layout->addWidget(buttons);
 
     connect(m_isMenu, &QCheckBox::toggled, this, &ButtonEditor::updateMode);
+    connect(m_split, &QCheckBox::toggled, this, &ButtonEditor::updateMode);
+    if (m_fieldKind)
+        connect(m_fieldKind, &QComboBox::currentIndexChanged, this, &ButtonEditor::updateMode);
     connect(m_dynamic, &QComboBox::currentIndexChanged, this, [this]() {
         const bool fixed = m_dynamic->currentData().toString().isEmpty();
         m_childList->setEnabled(fixed);
@@ -264,8 +284,21 @@ ButtonEditor::ButtonEditor(const ButtonDef &def, QWidget *parent)
 
 void ButtonEditor::updateMode()
 {
-    m_commands->setVisible(!m_isMenu->isChecked());
-    m_menuPage->setVisible(m_isMenu->isChecked());
+    if (m_fieldKind) {
+        m_isMenu->hide();
+        m_split->hide();
+        m_menuPage->hide();
+        const bool command = m_fieldKind->currentData().toString() == QLatin1String("command");
+        m_commands->setVisible(command);
+        m_right->setEnabled(false);
+        m_middle->setEnabled(false);
+        adjustSize();
+        return;
+    }
+    const bool menu = m_isMenu->isChecked();
+    m_split->setVisible(menu);
+    m_commands->setVisible(!menu || m_split->isChecked());
+    m_menuPage->setVisible(menu);
     adjustSize();
 }
 
@@ -295,10 +328,22 @@ ButtonDef ButtonEditor::button() const
     d.label = m_label->text().trimmed();
     d.icon = m_icon->currentText().trimmed();
     d.tip = m_tip->text().trimmed();
+    if (m_fieldKind) {
+        d.field = m_fieldKind->currentData().toString();
+        if (d.field == QLatin1String("command"))
+            d.left = m_left->toPlainText().trimmed();
+        return d;
+    }
     if (m_isMenu->isChecked()) {
         d.dynamic = m_dynamic->currentData().toString();
         if (d.dynamic.isEmpty())
             d.children = m_children;
+        d.split = m_split->isChecked();
+        if (d.split) {
+            d.left = m_left->toPlainText().trimmed();
+            d.right = m_right->toPlainText().trimmed();
+            d.middle = m_middle->toPlainText().trimmed();
+        }
     } else {
         d.left = m_left->toPlainText().trimmed();
         d.right = m_right->toPlainText().trimmed();
@@ -313,11 +358,18 @@ ButtonDef ButtonEditor::button() const
 QString ButtonEditor::validationError() const
 {
     const ButtonDef d = button();
-    if (d.label.isEmpty())
+    if (m_fieldKind) {
+        if (d.field == QLatin1String("command") && !d.left.contains(QLatin1String("{text}")))
+            return QStringLiteral("A command box needs {text} in its command, where what you type goes.");
+        if (d.field != QLatin1String("command"))
+            return {};
+    } else if (d.label.isEmpty())
         return QStringLiteral("The button needs a label.");
+    if (d.split && d.left.isEmpty())
+        return QStringLiteral("A split button needs a Left-click command.");
     if (m_isMenu->isChecked() && d.children.isEmpty() && d.dynamic.isEmpty())
         return QStringLiteral("A menu needs at least one item.");
-    if (!m_isMenu->isChecked() && d.left.isEmpty())
+    if (!m_isMenu->isChecked() && !m_fieldKind && d.left.isEmpty())
         return QStringLiteral("Left-click needs a command.");
     if (!d.left.isEmpty() && !ScriptRunner::isScript(d.left)) {
         const QString first = d.left.section(QLatin1Char('\n'), 0, 0).trimmed().section(QLatin1Char(' '), 0, 0);

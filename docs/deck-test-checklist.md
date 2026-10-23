@@ -103,6 +103,9 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Right-click the column header > Checksums > MD5: it fills in for each file.
 - [ ] A folder with Thumbs.db or .DS_Store: they do not show until Ctrl+H. Tools > Clean Junk Files lists and trashes them.
 - [ ] Select a file over 4 GB (or any file), Tools > Split File..., keep `fat32` (or type 100M): pieces .001, .002... appear. Select the .001, Tools > Join Pieces: the whole file comes back (compare with Checksums).
+- [ ] Set DUAL horizontal. Right-click your own toolbar > Between the Displays, then right-click it > Same Row as the Toolbar Before: it runs on after the drives. Drag it by an empty spot onto another row and back.
+- [ ] Window > Customize Toolbars > Commands > Toolbar pieces: drag "Copy Files ▾" onto a toolbar. Click it: copies; click its arrow: the menu. Drag a Spacer in front of a button: that button goes to the far end. Drag a Filter box in and type `*.png`.
+- [ ] In customize mode, right-click a toolbar > Button Style > Icons Only, and Large Icons. Right-click a toolbar (outside customize mode) > In the Menu Bar.
 
 ## Report back
 

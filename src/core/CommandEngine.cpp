@@ -936,9 +936,10 @@ bool CommandEngine::cmdCopy(const ParsedCommand &cmd, CommandContext &ctx, bool 
     }
 
     QString dest;
-    if (cmd.hasArg(QStringLiteral("TO")))
+    const bool ask = cmd.value(QStringLiteral("TO")).compare(QLatin1String("ask"), Qt::CaseInsensitive) == 0;
+    if (cmd.hasArg(QStringLiteral("TO")) && !ask)
         dest = resolvePath(cmd.value(QStringLiteral("TO")), ctx.sourcePath());
-    else
+    else if (!ask)
         dest = ctx.destPath();
     if (dest.isEmpty())
         dest = ctx.chooseDestination(move ? QStringLiteral("Move to") : QStringLiteral("Copy to"));

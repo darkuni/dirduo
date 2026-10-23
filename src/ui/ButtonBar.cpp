@@ -8,6 +8,8 @@
 #include <QDrag>
 #include <QFile>
 #include <QFileInfo>
+#include <QHBoxLayout>
+#include <QLineEdit>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QMenu>
@@ -40,15 +42,24 @@ QString describe(const ButtonDef &d)
     return lines.join(QLatin1Char('\n'));
 }
 
-// A separator that can be dragged and deleted in customize mode.
+// A separator or a spacer that can be dragged and deleted in customize mode.
+// A spacer stretches, pushing what follows it to the far end of the bar.
 class SeparatorItem : public QWidget
 {
 public:
-    SeparatorItem(ButtonBar *bar)
+    SeparatorItem(ButtonBar *bar, bool spacer = false)
         : QWidget(bar)
         , m_bar(bar)
+        , m_spacer(spacer)
     {
-        setFixedSize(10, 22);
+        if (!spacer) {
+            setFixedSize(10, 22);
+            return;
+        }
+        setObjectName(QStringLiteral("toolbar-spacer"));
+        setMinimumSize(12, 12);
+        orient(bar->orientation());
+        connect(bar, &QToolBar::orientationChanged, this, [this](Qt::Orientation o) { orient(o); });
     }
 
 protected:
@@ -58,26 +69,130 @@ protected:
         QColor c = palette().color(QPalette::WindowText);
         c.setAlphaF(0.25);
         p.setPen(c);
-        if (m_bar->orientation() == Qt::Horizontal)
-            p.drawLine(width() / 2, 3, width() / 2, height() - 4);
-        else
-            p.drawLine(3, height() / 2, width() - 4, height() / 2);
+        if (!m_spacer) {
+            if (m_bar->orientation() == Qt::Horizontal)
+                p.drawLine(width() / 2, 3, width() / 2, height() - 4);
+            else
+                p.drawLine(3, height() / 2, width() - 4, height() / 2);
+        }
         if (m_bar->editMode()) {
             QPen dash(palette().color(QPalette::Highlight));
             dash.setStyle(Qt::DotLine);
             p.setPen(dash);
             p.drawRect(rect().adjusted(0, 0, -1, -1));
+            if (m_spacer) {
+                p.setPen(c);
+                p.drawText(rect(), Qt::AlignCenter, m_bar->orientation() == Qt::Horizontal ? QStringLiteral("\u2194") : QStringLiteral("\u2195"));
+            }
         }
     }
     void mousePressEvent(QMouseEvent *e) override
     {
         m_press = e->position().toPoint();
+        if (!m_bar->editMode())
+            e->ignore(); // a spacer is empty toolbar: let it be dragged
     }
+    void mouseMoveEvent(QMouseEvent *e) override
+    {
+        if (m_bar->editMode() && (e->buttons() & Qt::LeftButton)
+            && (e->position().toPoint() - m_press).manhattanLength() >= QApplication::startDragDistance()) {
+            m_bar->startDrag(m_bar->indexOf(this));
+            return;
+        }
+        if (!m_bar->editMode())
+            e->ignore();
+    }
+    void mouseReleaseEvent(QMouseEvent *e) override
+    {
+        if (!m_bar->editMode())
+            e->ignore();
+    }
+    void contextMenuEvent(QContextMenuEvent *e) override
+    {
+        if (m_bar->editMode())
+            m_bar->showEditMenu(m_bar->indexOf(this), e->globalPos());
+        else
+            e->ignore();
+    }
+
+private:
+    void orient(Qt::Orientation o)
+    {
+        setSizePolicy(o == Qt::Horizontal ? QSizePolicy::Expanding : QSizePolicy::Preferred,
+                      o == Qt::Horizontal ? QSizePolicy::Preferred : QSizePolicy::Expanding);
+        updateGeometry();
+    }
+
+    ButtonBar *m_bar;
+    bool m_spacer;
+    QPoint m_press;
+};
+
+// A text box on a toolbar. In customize mode it is dragged and edited like
+// a button, so the box itself takes no clicks then.
+class FieldItem : public QWidget
+{
+public:
+    FieldItem(const ButtonDef &def, ButtonBar *bar)
+        : QWidget(bar)
+        , m_bar(bar)
+        , m_def(def)
+    {
+        auto *l = new QHBoxLayout(this);
+        l->setContentsMargins(2, 1, 2, 1);
+        m_edit = new QLineEdit(this);
+        m_edit->setObjectName(QStringLiteral("toolbar-field-") + def.field);
+        m_edit->setPlaceholderText(def.label.isEmpty() ? ButtonBar::tr("Filter") : def.label);
+        m_edit->setClearButtonEnabled(true);
+        m_edit->setToolTip(describe(def));
+        if (!def.icon.isEmpty())
+            m_edit->addAction(QIcon::fromTheme(def.icon), QLineEdit::LeadingPosition);
+        m_edit->setMinimumWidth(fontMetrics().averageCharWidth() * 10);
+        m_edit->setMaximumWidth(fontMetrics().averageCharWidth() * 28);
+        l->addWidget(m_edit);
+        const QString kind = def.field;
+        const QString command = def.left;
+        connect(m_edit, &QLineEdit::textEdited, this, [this, kind, command](const QString &t) {
+            if (kind == QLatin1String("filter"))
+                Q_EMIT m_bar->fieldEdited(kind, t, command, false);
+        });
+        connect(m_edit, &QLineEdit::returnPressed, this, [this, kind, command]() {
+            Q_EMIT m_bar->fieldEdited(kind, m_edit->text(), command, true);
+            if (kind != QLatin1String("filter"))
+                m_edit->selectAll();
+        });
+    }
+    QLineEdit *edit() const { return m_edit; }
+    const ButtonDef &definition() const { return m_def; }
+    void setEditing(bool on)
+    {
+        m_edit->setAttribute(Qt::WA_TransparentForMouseEvents, on);
+        m_edit->setFocusPolicy(on ? Qt::NoFocus : Qt::StrongFocus);
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        if (!m_bar->editMode())
+            return;
+        QPainter p(this);
+        QPen dash(palette().color(QPalette::Highlight));
+        dash.setStyle(Qt::DotLine);
+        p.setPen(dash);
+        p.drawRect(rect().adjusted(0, 0, -1, -1));
+    }
+    void mousePressEvent(QMouseEvent *e) override { m_press = e->position().toPoint(); }
     void mouseMoveEvent(QMouseEvent *e) override
     {
         if (m_bar->editMode() && (e->buttons() & Qt::LeftButton)
             && (e->position().toPoint() - m_press).manhattanLength() >= QApplication::startDragDistance())
             m_bar->startDrag(m_bar->indexOf(this));
+    }
+    void mouseDoubleClickEvent(QMouseEvent *) override
+    {
+        if (m_bar->editMode())
+            m_bar->editButton(m_bar->indexOf(this));
     }
     void contextMenuEvent(QContextMenuEvent *e) override
     {
@@ -89,6 +204,8 @@ protected:
 
 private:
     ButtonBar *m_bar;
+    ButtonDef m_def;
+    QLineEdit *m_edit;
     QPoint m_press;
 };
 
@@ -103,15 +220,23 @@ QJsonObject ButtonDef::toJson() const
         o.insert(QStringLiteral("separator"), true);
         return o;
     }
+    if (spacer) {
+        o.insert(QStringLiteral("spacer"), true);
+        return o;
+    }
     o.insert(QStringLiteral("label"), label);
+    if (!field.isEmpty())
+        o.insert(QStringLiteral("field"), field);
+    if (split && isMenu())
+        o.insert(QStringLiteral("split"), true);
     auto put = [&o](const char *k, const QString &v) {
         if (!v.isEmpty())
             o.insert(QLatin1String(k), v);
     };
     put("icon", icon);
     put("tip", tip);
-    if (!isMenu())
-        o.insert(QStringLiteral("left"), left);
+    if (!isMenu() || split)
+        put("left", left);
     put("dynamic", dynamic);
     put("right", right);
     put("middle", middle);
@@ -133,6 +258,13 @@ ButtonDef ButtonDef::fromJson(const QJsonObject &o)
     d.separator = o.value(QStringLiteral("separator")).toBool();
     if (d.separator)
         return d;
+    d.spacer = o.value(QStringLiteral("spacer")).toBool();
+    if (d.spacer)
+        return d;
+    d.split = o.value(QStringLiteral("split")).toBool();
+    d.field = o.value(QStringLiteral("field")).toString().toLower();
+    if (!d.field.isEmpty() && !fieldKinds().contains(d.field))
+        d.field = QStringLiteral("filter");
     d.label = o.value(QStringLiteral("label")).toString();
     d.icon = o.value(QStringLiteral("icon")).toString();
     d.tip = o.value(QStringLiteral("tip")).toString();
@@ -148,7 +280,7 @@ ButtonDef ButtonDef::fromJson(const QJsonObject &o)
     const QJsonArray menu = o.value(QStringLiteral("menu")).toArray();
     for (const QJsonValue &v : menu) {
         const ButtonDef c = fromJson(v.toObject());
-        if (c.separator || !c.label.isEmpty())
+        if (c.separator || (!c.label.isEmpty() && c.field.isEmpty()))
             d.children << c;
     }
     return d;
@@ -158,6 +290,47 @@ QStringList ButtonDef::dynamicKinds()
 {
     return {QStringLiteral("favorites"), QStringLiteral("frequent"), QStringLiteral("aliases"), QStringLiteral("collections"),
             QStringLiteral("servers")};
+}
+
+QStringList ButtonDef::fieldKinds()
+{
+    return {QStringLiteral("filter"), QStringLiteral("find"), QStringLiteral("go"), QStringLiteral("command")};
+}
+
+ButtonDef ButtonDef::makeSpacer()
+{
+    ButtonDef d;
+    d.spacer = true;
+    return d;
+}
+
+ButtonDef ButtonDef::makeField(const QString &kind)
+{
+    ButtonDef d;
+    d.field = fieldKinds().contains(kind) ? kind : QStringLiteral("filter");
+    if (d.field == QLatin1String("filter")) {
+        d.label = QStringLiteral("Filter");
+        d.icon = QStringLiteral("view-filter");
+        d.tip = QStringLiteral("Show only what matches in the source (wildcards work; ! in front hides matches)");
+    } else if (d.field == QLatin1String("find")) {
+        d.label = QStringLiteral("Find");
+        d.icon = QStringLiteral("edit-find");
+        d.tip = QStringLiteral("Find by name under the source folder: type, then Enter");
+    } else if (d.field == QLatin1String("go")) {
+        d.label = QStringLiteral("Go to");
+        d.icon = QStringLiteral("go-jump");
+        d.tip = QStringLiteral("A folder, alias or server address: type, then Enter");
+    } else {
+        d.label = QStringLiteral("Command");
+        d.left = QStringLiteral("Select PATTERN={text}");
+        d.tip = QStringLiteral("Runs its command with {text} replaced by what you type");
+    }
+    return d;
+}
+
+QStringList ToolbarDef::styles()
+{
+    return {QStringLiteral("auto"), QStringLiteral("icons"), QStringLiteral("text"), QStringLiteral("beside"), QStringLiteral("under")};
 }
 
 ButtonDef ButtonDef::makeSeparator()
@@ -186,7 +359,7 @@ QString ToolbarStore::fileFor(const QString &id) const
     return QDir(m_dir).filePath(id + QStringLiteral(".json"));
 }
 
-QList<ButtonDef> ToolbarStore::loadFile(const QString &file, QString *name, bool *ok)
+QList<ButtonDef> ToolbarStore::loadFile(const QString &file, QString *name, bool *ok, ToolbarDef *style)
 {
     if (ok)
         *ok = false;
@@ -199,11 +372,16 @@ QList<ButtonDef> ToolbarStore::loadFile(const QString &file, QString *name, bool
         return {};
     if (name)
         *name = doc.object().value(QStringLiteral("name")).toString();
+    if (style) {
+        const QString st = doc.object().value(QStringLiteral("style")).toString().toLower();
+        style->style = ToolbarDef::styles().contains(st) ? st : QStringLiteral("auto");
+        style->iconSize = qBound(0, doc.object().value(QStringLiteral("iconSize")).toInt(), 96);
+    }
     QList<ButtonDef> out;
     const QJsonArray arr = doc.object().value(QStringLiteral("buttons")).toArray();
     for (const QJsonValue &v : arr) {
         const ButtonDef d = ButtonDef::fromJson(v.toObject());
-        if (d.separator || !d.label.isEmpty())
+        if (d.separator || d.spacer || !d.label.isEmpty() || !d.field.isEmpty())
             out << d;
     }
     if (ok)
@@ -211,13 +389,17 @@ QList<ButtonDef> ToolbarStore::loadFile(const QString &file, QString *name, bool
     return out;
 }
 
-bool ToolbarStore::saveFile(const QString &file, const QString &name, const QList<ButtonDef> &buttons)
+bool ToolbarStore::saveFile(const QString &file, const QString &name, const QList<ButtonDef> &buttons, const ToolbarDef *style)
 {
     QJsonArray arr;
     for (const ButtonDef &d : buttons)
         arr.append(d.toJson());
     QJsonObject root;
     root.insert(QStringLiteral("name"), name);
+    if (style && style->style != QLatin1String("auto"))
+        root.insert(QStringLiteral("style"), style->style);
+    if (style && style->iconSize > 0)
+        root.insert(QStringLiteral("iconSize"), style->iconSize);
     root.insert(QStringLiteral("buttons"), arr);
     QDir().mkpath(QFileInfo(file).absolutePath());
     QSaveFile f(file);
@@ -238,24 +420,32 @@ void ToolbarStore::load()
             continue; // phase 1 name of the main toolbar, read below
         QString name;
         bool ok = false;
-        const QList<ButtonDef> buttons = loadFile(dir.filePath(f), &name, &ok);
+        ToolbarDef def;
+        const QList<ButtonDef> buttons = loadFile(dir.filePath(f), &name, &ok, &def);
         if (!ok)
             continue;
-        m_bars.insert(id, ToolbarDef{id, name.isEmpty() ? id : name, buttons});
+        def.id = id;
+        def.name = name.isEmpty() ? id : name;
+        def.buttons = buttons;
+        m_bars.insert(id, def);
     }
     if (!m_bars.contains(QLatin1String(kMainId))) {
         bool ok = false;
-        QList<ButtonDef> buttons = loadFile(dir.filePath(QStringLiteral("default.json")), nullptr, &ok);
+        ToolbarDef def;
+        QList<ButtonDef> buttons = loadFile(dir.filePath(QStringLiteral("default.json")), nullptr, &ok, &def);
         if (!ok)
             buttons = defaultButtons();
-        m_bars.insert(QLatin1String(kMainId), ToolbarDef{QLatin1String(kMainId), QStringLiteral("Buttons"), buttons});
+        def.id = QLatin1String(kMainId);
+        def.name = QStringLiteral("Buttons");
+        def.buttons = buttons;
+        m_bars.insert(QLatin1String(kMainId), def);
     }
 }
 
 void ToolbarStore::save(const QString &id)
 {
     const ToolbarDef &d = m_bars[id];
-    saveFile(fileFor(id), d.name, d.buttons);
+    saveFile(fileFor(id), d.name, d.buttons, &d);
 }
 
 QStringList ToolbarStore::ids() const
@@ -299,6 +489,16 @@ void ToolbarStore::replaceButton(const QString &id, int index, const ButtonDef &
     setButtons(id, b);
 }
 
+void ToolbarStore::setStyle(const QString &id, const QString &style, int iconSize)
+{
+    if (!m_bars.contains(id))
+        return;
+    m_bars[id].style = ToolbarDef::styles().contains(style) ? style : QStringLiteral("auto");
+    m_bars[id].iconSize = qBound(0, iconSize, 96);
+    save(id);
+    Q_EMIT changed(id);
+}
+
 void ToolbarStore::removeButton(const QString &id, int index)
 {
     QList<ButtonDef> b = m_bars.value(id).buttons;
@@ -336,7 +536,10 @@ QString ToolbarStore::create(const QString &name)
     QString id = base;
     for (int n = 2; m_bars.contains(id); ++n)
         id = base + QString::number(n);
-    m_bars.insert(id, ToolbarDef{id, name.trimmed().isEmpty() ? id : name.trimmed(), {}});
+    ToolbarDef def;
+    def.id = id;
+    def.name = name.trimmed().isEmpty() ? id : name.trimmed();
+    m_bars.insert(id, def);
     save(id);
     Q_EMIT added(id);
     return id;
@@ -370,6 +573,8 @@ void ToolbarStore::resetToDefault(const QString &id)
     QFile::remove(QDir(m_dir).filePath(QStringLiteral("default.json")));
     m_bars[id].buttons = defaultButtons();
     m_bars[id].name = QStringLiteral("Buttons");
+    m_bars[id].style = QStringLiteral("auto");
+    m_bars[id].iconSize = 0;
     Q_EMIT changed(id);
 }
 
@@ -501,12 +706,9 @@ ThreeButton::ThreeButton(const ButtonDef &def, QWidget *parent, ButtonBar *bar)
 {
     setText(def.label);
     const QIcon icon = QIcon::fromTheme(def.icon);
-    if (!icon.isNull()) {
+    if (!icon.isNull())
         setIcon(icon);
-        setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    } else {
-        setToolButtonStyle(Qt::ToolButtonTextOnly);
-    }
+    applyStyle(QStringLiteral("auto"));
     setToolTip(describe(def));
     setAutoRaise(true);
     setFocusPolicy(Qt::NoFocus);
@@ -524,7 +726,8 @@ ThreeButton::ThreeButton(const ButtonDef &def, QWidget *parent, ButtonBar *bar)
         setPopupMode(QToolButton::InstantPopup);
     } else if (def.isMenu()) {
         setMenu(buildMenu(def.children, this));
-        setPopupMode(QToolButton::InstantPopup);
+        // A split button runs its command; the arrow beside it has the menu.
+        setPopupMode(def.isSplit() ? QToolButton::MenuButtonPopup : QToolButton::InstantPopup);
     } else if (const QList<ButtonDef> hold = holdMenuFor(def); !hold.isEmpty()) {
         // Press and hold (or a long touch) for the choices; a click still runs it.
         QMenu *menu = buildMenu(hold, this);
@@ -535,6 +738,28 @@ ThreeButton::ThreeButton(const ButtonDef &def, QWidget *parent, ButtonBar *bar)
     // Files dropped on a button are handled by the bar (a grayed-out button
     // takes no events, but Copy should still take dropped files).
     setAcceptDrops(false);
+}
+
+void ThreeButton::applyStyle(const QString &style)
+{
+    const bool hasIcon = !icon().isNull();
+    Qt::ToolButtonStyle st = hasIcon ? Qt::ToolButtonTextBesideIcon : Qt::ToolButtonTextOnly;
+    if (style == QLatin1String("icons"))
+        st = hasIcon ? Qt::ToolButtonIconOnly : Qt::ToolButtonTextOnly; // a button with no icon keeps its label
+    else if (style == QLatin1String("text"))
+        st = Qt::ToolButtonTextOnly;
+    else if (style == QLatin1String("under"))
+        st = hasIcon ? Qt::ToolButtonTextUnderIcon : Qt::ToolButtonTextOnly;
+    setToolButtonStyle(st);
+}
+
+bool ThreeButton::onArrow(const QPoint &pos) const
+{
+    if (popupMode() != QToolButton::MenuButtonPopup)
+        return false;
+    QStyleOptionToolButton opt;
+    initStyleOption(&opt);
+    return style()->subControlRect(QStyle::CC_ToolButton, &opt, QStyle::SC_ToolButtonMenu, this).contains(pos);
 }
 
 bool ThreeButton::editing() const
@@ -587,7 +812,7 @@ void ThreeButton::mousePressEvent(QMouseEvent *event)
         return;
     }
     if (event->button() == Qt::RightButton || event->button() == Qt::MiddleButton) {
-        if (m_def.isMenu()) {
+        if (m_def.isMenu() && !m_def.isSplit()) {
             event->ignore();
             return;
         }
@@ -596,7 +821,8 @@ void ThreeButton::mousePressEvent(QMouseEvent *event)
         event->accept();
         return;
     }
-    m_pressed = Qt::LeftButton;
+    // The arrow of a split button opens the menu; the release runs nothing.
+    m_pressed = onArrow(event->position().toPoint()) ? Qt::NoButton : Qt::LeftButton;
     m_holdMenuShown = false;
     QToolButton::mousePressEvent(event);
 }
@@ -634,8 +860,8 @@ void ThreeButton::mouseReleaseEvent(QMouseEvent *event)
     QToolButton::mouseReleaseEvent(event);
     if (isCheckable())
         setChecked(wasChecked); // the condition decides, not the click
-    if (inside && button == Qt::LeftButton && m_pressed == Qt::LeftButton && !m_def.left.isEmpty() && !m_def.isMenu()
-        && !m_holdMenuShown)
+    if (inside && button == Qt::LeftButton && m_pressed == Qt::LeftButton && !m_def.left.isEmpty()
+        && (!m_def.isMenu() || m_def.isSplit()) && !m_holdMenuShown)
         Q_EMIT commandTriggered(m_def.left);
     m_holdMenuShown = false;
     m_pressed = Qt::NoButton;
@@ -683,7 +909,8 @@ ButtonBar::ButtonBar(ToolbarStore &store, const QString &id, QWidget *shortcutHo
     setMovable(true);
     setIconSize(QSize(Style::instance()->scaled(18), Style::instance()->scaled(18)));
     connect(Style::instance(), &Style::changed, this, [this]() {
-        setIconSize(QSize(Style::instance()->scaled(18), Style::instance()->scaled(18)));
+        const int size = m_store.toolbar(m_id).iconSize > 0 ? m_store.toolbar(m_id).iconSize : 18;
+        setIconSize(QSize(Style::instance()->scaled(size), Style::instance()->scaled(size)));
     });
     setAcceptDrops(true);
     connect(&m_store, &ToolbarStore::changed, this, [this](const QString &changedId) {
@@ -708,18 +935,31 @@ void ButtonBar::rebuild()
     qDeleteAll(m_shortcuts);
     m_shortcuts.clear();
 
-    for (const ButtonDef &def : m_store.toolbar(m_id).buttons) {
-        if (def.separator) {
-            auto *sep = new SeparatorItem(this);
+    const ToolbarDef bar = m_store.toolbar(m_id);
+    const int size = bar.iconSize > 0 ? bar.iconSize : 18;
+    setIconSize(QSize(Style::instance()->scaled(size), Style::instance()->scaled(size)));
+    bool spacer = false;
+    for (const ButtonDef &def : bar.buttons) {
+        if (def.separator || def.spacer) {
+            auto *sep = new SeparatorItem(this, def.spacer);
             addWidget(sep);
             m_items << sep;
+            spacer = spacer || def.spacer;
+            continue;
+        }
+        if (!def.field.isEmpty()) {
+            auto *f = new FieldItem(def, this);
+            f->setEditing(m_edit);
+            addWidget(f);
+            m_items << f;
             continue;
         }
         auto *b = new ThreeButton(def, this, this);
+        b->applyStyle(bar.style);
         connect(b, &ThreeButton::commandTriggered, this, &ButtonBar::commandTriggered);
         addWidget(b);
         m_items << b;
-        if (!def.key.isEmpty() && m_host && !def.isMenu()) {
+        if (!def.key.isEmpty() && m_host && (!def.isMenu() || def.isSplit())) {
             auto *sc = new QShortcut(QKeySequence(def.key, QKeySequence::PortableText), m_host);
             sc->setContext(Qt::WindowShortcut);
             const QString cmd = def.left;
@@ -730,7 +970,23 @@ void ButtonBar::rebuild()
             m_shortcuts << sc;
         }
     }
+    // Between the displays, a bar with a spacer takes the rest of its row.
+    const bool hadSpacer = property("linopusFill").toBool();
+    setProperty("linopusFill", spacer);
+    if (hadSpacer != spacer)
+        Q_EMIT fillChanged();
     updateStates();
+}
+
+QLineEdit *ButtonBar::fieldAt(int index) const
+{
+    auto *f = dynamic_cast<FieldItem *>(m_items.value(index));
+    return f ? f->edit() : nullptr;
+}
+
+bool ButtonBar::hasSpacer() const
+{
+    return property("linopusFill").toBool();
 }
 
 void ButtonBar::setEditMode(bool on)
@@ -739,6 +995,8 @@ void ButtonBar::setEditMode(bool on)
     for (QWidget *w : std::as_const(m_items)) {
         if (on)
             w->setEnabled(true); // grayed-out buttons can still be edited
+        if (auto *f = dynamic_cast<FieldItem *>(w))
+            f->setEditing(on);
         w->update();
     }
     if (!on)
@@ -765,6 +1023,14 @@ void ButtonBar::updateStates()
     if (m_edit)
         return;
     for (QWidget *w : std::as_const(m_items)) {
+        if (auto *f = dynamic_cast<FieldItem *>(w)) {
+            if (m_fieldProvider && f->definition().field == QLatin1String("filter") && !f->edit()->hasFocus()) {
+                const QString now = m_fieldProvider(f->definition().field);
+                if (f->edit()->text() != now)
+                    f->edit()->setText(now);
+            }
+            continue;
+        }
         auto *b = qobject_cast<ThreeButton *>(w);
         if (!b)
             continue;
@@ -777,7 +1043,7 @@ void ButtonBar::updateStates()
 void ButtonBar::editButton(int index)
 {
     const QList<ButtonDef> buttons = m_store.toolbar(m_id).buttons;
-    if (index < 0 || index >= buttons.size() || buttons.at(index).separator)
+    if (index < 0 || index >= buttons.size() || buttons.at(index).separator || buttons.at(index).spacer)
         return;
     ButtonEditor editor(buttons.at(index), this);
     if (editor.exec() == QDialog::Accepted)
@@ -790,7 +1056,7 @@ void ButtonBar::showEditMenu(int index, const QPoint &globalPos)
     const QList<ButtonDef> buttons = m_store.toolbar(m_id).buttons;
     const bool onItem = index >= 0 && index < buttons.size();
     const int after = onItem ? index + 1 : int(buttons.size());
-    if (onItem && !buttons.at(index).separator) {
+    if (onItem && !buttons.at(index).separator && !buttons.at(index).spacer) {
         connect(menu.addAction(QIcon::fromTheme(QStringLiteral("document-edit")), QStringLiteral("Edit...")),
                 &QAction::triggered, this, [this, index]() { editButton(index); });
         connect(menu.addAction(QIcon::fromTheme(QStringLiteral("edit-copy")), QStringLiteral("Duplicate")),
@@ -808,6 +1074,40 @@ void ButtonBar::showEditMenu(int index, const QPoint &globalPos)
             });
     connect(menu.addAction(QStringLiteral("Add Separator")), &QAction::triggered, this,
             [this, after]() { m_store.insertButton(m_id, after, ButtonDef::makeSeparator()); });
+    QAction *sp = menu.addAction(QStringLiteral("Add Spacer"));
+    sp->setToolTip(QStringLiteral("Pushes the buttons after it to the far end of the toolbar"));
+    connect(sp, &QAction::triggered, this, [this, after]() { m_store.insertButton(m_id, after, ButtonDef::makeSpacer()); });
+    QMenu *fields = menu.addMenu(QStringLiteral("Add Field"));
+    const QStringList fieldNames = {QStringLiteral("Filter Box"), QStringLiteral("Find Box"), QStringLiteral("Go To Box"),
+                                    QStringLiteral("Command Box")};
+    for (int i = 0; i < fieldNames.size(); ++i) {
+        const QString kind = ButtonDef::fieldKinds().at(i);
+        connect(fields->addAction(fieldNames.at(i)), &QAction::triggered, this,
+                [this, after, kind]() { m_store.insertButton(m_id, after, ButtonDef::makeField(kind)); });
+    }
+    menu.addSeparator();
+    QMenu *look = menu.addMenu(QStringLiteral("Button Style"));
+    const ToolbarDef cur = m_store.toolbar(m_id);
+    const QStringList styleNames = {QStringLiteral("Automatic"), QStringLiteral("Icons Only"), QStringLiteral("Labels Only"),
+                                    QStringLiteral("Label Beside Icon"), QStringLiteral("Label Under Icon")};
+    for (int i = 0; i < styleNames.size(); ++i) {
+        const QString st = ToolbarDef::styles().at(i);
+        QAction *a = look->addAction(styleNames.at(i));
+        a->setCheckable(true);
+        a->setChecked(cur.style == st);
+        connect(a, &QAction::triggered, this, [this, st]() { m_store.setStyle(m_id, st, m_store.toolbar(m_id).iconSize); });
+    }
+    look->addSeparator();
+    const QList<QPair<QString, int>> sizes = {{QStringLiteral("Standard Icons"), 0}, {QStringLiteral("Small Icons (16)"), 16},
+                                              {QStringLiteral("Medium Icons (22)"), 22}, {QStringLiteral("Large Icons (32)"), 32},
+                                              {QStringLiteral("Huge Icons (48)"), 48}};
+    for (const auto &sz : sizes) {
+        QAction *a = look->addAction(sz.first);
+        a->setCheckable(true);
+        a->setChecked(cur.iconSize == sz.second);
+        const int px = sz.second;
+        connect(a, &QAction::triggered, this, [this, px]() { m_store.setStyle(m_id, m_store.toolbar(m_id).style, px); });
+    }
     if (onItem) {
         menu.addSeparator();
         connect(menu.addAction(QIcon::fromTheme(QStringLiteral("edit-delete")), QStringLiteral("Delete")),
@@ -848,7 +1148,8 @@ ThreeButton *ButtonBar::fileTargetAt(const QPoint &pos) const
 {
     for (QWidget *w : m_items) {
         auto *b = qobject_cast<ThreeButton *>(w);
-        if (b && b->geometry().contains(pos) && !b->definition().isMenu() && !b->definition().left.isEmpty())
+        if (b && b->geometry().contains(pos) && (!b->definition().isMenu() || b->definition().isSplit())
+            && !b->definition().left.isEmpty())
             return b;
     }
     return nullptr;
@@ -921,7 +1222,7 @@ void ButtonBar::dropEvent(QDropEvent *event)
     update();
     const QJsonObject payload = QJsonDocument::fromJson(event->mimeData()->data(QLatin1String(kMime))).object();
     const ButtonDef def = ButtonDef::fromJson(payload.value(QStringLiteral("button")).toObject());
-    if (!def.separator && def.label.isEmpty())
+    if (!def.isItem() && def.label.isEmpty())
         return;
     const QString from = payload.value(QStringLiteral("toolbar")).toString();
     const int fromIndex = payload.value(QStringLiteral("index")).toInt(-1);

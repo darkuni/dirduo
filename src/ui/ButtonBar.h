@@ -30,8 +30,21 @@ struct ButtonDef
     // collections.
     QString dynamic;
     bool separator = false;
+    // Pushes what follows it to the far end of the toolbar.
+    bool spacer = false;
+    // A menu that is also a button: a click runs left, the arrow opens the menu.
+    bool split = false;
+    // A text box instead of a button: filter (the source list as you type),
+    // find (Find by name on Enter), go (a folder on Enter), or command (left
+    // with {text} in it, on Enter). label is the hint shown in it.
+    QString field;
 
     bool isMenu() const { return !children.isEmpty() || !dynamic.isEmpty(); }
+    bool isSplit() const { return split && isMenu() && !left.isEmpty(); }
+    bool isItem() const { return separator || spacer || !field.isEmpty(); } // not a button
+    static QStringList fieldKinds();
+    static ButtonDef makeSpacer();
+    static ButtonDef makeField(const QString &kind);
     static QStringList dynamicKinds();
     QJsonObject toJson() const;
     static ButtonDef fromJson(const QJsonObject &o);
@@ -44,6 +57,11 @@ struct ToolbarDef
     QString id;   // file name in ~/.config/linopus/toolbars, without .json
     QString name; // title shown on the toolbar and in menus
     QList<ButtonDef> buttons;
+    // How its buttons show: auto (icon and label, label alone without an
+    // icon), icons, text, beside, under. iconSize 0: the standard size.
+    QString style = QStringLiteral("auto");
+    int iconSize = 0;
+    static QStringList styles();
 };
 
 // Every toolbar the user has, shared by all listers: editing one in customize
@@ -70,6 +88,7 @@ public:
 
     QString create(const QString &name); // returns the new id
     bool rename(const QString &id, const QString &name);
+    void setStyle(const QString &id, const QString &style, int iconSize);
     bool remove(const QString &id);      // not the main toolbar
     void resetToDefault(const QString &id);
     bool isCustomized(const QString &id) const;
@@ -78,8 +97,8 @@ public:
 
     QString fileFor(const QString &id) const;
     static QList<ButtonDef> defaultButtons();
-    static QList<ButtonDef> loadFile(const QString &file, QString *name, bool *ok);
-    static bool saveFile(const QString &file, const QString &name, const QList<ButtonDef> &buttons);
+    static QList<ButtonDef> loadFile(const QString &file, QString *name, bool *ok, ToolbarDef *style = nullptr);
+    static bool saveFile(const QString &file, const QString &name, const QList<ButtonDef> &buttons, const ToolbarDef *style = nullptr);
 
 Q_SIGNALS:
     void changed(const QString &id);
@@ -95,6 +114,7 @@ private:
 };
 
 class ButtonBar;
+class QLineEdit;
 
 class ThreeButton : public QToolButton
 {
@@ -103,6 +123,8 @@ public:
     // bar is the editable bar the button belongs to, if any (not the drives).
     ThreeButton(const ButtonDef &def, QWidget *parent, ButtonBar *bar = nullptr);
     const ButtonDef &definition() const { return m_def; }
+    // The toolbar's style ("auto", "icons", "text", "beside", "under").
+    void applyStyle(const QString &style);
 
 Q_SIGNALS:
     void commandTriggered(const QString &command);
@@ -118,6 +140,7 @@ protected:
 private:
     QMenu *buildMenu(const QList<ButtonDef> &children, QWidget *parent);
     bool editing() const;
+    bool onArrow(const QPoint &pos) const;
 
     ButtonDef m_def;
     ButtonBar *m_bar;
@@ -154,6 +177,11 @@ public:
     void setEvaluator(Evaluator eval) { m_eval = std::move(eval); }
     bool evaluate(const QString &condition, bool fallback) const;
     void updateStates();
+    // What a filter field shows (the source list's filter), kept in step.
+    using FieldProvider = std::function<QString(const QString &kind)>;
+    void setFieldProvider(FieldProvider p) { m_fieldProvider = std::move(p); }
+    QLineEdit *fieldAt(int index) const;
+    bool hasSpacer() const;
 
     // Customize mode actions; also used by tests.
     void editButton(int index);
@@ -168,6 +196,9 @@ public:
 Q_SIGNALS:
     void commandTriggered(const QString &command);
     void filesDropped(const QString &command, const QStringList &paths);
+    // A field: typed in (filter) or Enter pressed (the rest).
+    void fieldEdited(const QString &kind, const QString &text, const QString &command, bool entered);
+    void fillChanged(); // a spacer came or went
     void customizeRequested();
 
 protected:
@@ -189,4 +220,5 @@ private:
     int m_dropIndex = -1;
     Evaluator m_eval;
     MenuProvider m_menuProvider;
+    FieldProvider m_fieldProvider;
 };

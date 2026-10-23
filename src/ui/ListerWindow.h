@@ -74,13 +74,14 @@ public:
     void zoomChanged();
     FileDisplay *destDisplay() const; // null in single mode
     FileDisplay *display(int index) const { return m_displays[index]; }
+    FolderTab *sourceTabForTesting() const { return sourceTab(); }
     // The file display's right-click menu (onItem: clicked on a file).
     void fillContextMenu(QMenu &menu, FileDisplay *d, bool onItem);
     // Opens a file: Linopus's default app for its type, else the desktop's.
     void openFile(const QString &path);
     bool isDual() const { return m_dual; }
 
-    enum class ToolbarPlace { Top, Bottom, Left, Right, Between };
+    enum class ToolbarPlace { Top, Bottom, Left, Right, Between, MenuBar };
     // Off; one tree for the lister that follows the source; or one per display.
     enum class TreeMode { Off, Shared, Separate };
     TreeMode treeMode() const { return m_treeMode; }
@@ -88,12 +89,13 @@ public:
     FolderTree *sharedTree() const { return m_sharedTree; }
     // Moves a toolbar to an edge of the window or between the displays.
     // newRow starts a new row (or column) instead of sharing the last one.
-    void placeToolbar(QToolBar *bar, ToolbarPlace place, bool newRow = false);
+    void placeToolbar(QToolBar *bar, ToolbarPlace place, bool newRow = false, bool joinRow = false);
     ToolbarPlace toolbarPlace(QToolBar *bar) const;
     QList<QToolBar *> toolbars() const;
     QToolBar *toolbarByName(const QString &name) const;
     DrivesBar *drivesBar() const { return m_drives; }
     ToolbarStrip *toolbarStrip() const { return m_strip; }
+    QWidget *menuBarCorner() const { return m_menuCorner; }
 
     // CommandContext
     QString sourcePath() const override;
@@ -181,6 +183,9 @@ private:
     ViewerPane *m_viewer = nullptr;
     void updateViewer();
     DrivesBar *m_drives = nullptr;
+    QWidget *m_menuCorner = nullptr; // toolbars at the right end of the menu bar
+    QList<QToolBar *> m_menuBars;
+    void onToolbarField(const QString &kind, const QString &text, const QString &command, bool entered);
     ToolbarStrip *m_strip = nullptr;
     QMenu *m_toolbarsMenu = nullptr;
 
