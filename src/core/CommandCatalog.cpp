@@ -47,6 +47,9 @@ QList<CommandInfo> buildCommands()
                       arg("DEFAULT", {}, "Also make it Linopus's default for this type of file"),
                       arg("FILE=", {}, "What to open instead of the selection")},
                      QStringLiteral("OpenWith APP=Kate")};
+    c << CommandInfo{QStringLiteral("Show"), QStringLiteral("The picture viewer: the selected picture, stepping through the folder"),
+                     {arg("FILE=", {}, "Picture to show instead of the selection")},
+                     QStringLiteral("Show")};
     c << CommandInfo{QStringLiteral("Terminal"), QStringLiteral("Open a terminal window in the folder (Konsole, or another one installed)"),
                      {arg("PATH=", {}, "Folder to open in (otherwise the source folder)"),
                       arg("PROGRAM=", {QStringLiteral("konsole"), QStringLiteral("gnome-terminal"), QStringLiteral("alacritty"), QStringLiteral("kitty")},
@@ -333,6 +336,7 @@ QList<CatalogButton> buildButtons()
         b("File operations", "Make Link", "insert-link", "Make links to the selection in the destination", "MakeLink DEST",
           "MakeLink"),
         b("File operations", "Touch", "chronometer", "Set the selection's modified date to now", "SetAttr MODIFIED=now"),
+        b("File operations", "View", "view-preview", "Show the picture in the picture viewer", "Show"),
         b("File operations", "Convert Images", "image-x-generic", "Convert, resize or turn the selected pictures", "Image", "Image CONVERT=png RUN"),
         b("Folder", "Synchronize", "folder-sync", "Compare the source and destination and make them match", "Sync"),
         b("Folder", "Duplicates", "edit-copy", "Find duplicate files under the source folder", "Duplicates"),

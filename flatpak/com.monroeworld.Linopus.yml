@@ -14,6 +14,8 @@ finish-args:
   - --share=ipc
   - --share=network
   - --socket=wayland
+  # Sound for music and video played in the viewer pane.
+  - --socket=pulseaudio
   - --socket=fallback-x11
   - --device=dri
   # A file manager needs the real filesystem, not the sandbox.
@@ -197,6 +199,7 @@ modules:
       - -DCMAKE_BUILD_TYPE=Release
       - -DLINOPUS_BUILD_TESTS=OFF
       - -DLINOPUS_REQUIRE_LIBARCHIVE=ON
+      - -DLINOPUS_REQUIRE_MULTIMEDIA=ON
     sources:
       - type: dir
         path: ..

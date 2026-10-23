@@ -179,6 +179,7 @@ add_library(linopus_ui STATIC
     src/ui/Glyphs.cpp
     src/ui/ServerDialog.cpp
     src/ui/OpenWithDialog.cpp
+    src/ui/ImageViewer.cpp
     src/ui/HistoryDialog.cpp
     src/ui/SelectDialog.cpp
     src/ui/Launch.cpp
@@ -189,6 +190,17 @@ add_library(linopus_ui STATIC
     src/ui/AppContext.cpp
 )
 target_link_libraries(linopus_ui PUBLIC linopus_core Qt6::Widgets Qt6::Network)
+
+# Playing music and video in the viewer pane. Optional; the Flatpak has it.
+option(LINOPUS_REQUIRE_MULTIMEDIA "Fail when Qt Multimedia is missing" OFF)
+find_package(Qt6 QUIET COMPONENTS Multimedia MultimediaWidgets)
+if(Qt6Multimedia_FOUND AND Qt6MultimediaWidgets_FOUND)
+    target_link_libraries(linopus_ui PUBLIC Qt6::Multimedia Qt6::MultimediaWidgets)
+    target_compile_definitions(linopus_ui PUBLIC LINOPUS_HAVE_MULTIMEDIA)
+    message(STATUS "Qt Multimedia: playback in the viewer on")
+elseif(LINOPUS_REQUIRE_MULTIMEDIA)
+    message(FATAL_ERROR "Qt Multimedia not found (LINOPUS_REQUIRE_MULTIMEDIA is on)")
+endif()
 
 if(LINOPUS_WITH_KIO)
     add_library(linopus_kio STATIC

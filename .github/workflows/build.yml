@@ -16,7 +16,7 @@ jobs:
       - name: Install Qt
         run: |
           sudo apt-get update
-          sudo apt-get install -y qt6-base-dev qt6-base-dev-tools libgl-dev ninja-build pkgconf libtag1-dev libexiv2-dev
+          sudo apt-get install -y qt6-base-dev qt6-base-dev-tools libgl-dev ninja-build pkgconf libtag1-dev libexiv2-dev qt6-multimedia-dev
       - name: Configure
         run: cmake -S . -B build -G Ninja
       - name: Build
@@ -47,7 +47,7 @@ jobs:
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build pkgconf qt6-base-dev qt6-base-dev-tools \
-            libkf6kio-dev extra-cmake-modules kio-extras kio6 libtag-dev libexiv2-dev \
+            libkf6kio-dev extra-cmake-modules kio-extras kio6 libtag-dev libexiv2-dev qt6-multimedia-dev \
             python3 python3-pyftpdlib openssh-server openssh-client dbus dbus-daemon
       - name: Configure
         run: cmake -S . -B build -G Ninja

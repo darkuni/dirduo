@@ -15,7 +15,7 @@ class ImageView;
 // What the viewer made of a file; built off the GUI thread.
 struct Preview
 {
-    enum class Kind { None, Image, Text, Hex, Archive, Folder, Info };
+    enum class Kind { None, Image, Text, Hex, Archive, Folder, Info, Media };
     Kind kind = Kind::None;
     QString path;
     QString title;
@@ -52,6 +52,14 @@ public:
     QString textShown() const;
     QSize imageSize() const { return m_current.image.size(); }
     bool isLoading() const { return m_watcher.isRunning(); }
+    // Music and video play here (when built with Qt Multimedia).
+    static bool canPlay();
+    bool mediaLoaded() const;
+    void playPause();
+    bool isPlaying() const;
+
+protected:
+    void hideEvent(QHideEvent *event) override;
 
 private:
     void start();
@@ -71,5 +79,6 @@ private:
     QPlainTextEdit *m_text;
     QTreeWidget *m_archive;
     QLabel *m_message;
+    class MediaPanel *m_media = nullptr;
     bool m_forceHex = false;
 };

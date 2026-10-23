@@ -98,7 +98,7 @@ QStringList CommandEngine::commandNames()
             QStringLiteral("Delete"), QStringLiteral("Duplicates"), QStringLiteral("Favorite"), QStringLiteral("Find"), QStringLiteral("Go"),
             QStringLiteral("Image"),
             QStringLiteral("Layout"), QStringLiteral("MakeLink"), QStringLiteral("Metadata"), QStringLiteral("Move"), QStringLiteral("OpenWith"), QStringLiteral("Print"),
-            QStringLiteral("Properties"), QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Server"), QStringLiteral("Set"), QStringLiteral("SetAttr"), QStringLiteral("Settings"),
+            QStringLiteral("Properties"), QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Server"), QStringLiteral("Set"), QStringLiteral("SetAttr"), QStringLiteral("Settings"), QStringLiteral("Show"),
             QStringLiteral("Sync"), QStringLiteral("Terminal"), QStringLiteral("Toolbar"), QStringLiteral("Undo")};
 }
 
@@ -233,6 +233,8 @@ bool CommandEngine::execute(const ParsedCommand &cmd, CommandContext &ctx, QStri
         return cmdServer(cmd, ctx, error);
     if (cmd.is(QStringLiteral("OpenWith")))
         return cmdOpenWith(cmd, ctx, error);
+    if (cmd.is(QStringLiteral("Show")))
+        return ctx.tool(cmd, error); // the picture viewer
     if (cmd.is(QStringLiteral("Sync")) || cmd.is(QStringLiteral("Duplicates")) || cmd.is(QStringLiteral("Find"))
         || cmd.is(QStringLiteral("Favorite")) || cmd.is(QStringLiteral("Layout")) || cmd.is(QStringLiteral("Image")))
         return ctx.tool(cmd, error);

@@ -1,4 +1,5 @@
 #include "ui/BreadcrumbBar.h"
+#include "core/FileOps.h"
 #include <QHash>
 #include <QCollator>
 #include "core/RemoteBackend.h"
@@ -250,10 +251,7 @@ void BreadcrumbBar::fillChildMenu(QToolButton *arrow, const QString &dir)
                     paths.insert(it.name, it.path);
                 }
             }
-            QCollator coll;
-            coll.setNumericMode(true);
-            coll.setCaseSensitivity(Qt::CaseInsensitive);
-            std::sort(names.begin(), names.end(), [&coll](const QString &a, const QString &b) { return coll.compare(a, b) < 0; });
+            std::sort(names.begin(), names.end(), [](const QString &a, const QString &b) { return FileOps::naturalCompare(a, b) < 0; });
             menu->removeAction(wait);
             addChildActions(menu, names, [&](const QString &n) { return paths.value(n); });
             lister->deleteLater();

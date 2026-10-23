@@ -1,4 +1,12 @@
 #include "ui/ViewerPane.h"
+#ifdef LINOPUS_HAVE_MULTIMEDIA
+#include <QAudioOutput>
+#include <QMediaPlayer>
+#include <QSlider>
+#include <QVideoWidget>
+#endif
+
+#include "core/Archive.h"
 
 #include "core/Metadata.h"
 
@@ -205,6 +213,12 @@ Preview Preview::load(const QString &path, int maxImageSide)
 
     // Music and video: what the tags say.
     const MediaInfo::Kind media = Metadata::kindFor(path);
+    if ((media == MediaInfo::Kind::Audio || media == MediaInfo::Kind::Video) && ViewerPane::canPlay()) {
+        p.kind = Kind::Media;
+        const MediaInfo m = Metadata::read(path);
+        p.text = m.isEmpty() ? fi.fileName() : m.summary();
+        return p;
+    }
     if (media == MediaInfo::Kind::Audio || media == MediaInfo::Kind::Video) {
         const MediaInfo m = Metadata::read(path);
         if (!m.isEmpty()) {
@@ -214,7 +228,28 @@ Preview Preview::load(const QString &path, int maxImageSide)
         }
     }
 
-    // What is inside a zip.
+    // What is inside an archive (zip, 7z, RAR, tar, ISO...).
+    if (Archive::available() && Archive::isArchive(path)) {
+        QList<Archive::Entry> entries;
+        QString err;
+        if (Archive::list(path, &entries, &err)) {
+            p.kind = Kind::Archive;
+            int files = 0;
+            qint64 total = 0;
+            for (const Archive::Entry &e : std::as_const(entries)) {
+                if (e.isDir)
+                    continue;
+                ++files;
+                total += e.size;
+                p.entries << e.name + QLatin1Char('\t') + FileOps::formatSize(e.size) + (e.encrypted ? QStringLiteral(" (locked)") : QString());
+            }
+            p.info += QStringLiteral("\n%1 files, %2 unpacked").arg(files).arg(FileOps::formatSize(total));
+            if (entries.size() >= 5000)
+                p.truncated = true;
+            return p;
+        }
+    }
+    // What is inside a zip (without libarchive).
     if (ext == QLatin1String("zip") && fi.size() < 64LL * 1024 * 1024) {
         QList<Zip::Entry> entries;
         QString err;
@@ -255,6 +290,161 @@ Preview Preview::load(const QString &path, int maxImageSide)
 }
 
 // ---------------------------------------------------------------- pane
+
+#ifdef LINOPUS_HAVE_MULTIMEDIA
+// Plays the file in the viewer: a picture for video, the tags for music, and
+// play/pause with a position bar. Nothing starts until Play is pressed, and
+// the player itself is only made the first time something is loaded.
+class MediaPanel : public QWidget
+{
+public:
+    explicit MediaPanel(QWidget *parent)
+        : QWidget(parent)
+    {
+        auto *layout = new QVBoxLayout(this);
+        layout->setContentsMargins(0, 0, 0, 0);
+        m_video = new QVideoWidget(this);
+        m_video->setMinimumHeight(80);
+        m_video->hide();
+        m_tags = new QLabel(this);
+        m_tags->setAlignment(Qt::AlignCenter);
+        m_tags->setWordWrap(true);
+        layout->addWidget(m_video, 1);
+        layout->addWidget(m_tags, 1);
+        auto *row = new QHBoxLayout;
+        m_play = new QToolButton(this);
+        m_play->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-start")));
+        m_play->setText(QStringLiteral("Play"));
+        m_play->setToolTip(QStringLiteral("Play / pause"));
+        m_position = new QSlider(Qt::Horizontal, this);
+        m_time = new QLabel(QStringLiteral("0:00 / 0:00"), this);
+        row->addWidget(m_play);
+        row->addWidget(m_position, 1);
+        row->addWidget(m_time);
+        layout->addLayout(row);
+        QObject::connect(m_play, &QToolButton::clicked, this, [this]() { playPause(); });
+        QObject::connect(m_position, &QSlider::sliderMoved, this, [this](int v) {
+            if (m_player)
+                m_player->setPosition(qint64(v) * 100);
+        });
+    }
+    void load(const QString &path, const QString &tags)
+    {
+        stop();
+        m_tags->setText(tags);
+        m_video->hide();
+        m_tags->show();
+        ensurePlayer();
+        m_player->setSource(QUrl::fromLocalFile(path));
+    }
+    void stop()
+    {
+        if (!m_player)
+            return;
+        m_player->stop();
+        m_player->setSource(QUrl());
+    }
+    void playPause()
+    {
+        if (!m_player)
+            return;
+        if (m_player->playbackState() == QMediaPlayer::PlayingState)
+            m_player->pause();
+        else
+            m_player->play();
+    }
+    bool loaded() const { return m_player && !m_player->source().isEmpty(); }
+    bool playing() const { return m_player && m_player->playbackState() == QMediaPlayer::PlayingState; }
+
+private:
+    void ensurePlayer()
+    {
+        if (m_player)
+            return;
+        m_player = new QMediaPlayer(this);
+        m_audio = new QAudioOutput(this);
+        m_player->setAudioOutput(m_audio);
+        m_player->setVideoOutput(m_video);
+        QObject::connect(m_player, &QMediaPlayer::durationChanged, this, [this](qint64 d) {
+            m_position->setRange(0, int(d / 100));
+            updateTime();
+        });
+        QObject::connect(m_player, &QMediaPlayer::positionChanged, this, [this](qint64 p) {
+            if (!m_position->isSliderDown())
+                m_position->setValue(int(p / 100));
+            updateTime();
+        });
+        QObject::connect(m_player, &QMediaPlayer::playbackStateChanged, this, [this](QMediaPlayer::PlaybackState st) {
+            m_play->setIcon(QIcon::fromTheme(st == QMediaPlayer::PlayingState ? QStringLiteral("media-playback-pause")
+                                                                               : QStringLiteral("media-playback-start")));
+        });
+        QObject::connect(m_player, &QMediaPlayer::hasVideoChanged, this, [this](bool v) {
+            m_video->setVisible(v);
+            m_tags->setVisible(!v);
+        });
+    }
+    void updateTime()
+    {
+        auto fmt = [](qint64 ms) {
+            const qint64 s = ms / 1000;
+            return s >= 3600 ? QStringLiteral("%1:%2:%3").arg(s / 3600).arg((s / 60) % 60, 2, 10, QLatin1Char('0')).arg(s % 60, 2, 10, QLatin1Char('0'))
+                             : QStringLiteral("%1:%2").arg(s / 60).arg(s % 60, 2, 10, QLatin1Char('0'));
+        };
+        m_time->setText(QStringLiteral("%1 / %2").arg(fmt(m_player->position()), fmt(m_player->duration())));
+    }
+
+    QMediaPlayer *m_player = nullptr;
+    QAudioOutput *m_audio = nullptr;
+    QVideoWidget *m_video;
+    QLabel *m_tags;
+    QToolButton *m_play;
+    QSlider *m_position;
+    QLabel *m_time;
+};
+#else
+class MediaPanel : public QWidget
+{
+public:
+    using QWidget::QWidget;
+    void load(const QString &, const QString &) {}
+    void stop() {}
+    void playPause() {}
+    bool loaded() const { return false; }
+    bool playing() const { return false; }
+};
+#endif
+
+bool ViewerPane::canPlay()
+{
+#ifdef LINOPUS_HAVE_MULTIMEDIA
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool ViewerPane::mediaLoaded() const
+{
+    return m_media && m_media->loaded();
+}
+
+void ViewerPane::playPause()
+{
+    if (m_media && m_current.kind == Preview::Kind::Media)
+        m_media->playPause();
+}
+
+bool ViewerPane::isPlaying() const
+{
+    return m_media && m_media->playing();
+}
+
+void ViewerPane::hideEvent(QHideEvent *event)
+{
+    if (m_media)
+        m_media->stop(); // closing the pane stops the music
+    QDockWidget::hideEvent(event);
+}
 
 ViewerPane::ViewerPane(QWidget *parent)
     : QDockWidget(QStringLiteral("Viewer"), parent)
@@ -300,6 +490,8 @@ ViewerPane::ViewerPane(QWidget *parent)
     m_stack->addWidget(m_text);
     m_stack->addWidget(m_archive);
     m_stack->addWidget(m_message);
+    m_media = new MediaPanel(m_stack);
+    m_stack->addWidget(m_media);
     layout->addWidget(m_stack, 1);
     setWidget(body);
     setMinimumWidth(180);
@@ -366,6 +558,8 @@ QString ViewerPane::textShown() const
 
 void ViewerPane::display(const Preview &p)
 {
+    if (p.kind != Preview::Kind::Media || p.path != m_current.path)
+        m_media->stop();
     m_current = p;
     m_title->setText(p.title);
     m_info->setText(p.info);
@@ -393,6 +587,11 @@ void ViewerPane::display(const Preview &p)
         for (const QString &e : p.entries)
             new QTreeWidgetItem(m_archive, e.split(QLatin1Char('\t')));
         m_stack->setCurrentWidget(m_archive);
+        break;
+    case Preview::Kind::Media:
+        if (!m_media->loaded())
+            m_media->load(p.path, p.text);
+        m_stack->setCurrentWidget(m_media);
         break;
     case Preview::Kind::Folder:
         m_message->setText(p.text);

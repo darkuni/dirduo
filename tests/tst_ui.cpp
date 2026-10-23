@@ -37,6 +37,7 @@
 #include "ui/Style.h"
 #include "core/Location.h"
 #include "ui/ArchiveDialog.h"
+#include "ui/ImageViewer.h"
 #include "ui/OpenWithDialog.h"
 #include "core/Apps.h"
 #include "core/HostRun.h"
@@ -1394,6 +1395,83 @@ private Q_SLOTS:
         QCOMPARE(w->dockWidgetArea(v), Qt::BottomDockWidgetArea);
         QVERIFY(w->runCommand(QStringLiteral("Set VIEWER=off")));
         QVERIFY(!v->isVisible());
+    }
+
+    void viewerExtras()
+    {
+        QTemporaryDir dir;
+        const QString d = dir.path();
+        // Archives of any kind list what is inside.
+        if (Archive::available()) {
+            touch(d + QStringLiteral("/src/Game/disk.d64"));
+            touch(d + QStringLiteral("/src/notes.txt"));
+            QString err;
+            QVERIFY(Archive::pack({d + QStringLiteral("/src/Game"), d + QStringLiteral("/src/notes.txt")}, d + QStringLiteral("/pack.7z"),
+                                  Archive::Format::SevenZip, {}, &err));
+            const Preview p = Preview::load(d + QStringLiteral("/pack.7z"));
+            QCOMPARE(p.kind, Preview::Kind::Archive);
+            QCOMPARE(p.entries.size(), 2);
+            QVERIFY(p.info.contains(QStringLiteral("2 files")));
+        }
+        // Music plays in the pane (a short silent WAV).
+        {
+            QFile f(d + QStringLiteral("/beep.wav"));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            const int rate = 8000, samples = 8000;
+            QByteArray data(samples, char(128));
+            QByteArray h;
+            auto le32 = [&h](quint32 v) { for (int i = 0; i < 4; ++i) h.append(char((v >> (8 * i)) & 0xff)); };
+            auto le16 = [&h](quint16 v) { h.append(char(v & 0xff)); h.append(char(v >> 8)); };
+            h.append("RIFF"); le32(36 + samples); h.append("WAVEfmt "); le32(16); le16(1); le16(1); le32(rate); le32(rate); le16(1); le16(8);
+            h.append("data"); le32(samples);
+            f.write(h + data);
+        }
+        const Preview wav = Preview::load(d + QStringLiteral("/beep.wav"));
+        if (ViewerPane::canPlay()) {
+            QCOMPARE(wav.kind, Preview::Kind::Media);
+            QVERIFY(w->runCommand(QStringLiteral("Set VIEWER=on")));
+            w->viewer()->showNow(d + QStringLiteral("/beep.wav"));
+            QCOMPARE(w->viewer()->kind(), Preview::Kind::Media);
+            QVERIFY(w->viewer()->mediaLoaded());
+            QVERIFY(!w->viewer()->isPlaying()); // nothing plays until asked
+            w->viewer()->showNow(d + QStringLiteral("/src/notes.txt"));
+            QVERIFY(!w->viewer()->mediaLoaded()); // moving on stops it
+            QVERIFY(w->runCommand(QStringLiteral("Set VIEWER=off")));
+        }
+
+        // The picture viewer steps through the folder.
+        QDir().mkpath(d + QStringLiteral("/pics"));
+        for (const char *n : {"a1.png", "a2.png", "a10.png"}) {
+            QImage img(40, 20, QImage::Format_RGB32);
+            img.fill(Qt::blue);
+            QVERIFY(img.save(d + QStringLiteral("/pics/") + QLatin1String(n)));
+        }
+        touch(d + QStringLiteral("/pics/readme.txt"));
+        QCOMPARE(ImageViewer::picturesIn(d + QStringLiteral("/pics")).size(), 3);
+        QVERIFY(w->runCommand(QStringLiteral("Show FILE=\"%1\"").arg(d + QStringLiteral("/pics/a2.png"))));
+        ImageViewer *viewer = nullptr;
+        for (QWidget *top : QApplication::topLevelWidgets()) {
+            if (auto *iv = qobject_cast<ImageViewer *>(top))
+                viewer = iv;
+        }
+        QVERIFY(viewer);
+        QCOMPARE(viewer->count(), 3);
+        QCOMPARE(viewer->index(), 1); // natural order: a1, a2, a10
+        QCOMPARE(viewer->imageSize(), QSize(40, 20));
+        QTest::keyClick(viewer, Qt::Key_Right);
+        QVERIFY(viewer->current().endsWith(QStringLiteral("a10.png")));
+        QTest::keyClick(viewer, Qt::Key_Right); // stays on the last
+        QCOMPARE(viewer->index(), 2);
+        QTest::keyClick(viewer, Qt::Key_Home);
+        QCOMPARE(viewer->index(), 0);
+        QTest::keyClick(viewer, Qt::Key_1);
+        QCOMPARE(viewer->zoom(), 1.0);
+        QTest::keyClick(viewer, Qt::Key_0);
+        QCOMPARE(viewer->zoom(), 0.0);
+        QPointer<ImageViewer> gone(viewer);
+        QTest::keyClick(viewer, Qt::Key_Escape);
+        QTRY_VERIFY(!gone);
+        QVERIFY(!runFailing(QStringLiteral("Show FILE=\"%1\"").arg(d + QStringLiteral("/pics/readme.txt"))));
     }
 
     void savedLayouts()

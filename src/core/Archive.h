@@ -37,6 +37,17 @@ bool isEncrypted(const QString &archive);
 // Formats that can be given a password when made (zip, with AES-256).
 bool canEncrypt(Format f);
 
+// One entry of an archive, for listing what is inside.
+struct Entry
+{
+    QString name; // path inside, "Game/disk1.d64"
+    qint64 size = 0;
+    bool isDir = false;
+    bool encrypted = false;
+};
+// What is inside (up to max entries); false with error when it cannot be read.
+bool list(const QString &archive, QList<Entry> *entries, QString *error, int max = 5000);
+
 struct Hooks
 {
     std::function<bool()> keepGoing;                              // false: stop (canceled)

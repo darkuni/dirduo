@@ -184,6 +184,39 @@ QString baseName(const QString &path)
     return QFileInfo(path).completeBaseName();
 }
 
+bool list(const QString &archivePath, QList<Entry> *entries, QString *error, int max)
+{
+#ifdef LINOPUS_HAVE_LIBARCHIVE
+    struct archive *a = openReader(archivePath, {}, 64 * 1024, error);
+    if (!a)
+        return false;
+    struct archive_entry *e = nullptr;
+    int r;
+    while ((r = archive_read_next_header(a, &e)) == ARCHIVE_OK || r == ARCHIVE_WARN) {
+        if (entries->size() >= max)
+            break;
+        Entry en;
+        en.name = cleanEntry(entryName(e));
+        en.isDir = archive_entry_filetype(e) == AE_IFDIR;
+        en.size = archive_entry_size_is_set(e) ? archive_entry_size(e) : 0;
+        en.encrypted = archive_entry_is_encrypted(e);
+        if (!en.name.isEmpty())
+            entries->append(en);
+        archive_read_data_skip(a);
+    }
+    const bool ok = r == ARCHIVE_EOF || entries->size() >= max || !entries->isEmpty();
+    if (!ok && error)
+        *error = errorOf(a);
+    archive_read_free(a);
+    return ok;
+#else
+    Q_UNUSED(archivePath) Q_UNUSED(entries) Q_UNUSED(max)
+    if (error)
+        *error = QStringLiteral("This build of Linopus has no archive support.");
+    return false;
+#endif
+}
+
 bool canEncrypt(Format f)
 {
     return f == Format::Zip;

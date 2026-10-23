@@ -15,6 +15,7 @@
 #include "core/FindEngine.h"
 #include "ui/HistoryDialog.h"
 #include "ui/ArchiveDialog.h"
+#include "ui/ImageViewer.h"
 #include "ui/OpenWithDialog.h"
 #include "core/Apps.h"
 #include "ui/ServerDialog.h"
@@ -2028,6 +2029,7 @@ void ListerWindow::fillContextMenu(QMenu &menu, FileDisplay *d, bool onItem)
         }
         if (pictures) {
             menu.addSeparator();
+            menu.addAction(commandAction(QStringLiteral("View"), QStringLiteral("Show"), {}, QStringLiteral("view-preview")));
             menu.addAction(commandAction(sel.size() == 1 ? QStringLiteral("Convert Image...") : QStringLiteral("Convert Images..."),
                                          QStringLiteral("Image"), {}, QStringLiteral("image-x-generic")));
         }
@@ -2514,6 +2516,28 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
     }
     if (cmd.is(QStringLiteral("Image")))
         return imageCommand(cmd, error);
+    if (cmd.is(QStringLiteral("Show"))) {
+        QStringList picked;
+        for (const QString &f : cmd.values(QStringLiteral("FILE")))
+            picked << m_app.engine().resolvePath(f, sourcePath());
+        if (picked.isEmpty())
+            picked = selectedPaths();
+        if (picked.isEmpty() && !focusedPath().isEmpty())
+            picked << focusedPath();
+        QStringList pictures;
+        for (const QString &p : std::as_const(picked)) {
+            if (Location::isLocal(p) && ImageConvert::canRead(p))
+                pictures << p;
+        }
+        if (pictures.isEmpty())
+            return fail(QStringLiteral("Select a picture to view."));
+        // Several picked: step through those; one: through its folder.
+        auto *viewer = new ImageViewer(pictures.first(), pictures.size() > 1 ? pictures : QStringList(), nullptr);
+        viewer->show();
+        viewer->raise();
+        viewer->activateWindow();
+        return true;
+    }
     if (cmd.is(QStringLiteral("OpenWith"))) {
         QStringList files;
         for (const QString &f : cmd.values(QStringLiteral("FILE")))
