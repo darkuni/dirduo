@@ -53,6 +53,9 @@ public:
     QToolButton *copyPathButton() const { return m_copyPath; }
     QToolButton *swapPathsButton() const { return m_swapPaths; }
     void fillRecentMenu(QMenu *menu);
+    // The Home button's folder: your home folder unless set to another.
+    static QString homeFolder();
+    void setHomeFolder(const QString &path); // empty: back to your home folder
 
     // This display's own folder tree (Set TREE=separate).
     void setTreeVisible(bool visible);
@@ -84,6 +87,9 @@ Q_SIGNALS:
     void copyPathRequested(FileDisplay *display);
     // Selection, view or folder changed: buttons may need to update.
     void stateChanged(FileDisplay *display);
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     void wireTab(FolderTab *tab);

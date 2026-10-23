@@ -1978,6 +1978,22 @@ private Q_SLOTS:
         QTRY_COMPARE(o->path(), otherStart);
         d->homeButton()->click();
         QTRY_COMPARE(t->path(), QDir::homePath());
+        // Home is a best favorite: a middle click makes this folder it.
+        t->navigate(root + QStringLiteral("/b"));
+        QTRY_COMPARE(t->path(), root + QStringLiteral("/b"));
+        QTest::mouseClick(d->homeButton(), Qt::MiddleButton);
+        QCOMPARE(FileDisplay::homeFolder(), root + QStringLiteral("/b"));
+        QCOMPARE(t->path(), root + QStringLiteral("/b")); // the middle click does not go anywhere
+        t->navigate(root + QStringLiteral("/a"));
+        QTRY_COMPARE(t->path(), root + QStringLiteral("/a"));
+        w->display(1)->homeButton()->click(); // every display shares it
+        QTRY_COMPARE(w->display(1)->currentTab()->path(), root + QStringLiteral("/b"));
+        d->homeButton()->click();
+        QTRY_COMPARE(t->path(), root + QStringLiteral("/b"));
+        d->setHomeFolder(QString());
+        QCOMPARE(FileDisplay::homeFolder(), QDir::homePath());
+        w->display(1)->currentTab()->navigate(otherStart);
+        QTRY_COMPARE(w->display(1)->currentTab()->path(), otherStart);
         t->navigate(start);
         QTRY_COMPARE(t->path(), start);
     }

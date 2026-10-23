@@ -8,6 +8,10 @@
 #include "ui/Style.h"
 
 #include <QSplitter>
+#include <QCursor>
+#include <QToolTip>
+#include <QSettings>
+#include "core/Paths.h"
 #include <QMouseEvent>
 #include <QMimeData>
 #include <QMenu>
@@ -224,10 +228,25 @@ FileDisplay::FileDisplay(AliasManager &aliases, QWidget *parent)
             t->refresh();
         Q_EMIT activated(this);
     });
+    // Home is a "best favorite": a click goes there, a middle click (or
+    // right-click > Set to This Folder) makes the current folder it.
     connect(m_home, &QToolButton::clicked, this, [this]() {
         Q_EMIT activated(this);
         if (auto *t = currentTab())
-            t->navigate(QDir::homePath());
+            t->navigate(homeFolder());
+    });
+    m_home->installEventFilter(this);
+    m_home->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_home, &QWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
+        QMenu menu(this);
+        QAction *set = menu.addAction(QStringLiteral("Set to This Folder"));
+        QAction *reset = menu.addAction(QStringLiteral("Reset to Your Home Folder"));
+        reset->setEnabled(homeFolder() != QDir::homePath());
+        QAction *chosen = menu.exec(m_home->mapToGlobal(pos));
+        if (chosen == set && currentTab())
+            setHomeFolder(currentTab()->path());
+        else if (chosen == reset)
+            setHomeFolder(QString());
     });
     connect(m_crumbs, &BreadcrumbBar::navigateRequested, this, [this](const QString &input) {
         Q_EMIT activated(this);
@@ -542,6 +561,41 @@ void FileDisplay::applyStyle()
     m_badge->setStyleSheet(QStringLiteral("QLabel { background: %1; color: %2; border-radius: 4px; font-weight: 600; }").arg(bg, fg));
     // A locked destination says so in words too.
     m_badge->setVisible(m_showBadge && role == Role::Dest && m_destLocked);
+}
+
+QString FileDisplay::homeFolder()
+{
+    QSettings s(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+    const QString p = s.value(QStringLiteral("Location/home")).toString();
+    return p.isEmpty() ? QDir::homePath() : p;
+}
+
+void FileDisplay::setHomeFolder(const QString &path)
+{
+    QSettings s(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+    if (path.isEmpty() || path == QDir::homePath())
+        s.remove(QStringLiteral("Location/home"));
+    else
+        s.setValue(QStringLiteral("Location/home"), path);
+    QToolTip::showText(QCursor::pos(), QStringLiteral("Home is now %1").arg(Location::display(homeFolder())), m_home, {}, 1500);
+}
+
+bool FileDisplay::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == m_home) {
+        if (event->type() == QEvent::MouseButtonRelease && static_cast<QMouseEvent *>(event)->button() == Qt::MiddleButton) {
+            if (m_home->rect().contains(static_cast<QMouseEvent *>(event)->position().toPoint()) && currentTab())
+                setHomeFolder(currentTab()->path());
+            return true;
+        }
+        if (event->type() == QEvent::MouseButtonPress && static_cast<QMouseEvent *>(event)->button() == Qt::MiddleButton)
+            return true;
+        if (event->type() == QEvent::ToolTip) {
+            m_home->setToolTip(QStringLiteral("Home: %1\nMiddle-click (or right-click) to make this folder Home")
+                                   .arg(Location::display(homeFolder())));
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void FileDisplay::fillRecentMenu(QMenu *menu)
