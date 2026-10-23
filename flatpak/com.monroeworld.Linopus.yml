@@ -55,9 +55,11 @@ modules:
       - -DSERVER_TESTING=OFF
       - -DWITH_GSSAPI=OFF
     sources:
+      # libssh's GitHub mirror: git.libssh.org is not always reachable from CI.
       - type: git
-        url: https://git.libssh.org/projects/libssh.git
+        url: https://github.com/libssh/libssh-mirror.git
         tag: libssh-0.11.3
+        commit: 301d0e16dfa8a5cac1cff956b6880ca90eb82864
 
   # SMB (Windows and Samba shares): Samba's client library for KIO's smb
   # worker, and what it takes to build it. Modules as in Flathub's Dolphin.
