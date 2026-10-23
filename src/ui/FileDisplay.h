@@ -54,6 +54,7 @@ public:
     // Every tab and the tree, in percent.
     void setZoom(int percent);
     int zoom() const { return m_zoom; }
+    QString freeSpaceText() const; // "12.3 GB free of 64 GB", empty for servers
 
 Q_SIGNALS:
     void activated(FileDisplay *display);
@@ -93,4 +94,6 @@ private:
     QTabBar *m_tabs;
     QStackedWidget *m_stack;
     QLabel *m_status;
+    QLabel *m_free = nullptr;
+    void updateFreeSpace();
 };

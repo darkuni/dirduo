@@ -1844,6 +1844,12 @@ private Q_SLOTS:
         waitListed(t, QDir(root).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
     }
 
+    void freeSpaceShown()
+    {
+        FileDisplay *d = w->display(0);
+        QTRY_VERIFY(d->freeSpaceText().contains(QStringLiteral(" free of ")));
+    }
+
     void columnsResizable()
     {
         FolderTab *t = w->display(0)->currentTab();
@@ -2059,8 +2065,9 @@ private Q_SLOTS:
             out.sort();
             return out;
         };
-        QVERIFY(w->runCommand(QStringLiteral("Select COMPARE=newerormissing")));
-        QCOMPARE(names(t->selectedPaths()), (QStringList{QStringLiteral("one.txt"), QStringLiteral("two.txt")}));
+        // The refreshed listings (with the new dates) can land a moment later.
+        QTRY_COMPARE((w->runCommand(QStringLiteral("Select COMPARE=newerormissing")), names(t->selectedPaths())),
+                     (QStringList{QStringLiteral("one.txt"), QStringLiteral("two.txt")}));
         QVERIFY(w->runCommand(QStringLiteral("Select COMPARE=missing")));
         QCOMPARE(names(t->selectedPaths()), QStringList{QStringLiteral("one.txt")});
         QVERIFY(w->runCommand(QStringLiteral("Select COMPARE=same BOTH")));

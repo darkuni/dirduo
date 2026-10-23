@@ -1,3 +1,4 @@
+#include "core/FileOps.h"
 #include "core/JobManager.h"
 #include "core/Paths.h"
 
@@ -79,6 +80,29 @@ private Q_SLOTS:
         QCOMPARE(QFileInfo(dst + QStringLiteral("/album/latest")).symLinkTarget(), dst + QStringLiteral("/album/01.mp3"));
         QVERIFY(QFile::exists(src + QStringLiteral("/album/01.mp3"))); // copy keeps the source
         QVERIFY(!QFile::exists(dst + QStringLiteral("/album/01.mp3.linopus-part")));
+    }
+
+    void refusesCopyThatWillNotFit()
+    {
+        writeFile(src + QStringLiteral("/big/a.bin"), QByteArray(5000, 'a'));
+        writeFile(src + QStringLiteral("/big/b.bin"), QByteArray(5000, 'b'));
+        FileOps::setBytesFreeOverride(9000);
+        JobManager jm;
+        const int id = jm.enqueue(spec(JobType::Copy, {src + QStringLiteral("/big")}, dst));
+        QVERIFY(jm.waitForIdle(5000));
+        FileOps::setBytesFreeOverride(-1);
+        QCOMPARE(jm.snapshot(id).state, JobState::Failed);
+        QVERIFY(jm.snapshot(id).errors.value(0).contains(QStringLiteral("not enough room")));
+        QVERIFY(!QFile::exists(dst + QStringLiteral("/big"))); // nothing written
+        // Moving within one drive needs no room.
+        FileOps::setBytesFreeOverride(0);
+        const int move = jm.enqueue(spec(JobType::Move, {src + QStringLiteral("/big")}, dst));
+        QVERIFY(jm.waitForIdle(5000));
+        FileOps::setBytesFreeOverride(-1);
+        QCOMPARE(jm.snapshot(move).state, JobState::Finished);
+        QVERIFY(QFile::exists(dst + QStringLiteral("/big/a.bin")));
+        QVERIFY(FileOps::bytesFree(dst) > 0);
+        QVERIFY(FileOps::bytesTotal(dst) >= FileOps::bytesFree(dst));
     }
 
     void copyIntoSameFolderMakesACopy()

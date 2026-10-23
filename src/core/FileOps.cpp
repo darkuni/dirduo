@@ -1,6 +1,7 @@
 #include "core/FileOps.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QLocale>
 
@@ -8,6 +9,9 @@
 #include <cstdio>
 #include <cstring>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
+
+#include <atomic>
 
 namespace FileOps {
 
@@ -30,6 +34,31 @@ bool sameDevice(const QString &a, const QString &b)
 {
     const quint64 da = deviceId(a);
     return da != 0 && da == deviceId(b);
+}
+
+static std::atomic<qint64> s_freeOverride{-1};
+
+void setBytesFreeOverride(qint64 bytes)
+{
+    s_freeOverride = bytes;
+}
+
+qint64 bytesFree(const QString &path)
+{
+    if (s_freeOverride >= 0)
+        return s_freeOverride;
+    struct statvfs st;
+    if (::statvfs(QFile::encodeName(path).constData(), &st) != 0)
+        return -1;
+    return qint64(st.f_bavail) * qint64(st.f_frsize);
+}
+
+qint64 bytesTotal(const QString &path)
+{
+    struct statvfs st;
+    if (::statvfs(QFile::encodeName(path).constData(), &st) != 0)
+        return -1;
+    return qint64(st.f_blocks) * qint64(st.f_frsize);
 }
 
 bool isSameOrInside(const QString &child, const QString &parent)

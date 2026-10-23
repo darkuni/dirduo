@@ -1,4 +1,7 @@
 #include "ui/FileDisplay.h"
+#include <QLocale>
+#include "core/Location.h"
+#include "core/FileOps.h"
 
 #include "ui/BreadcrumbBar.h"
 #include "ui/FolderTree.h"
@@ -93,7 +96,17 @@ FileDisplay::FileDisplay(AliasManager &aliases, QWidget *parent)
     QFont small = m_status->font();
     small.setPointSizeF(small.pointSizeF() * 0.92);
     m_status->setFont(small);
-    layout->addWidget(m_status);
+    // Free space on the drive, at the right of the status line.
+    m_free = new QLabel(this);
+    m_free->setContentsMargins(6, 2, 6, 2);
+    m_free->setFont(small);
+    m_free->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    auto *statusRow = new QHBoxLayout;
+    statusRow->setContentsMargins(0, 0, 0, 0);
+    statusRow->setSpacing(0);
+    statusRow->addWidget(m_status, 1);
+    statusRow->addWidget(m_free);
+    layout->addLayout(statusRow);
 
     connect(m_back, &QToolButton::clicked, this, [this]() {
         if (auto *t = currentTab())
@@ -259,8 +272,10 @@ void FileDisplay::wireTab(FolderTab *t)
         }
     });
     connect(t, &FolderTab::statusChanged, this, [this, t]() {
-        if (t == currentTab())
+        if (t == currentTab()) {
             m_status->setText(t->statusText());
+            updateFreeSpace();
+        }
     });
     connect(t, &FolderTab::activated, this, [this]() { Q_EMIT activated(this); });
     for (auto sig : {&FolderTab::selectionChanged, &FolderTab::viewStateChanged, &FolderTab::statusChanged}) {
@@ -308,6 +323,39 @@ void FileDisplay::updateHeader()
     if (m_tree)
         m_tree->setPath(t->path());
     m_status->setText(t->statusText());
+    updateFreeSpace();
+}
+
+void FileDisplay::updateFreeSpace()
+{
+    FolderTab *t = currentTab();
+    const QString path = t ? t->path() : QString();
+    qint64 free = -1;
+    qint64 total = -1;
+    // Folders on this computer and its cards only: asking a server is slow.
+    if (Location::isLocal(path)) {
+        free = FileOps::bytesFree(path);
+        total = FileOps::bytesTotal(path);
+    }
+    if (free < 0 || total <= 0) {
+        m_free->clear();
+        m_free->setToolTip(QString());
+        return;
+    }
+    m_free->setText(QStringLiteral("%1 free of %2").arg(FileOps::formatSize(free), FileOps::formatSize(total)));
+    m_free->setToolTip(QStringLiteral("%1 bytes free").arg(QLocale().toString(free)));
+    // Nearly full (under 5%, or under 1 GB): shown in the warning color.
+    const bool low = free < total / 20 || free < qint64(1) << 30;
+    m_free->setProperty("low", low);
+    QPalette pal = m_status->palette();
+    if (low)
+        pal.setColor(QPalette::WindowText, QColor(0xd0, 0x40, 0x30));
+    m_free->setPalette(pal);
+}
+
+QString FileDisplay::freeSpaceText() const
+{
+    return m_free->text();
 }
 
 void FileDisplay::setRole(Role role)
@@ -321,6 +369,8 @@ void FileDisplay::applyStyle()
     QFont small = font();
     small.setPointSizeF(font().pointSizeF() * 0.92);
     m_status->setFont(small);
+    if (m_free)
+        m_free->setFont(small);
     const Theme &theme = Style::instance()->theme();
     const QPalette pal = palette();
     auto textOn = [](const QColor &c) {

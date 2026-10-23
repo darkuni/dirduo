@@ -12,6 +12,12 @@ namespace FileOps {
 quint64 deviceId(const QString &path);
 
 bool sameDevice(const QString &a, const QString &b);
+// Room left for the user on the drive holding path, and its size; -1 when
+// unknown (a server, a path that is gone).
+qint64 bytesFree(const QString &path);
+qint64 bytesTotal(const QString &path);
+// Tests: pretend every drive has this much free (-1: the real figure).
+void setBytesFreeOverride(qint64 bytes);
 
 // True if child is parent itself or somewhere inside it.
 bool isSameOrInside(const QString &child, const QString &parent);

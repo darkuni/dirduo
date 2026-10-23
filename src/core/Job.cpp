@@ -416,6 +416,23 @@ void Job::runCopyMove()
     }
     if (m_canceled)
         return;
+    // Room enough? Checked before anything is written, so a copy that cannot
+    // fit fails at once instead of filling the card and stopping halfway.
+    // (Moves within one drive need no room; files to be replaced might free
+    // some, which is not counted.)
+    if (!(move && FileOps::sameDevice(entries.empty() ? dest : entries.front().src, dest))) {
+        qint64 needed = 0;
+        for (const Entry &e : entries) {
+            if (!e.isDir && !e.isSymlink)
+                needed += e.size;
+        }
+        const qint64 free = FileOps::bytesFree(dest);
+        if (free >= 0 && needed > free) {
+            addError(QStringLiteral("There is not enough room in \"%1\": this needs %2 and %3 is free.")
+                         .arg(Location::display(dest), FileOps::formatSize(needed), FileOps::formatSize(free)));
+            return;
+        }
+    }
     setState(JobState::Running);
 
     // Whole items moved within one filesystem: one rename each, instant.
