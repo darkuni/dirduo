@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/ScriptRunner.h"
 #include "core/CommandParser.h"
 #include "core/Job.h"
 #include "core/History.h"
@@ -28,6 +29,15 @@ public:
     virtual bool confirm(const QString &title, const QString &text) = 0;
     virtual void showError(const QString &title, const QString &text) = 0;
     virtual QString chooseDestination(const QString &title) = 0; // empty when canceled
+    // A button script finished (see ScriptRunner): show its output, refresh.
+    virtual void scriptFinished(const ScriptResult &result, const ScriptOptions &options)
+    {
+        Q_UNUSED(result)
+        Q_UNUSED(options)
+    }
+    // The QObject behind this context, so a script that outlives a click can
+    // tell whether its window is still there (nullptr: never told).
+    virtual QObject *contextObject() { return nullptr; }
     // A password typed out of sight; false when canceled.
     virtual bool promptPassword(const QString &title, const QString &label, QString &value)
     {
@@ -131,6 +141,8 @@ public:
     // Runs every line in order; stops at the first failure and reports it
     // through ctx.showError (canceled prompts stop silently).
     bool run(const QString &script, CommandContext &ctx);
+    // Scripts still running (tests wait on them).
+    QList<ScriptRunner *> runningScripts() const;
     bool execute(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
 
     // Shared with drag and drop and paste. Return the job id, or 0.
@@ -194,6 +206,7 @@ private:
     bool cmdMakeLink(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool cmdTerminal(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool cmdServer(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
+    bool runScript(const QString &script, CommandContext &ctx);
     void recordNew(const QStringList &paths, const QString &what);
 
     QStringList sourcesFor(const ParsedCommand &cmd, CommandContext &ctx, const QStringList &flags) const;

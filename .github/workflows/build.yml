@@ -99,6 +99,8 @@ jobs:
         env:
           ARCH: ${{ matrix.variant.arch }}
         run: |
+          # Which build this is, for Help > About (the Flatpak copies the source without .git).
+          echo "${GITHUB_SHA::7} $(date -u '+%Y-%m-%d %H:%M UTC')" > build-id.txt
           flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           # The log goes to a file; on failure its tail becomes an annotation,
           # readable without access to the raw job log.

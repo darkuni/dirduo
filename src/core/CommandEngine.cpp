@@ -17,6 +17,7 @@
 #include <QDateTime>
 #include <QBuffer>
 #include <QDir>
+#include <QPointer>
 #include <QHash>
 #include <QFileInfo>
 #include <QGuiApplication>
@@ -112,6 +113,8 @@ QString CommandEngine::resolvePath(const QString &input, const QString &base) co
 
 bool CommandEngine::run(const QString &script, CommandContext &ctx)
 {
+    if (ScriptRunner::isScript(script))
+        return runScript(script, ctx);
     QString error;
     // Codes are expanded once per function, at parse time, so every line sees
     // the selection as it was when the button was clicked.
@@ -684,6 +687,36 @@ bool CommandEngine::cmdServer(const ParsedCommand &cmd, CommandContext &ctx, QSt
     }
     // ADD without an address, or nothing: the window (Add Server, or the list).
     return ctx.tool(cmd, error);
+}
+
+QList<ScriptRunner *> CommandEngine::runningScripts() const
+{
+    return findChildren<ScriptRunner *>(QString(), Qt::FindDirectChildrenOnly);
+}
+
+bool CommandEngine::runScript(const QString &script, CommandContext &ctx)
+{
+    // In the source folder when it is on this computer, else the home folder.
+    const QString source = ctx.sourcePath();
+    const QString dir = Location::isLocal(source) && QFileInfo(source).isDir() ? source : QDir::homePath();
+    QStringList args;
+    for (const QString &p : ctx.selectedPaths())
+        args << p;
+    auto *runner = new ScriptRunner(this);
+    QObject *owner = ctx.contextObject();
+    QPointer<QObject> alive(owner);
+    CommandContext *target = &ctx;
+    connect(runner, &ScriptRunner::finished, this, [runner, alive, owner, target](const ScriptResult &r, const ScriptOptions &o) {
+        if (owner && alive)
+            target->scriptFinished(r, o);
+        runner->deleteLater();
+    });
+    QString error;
+    if (!runner->start(script, args, dir, source, ctx.destPath(), ctx.focusedPath(), &error)) {
+        ctx.showError(QStringLiteral("Script"), error);
+        return false;
+    }
+    return true;
 }
 
 int CommandEngine::trashItems(const QStringList &paths)

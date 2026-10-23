@@ -29,8 +29,26 @@ message(STATUS "Linopus with KIO: ${LINOPUS_WITH_KIO}")
 
 option(LINOPUS_BUILD_TESTS "Build the unit tests" ON)
 
+# Which build this is: build-id.txt (written by CI), else git, else "local build".
+set(LINOPUS_BUILD_ID "local build")
+if(EXISTS "${CMAKE_SOURCE_DIR}/build-id.txt")
+    file(STRINGS "${CMAKE_SOURCE_DIR}/build-id.txt" LINOPUS_BUILD_ID LIMIT_COUNT 1)
+else()
+    find_package(Git QUIET)
+    if(GIT_FOUND)
+        execute_process(COMMAND ${GIT_EXECUTABLE} log -1 --format=%h%x20%cd --date=format:%Y-%m-%d
+                        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} OUTPUT_VARIABLE _git_id
+                        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET RESULT_VARIABLE _git_ok)
+        if(_git_ok EQUAL 0 AND _git_id)
+            set(LINOPUS_BUILD_ID "${_git_id}")
+        endif()
+    endif()
+endif()
+message(STATUS "Linopus build: ${LINOPUS_BUILD_ID}")
+
 add_compile_definitions(
     LINOPUS_VERSION="${PROJECT_VERSION}"
+    LINOPUS_BUILD_ID="${LINOPUS_BUILD_ID}"
     LINOPUS_APP_ID="${LINOPUS_APP_ID}"
     QT_NO_KEYWORDS
 )
@@ -62,6 +80,7 @@ add_library(linopus_core STATIC
     src/core/Attributes.cpp
     src/core/HostRun.cpp
     src/core/Servers.cpp
+    src/core/ScriptRunner.cpp
     src/core/Metadata.cpp
     src/core/Thumbnails.cpp
     src/core/History.cpp

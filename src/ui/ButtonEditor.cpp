@@ -2,6 +2,7 @@
 
 #include "core/CommandCatalog.h"
 #include "core/Condition.h"
+#include "core/ScriptRunner.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -29,6 +30,11 @@ QPlainTextEdit *commandEdit(QWidget *parent, const QString &text, const QString 
     e->setTabChangesFocus(true);
     const int line = e->fontMetrics().lineSpacing();
     e->setFixedHeight(line * 3 + 12);
+    // A shell script gets room to breathe.
+    QObject::connect(e, &QPlainTextEdit::textChanged, e, [e, line]() {
+        e->setFixedHeight(ScriptRunner::isScript(e->toPlainText()) ? line * 14 + 12 : line * 3 + 12);
+    });
+    e->setFixedHeight(ScriptRunner::isScript(text) ? line * 14 + 12 : line * 3 + 12);
     return e;
 }
 
@@ -107,6 +113,24 @@ ButtonEditor::ButtonEditor(const ButtonDef &def, QWidget *parent)
     cl->addRow(QStringLiteral("Left-click:"), m_left);
     cl->addRow(QStringLiteral("Right-click:"), m_right);
     cl->addRow(QStringLiteral("Middle-click:"), m_middle);
+    // Shell scripts: a first line of #!/bin/bash (or any #!) makes it one.
+    auto *scriptRow = new QHBoxLayout;
+    auto *scriptHelp = new QLabel(QStringLiteral("Start with <b>#!/bin/bash</b> to run a script on the system: the selected items are "
+                                                 "\"$@\", it starts in the source folder, and $LINOPUS_SOURCE, $LINOPUS_DEST and "
+                                                 "$LINOPUS_FOCUSED are set. Add <b># linopus: terminal</b> to run it in Konsole, "
+                                                 "<b># linopus: output</b> to always see what it printed."),
+                                  m_commands);
+    scriptHelp->setWordWrap(true);
+    auto *newScript = new QPushButton(QStringLiteral("New Script"), m_commands);
+    newScript->setToolTip(QStringLiteral("Put a bash script template in Left-click"));
+    connect(newScript, &QPushButton::clicked, this, [this]() {
+        m_left->setPlainText(QStringLiteral("#!/bin/bash\n# linopus: output\n# Selected items: \"$@\"   Source: \"$LINOPUS_SOURCE\"   Destination: \"$LINOPUS_DEST\"\n"
+                                            "for f in \"$@\"; do\n    echo \"$f\"\ndone\n"));
+        m_left->setFocus();
+    });
+    scriptRow->addWidget(scriptHelp, 1);
+    scriptRow->addWidget(newScript, 0, Qt::AlignTop);
+    cl->addRow(scriptRow);
     layout->addWidget(m_commands);
 
     m_menuPage = new QGroupBox(QStringLiteral("Menu items"), this);
@@ -295,7 +319,7 @@ QString ButtonEditor::validationError() const
         return QStringLiteral("A menu needs at least one item.");
     if (!m_isMenu->isChecked() && d.left.isEmpty())
         return QStringLiteral("Left-click needs a command.");
-    if (!d.left.isEmpty()) {
+    if (!d.left.isEmpty() && !ScriptRunner::isScript(d.left)) {
         const QString first = d.left.section(QLatin1Char('\n'), 0, 0).trimmed().section(QLatin1Char(' '), 0, 0);
         if (!CommandCatalog::find(first))
             return QStringLiteral("Left-click: there is no command called \"%1\".").arg(first);

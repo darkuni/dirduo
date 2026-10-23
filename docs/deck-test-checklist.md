@@ -38,6 +38,8 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Middle-click the Home button in a folder; go elsewhere; click Home: back in that folder (in either display). Right-click Home > Reset.
 - [ ] Network button on the drives bar: your Windows/Samba machines show up. Open a share, sign in, copy both ways.
 - [ ] Network arrow > Add Server...: add your NAS (SFTP or SMB). It appears in the arrow menu, Go > Network and Servers, and the tree's Network group. Manage Servers... edits and removes.
+- [ ] Customize a toolbar, add a button, New Script; select some files and click it: the output window lists them. Try `# linopus: terminal`, and a script that fails (`exit 1`).
+- [ ] Help > About shows the build (commit and date).
 - [ ] Make a zip with a password, then Extract it: it asks; a wrong password says so and leaves nothing behind.
 - [ ] The status line shows free space for the internal drive and the SD card. Copy something bigger than the card's free space: it stops at once with "not enough room".
 - [ ] Copy files from an ungrouped flat view with Ctrl+C, paste with Ctrl+V: it asks Keep Folder Structure or Same Folder.

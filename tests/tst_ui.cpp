@@ -2053,6 +2053,24 @@ private Q_SLOTS:
         Servers::instance()->setItems({});
     }
 
+    void scriptButtonsShowFailures()
+    {
+        QTemporaryDir cache;
+        Paths::setCacheHomeOverride(cache.path());
+        QVERIFY(w->runCommand(QStringLiteral("#!/bin/bash\necho something broke\nexit 3")));
+        QDialog *out = nullptr;
+        QTRY_VERIFY((out = w->findChild<QDialog *>(QStringLiteral("scriptOutput"))));
+        QVERIFY(out->windowTitle().contains(QStringLiteral("exit 3")));
+        QVERIFY(out->findChild<QPlainTextEdit *>()->toPlainText().contains(QStringLiteral("something broke")));
+        out->close();
+        QTRY_VERIFY(!w->findChild<QDialog *>(QStringLiteral("scriptOutput")));
+        // Success, quietly: no window.
+        QVERIFY(w->runCommand(QStringLiteral("#!/bin/bash\ntrue")));
+        QTest::qWait(500);
+        QVERIFY(!w->findChild<QDialog *>(QStringLiteral("scriptOutput")));
+        Paths::setCacheHomeOverride(QString());
+    }
+
     void freeSpaceShown()
     {
         FileDisplay *d = w->display(0);

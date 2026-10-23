@@ -45,6 +45,10 @@
 
 #include <QAbstractItemView>
 #include <QPushButton>
+#include <QVBoxLayout>
+#include <QFontDatabase>
+#include <QDialogButtonBox>
+#include <QPlainTextEdit>
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
@@ -582,9 +586,10 @@ void ListerWindow::buildMenus()
     QAction *about = help->addAction(QStringLiteral("About Linopus"));
     connect(about, &QAction::triggered, this, [this]() {
         QMessageBox::about(this, QStringLiteral("About Linopus"),
-                           QStringLiteral("<b>Linopus %1</b><p>A source and destination file manager for Linux.</p>"
-                                          "<p>Configuration: %2</p>")
-                               .arg(QStringLiteral(LINOPUS_VERSION), Paths::configDir().toHtmlEscaped()));
+                           QStringLiteral("<b>Linopus %1</b><p>Build %2</p><p>A source and destination file manager for Linux.</p>"
+                                          "<p>Configuration: %3</p>")
+                               .arg(QStringLiteral(LINOPUS_VERSION), QStringLiteral(LINOPUS_BUILD_ID).toHtmlEscaped(),
+                                    Paths::configDir().toHtmlEscaped()));
     });
 }
 
@@ -1303,6 +1308,37 @@ bool ListerWindow::promptText(const QString &title, const QString &label, QStrin
         return false;
     value = result;
     return true;
+}
+
+void ListerWindow::scriptFinished(const ScriptResult &result, const ScriptOptions &options)
+{
+    if (options.refresh) {
+        for (FileDisplay *d : m_displays) {
+            if (FolderTab *t = d->currentTab(); t && Location::isLocal(t->path()))
+                t->refresh();
+        }
+    }
+    const bool failed = result.crashed || result.exitCode != 0;
+    if (!failed && !options.showOutput)
+        return;
+    if (options.terminal && !failed)
+        return;
+    // What it printed, in a window of its own (not modal: keep working).
+    auto *dlg = new QDialog(this);
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    dlg->setObjectName(QStringLiteral("scriptOutput"));
+    dlg->setWindowTitle(failed ? QStringLiteral("Script failed (exit %1)").arg(result.exitCode) : QStringLiteral("Script output"));
+    auto *layout = new QVBoxLayout(dlg);
+    auto *text = new QPlainTextEdit(dlg);
+    text->setReadOnly(true);
+    text->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    text->setPlainText(result.output.isEmpty() ? QStringLiteral("(no output)") : result.output);
+    layout->addWidget(text);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, dlg);
+    connect(buttons, &QDialogButtonBox::rejected, dlg, &QDialog::close);
+    layout->addWidget(buttons);
+    dlg->resize(fontMetrics().averageCharWidth() * 90, fontMetrics().height() * 24);
+    dlg->show();
 }
 
 bool ListerWindow::promptPassword(const QString &title, const QString &label, QString &value)

@@ -1,6 +1,7 @@
 #include "core/AliasManager.h"
 #include "core/CommandEngine.h"
 #include "core/HostRun.h"
+#include "core/ScriptRunner.h"
 #include "core/Servers.h"
 #include "core/JobManager.h"
 #include "core/Paths.h"
@@ -20,6 +21,12 @@ void writeFile(const QString &path, const QByteArray &data = "x")
     QFile f(path);
     QVERIFY(f.open(QIODevice::WriteOnly));
     f.write(data);
+}
+
+QByteArray readFile(const QString &path)
+{
+    QFile f(path);
+    return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
 }
 
 class FakeContext : public CommandContext
@@ -215,6 +222,36 @@ private Q_SLOTS:
         QCOMPARE(Servers::instance()->items().size(), 1);
         QVERIFY(!m_engine->run(QStringLiteral("Server REMOVE=NAS"), ctx));
         Servers::instance()->setItems({});
+    }
+
+    void buttonScripts()
+    {
+        Paths::setCacheHomeOverride(m_dir->filePath(QStringLiteral("cache")));
+        writeFile(ctx.source + QStringLiteral("/a b.txt"), "a");
+        writeFile(ctx.source + QStringLiteral("/c.txt"), "c");
+        ctx.selection = {ctx.source + QStringLiteral("/a b.txt"), ctx.source + QStringLiteral("/c.txt")};
+        const QString script = QStringLiteral("#!/bin/bash\n# linopus: output\nout=\"$LINOPUS_DEST/out.txt\"\n"
+                                              "pwd > \"$out\"\necho \"$LINOPUS_SOURCE\" >> \"$out\"\n"
+                                              "for f in \"$@\"; do basename \"$f\" >> \"$out\"; done\necho done\n");
+        QVERIFY(ScriptRunner::isScript(script));
+        QVERIFY(!ScriptRunner::isScript(QStringLiteral("Copy")));
+        QVERIFY(ScriptRunner::optionsOf(script).showOutput);
+        QVERIFY(!ScriptRunner::optionsOf(script).terminal);
+        QVERIFY(ScriptRunner::optionsOf(QStringLiteral("#!/bin/sh\n# linopus: terminal\n# Linopus: NoRefresh")).terminal);
+        QVERIFY(!ScriptRunner::optionsOf(QStringLiteral("#!/bin/sh\n#linopus:norefresh")).refresh);
+
+        QVERIFY(m_engine->run(script, ctx));
+        QTRY_VERIFY(m_engine->runningScripts().isEmpty() || m_engine->runningScripts().first()->waitForFinished(10000));
+        QTRY_VERIFY(QFile::exists(ctx.dest + QStringLiteral("/out.txt")));
+        QTRY_COMPARE(readFile(ctx.dest + QStringLiteral("/out.txt")).split('\n').size(), 5);
+        const QList<QByteArray> lines = readFile(ctx.dest + QStringLiteral("/out.txt")).split('\n');
+        QCOMPARE(QString::fromUtf8(lines.value(0)), ctx.source); // starts in the source folder
+        QCOMPARE(QString::fromUtf8(lines.value(1)), ctx.source);
+        QCOMPARE(lines.value(2), QByteArray("a b.txt")); // spaces survive
+        QCOMPARE(lines.value(3), QByteArray("c.txt"));
+        // The script file is cleaned up afterwards.
+        QTRY_VERIFY(QDir(ScriptRunner::scriptDir()).entryList(QDir::Files).isEmpty());
+        Paths::setCacheHomeOverride(QString());
     }
 
     void copySelectionToDest()
