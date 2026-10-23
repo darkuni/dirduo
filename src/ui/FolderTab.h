@@ -39,6 +39,8 @@ public:
     bool up();
     void refresh();
     bool canGoBack() const { return !m_back.isEmpty(); }
+    QStringList backHistory() const { return m_back; }       // oldest first
+    QStringList forwardHistory() const { return m_forward; }
     bool canGoForward() const { return !m_forward.isEmpty(); }
 
     QString path() const { return m_path; }

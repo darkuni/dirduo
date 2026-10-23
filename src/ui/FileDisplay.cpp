@@ -8,6 +8,13 @@
 #include "ui/Style.h"
 
 #include <QSplitter>
+#include <QMouseEvent>
+#include <QMimeData>
+#include <QMenu>
+#include <QDrag>
+#include <QDir>
+#include <QApplication>
+#include "ui/Glyphs.h"
 
 #include <QAbstractItemView>
 #include <QHBoxLayout>
@@ -27,6 +34,52 @@ QToolButton *navButton(const QString &icon, Qt::ArrowType fallback, const QStrin
         b->setArrowType(fallback);
     else
         b->setIcon(i);
+    b->setAutoRaise(true);
+    b->setToolTip(tip);
+    b->setFocusPolicy(Qt::NoFocus);
+    return b;
+}
+
+// The current folder's icon in the location bar: drag it to copy, move or
+// link the folder itself, as with an item in the list.
+class FolderHandle : public QLabel
+{
+public:
+    explicit FolderHandle(QWidget *parent)
+        : QLabel(parent)
+    {
+        setCursor(Qt::OpenHandCursor);
+        setToolTip(QStringLiteral("This folder: drag it somewhere to copy or move it"));
+    }
+    QString path;
+
+protected:
+    void mousePressEvent(QMouseEvent *e) override
+    {
+        m_start = e->position().toPoint();
+        QLabel::mousePressEvent(e);
+    }
+    void mouseMoveEvent(QMouseEvent *e) override
+    {
+        if (!(e->buttons() & Qt::LeftButton) || path.isEmpty()
+            || (e->position().toPoint() - m_start).manhattanLength() < QApplication::startDragDistance())
+            return;
+        auto *drag = new QDrag(this);
+        auto *mime = new QMimeData;
+        mime->setUrls({Location::toUrl(path)});
+        drag->setMimeData(mime);
+        if (!pixmap().isNull())
+            drag->setPixmap(pixmap());
+        drag->exec(Qt::CopyAction | Qt::MoveAction | Qt::LinkAction, Qt::CopyAction);
+    }
+
+private:
+    QPoint m_start;
+};
+
+QToolButton *glyphButton(const QString &tip, QWidget *parent)
+{
+    auto *b = new QToolButton(parent);
     b->setAutoRaise(true);
     b->setToolTip(tip);
     b->setFocusPolicy(Qt::NoFocus);
@@ -61,14 +114,49 @@ FileDisplay::FileDisplay(AliasManager &aliases, QWidget *parent)
     auto *hl = new QHBoxLayout(header);
     hl->setContentsMargins(4, 2, 4, 2);
     hl->setSpacing(2);
+    // Laid out as in Opus: back, forward, up, refresh, home, favorites, the
+    // folder's icon, the path, and recent folders at the end. The bar takes
+    // the display's role color (source, destination, locked destination).
+    m_header = header;
+    header->setAutoFillBackground(true);
     m_badge->setAlignment(Qt::AlignCenter);
     m_badge->setMinimumWidth(64);
     m_badge->setContentsMargins(6, 1, 6, 1);
+    m_badge->hide(); // the bar's color says it now; kept for the locked mark
+    m_refresh = glyphButton(QStringLiteral("Refresh (F5)"), header);
+    m_home = glyphButton(QStringLiteral("Home"), header);
+    m_star = glyphButton(QStringLiteral("Favorites"), header);
+    m_star->setPopupMode(QToolButton::InstantPopup);
+    m_star->setStyleSheet(QStringLiteral("QToolButton::menu-indicator { image: none; }"));
+    auto *favMenu = new QMenu(m_star);
+    connect(favMenu, &QMenu::aboutToShow, this, [this, favMenu]() {
+        Q_EMIT activated(this); // a pick opens here
+        favMenu->clear();
+        if (m_menuProvider)
+            m_menuProvider(favMenu, QStringLiteral("favorites"));
+    });
+    m_star->setMenu(favMenu);
+    auto *handle = new FolderHandle(header);
+    m_folderIcon = handle;
+    m_recent = glyphButton(QStringLiteral("Recent folders"), header);
+    m_recent->setPopupMode(QToolButton::InstantPopup);
+    m_recent->setStyleSheet(QStringLiteral("QToolButton::menu-indicator { image: none; }"));
+    auto *recentMenu = new QMenu(m_recent);
+    connect(recentMenu, &QMenu::aboutToShow, this, [this, recentMenu]() { fillRecentMenu(recentMenu); });
+    m_recent->setMenu(recentMenu);
+    for (QToolButton *b : {m_back, m_forward, m_up})
+        b->setArrowType(Qt::NoArrow);
     hl->addWidget(m_badge);
     hl->addWidget(m_back);
     hl->addWidget(m_forward);
     hl->addWidget(m_up);
+    hl->addWidget(m_refresh);
+    hl->addWidget(m_home);
+    hl->addWidget(m_star);
+    hl->addSpacing(2);
+    hl->addWidget(m_folderIcon);
     hl->addWidget(m_crumbs, 1);
+    hl->addWidget(m_recent);
     layout->addWidget(header);
 
     m_tabs->setDocumentMode(true);
@@ -122,6 +210,16 @@ FileDisplay::FileDisplay(AliasManager &aliases, QWidget *parent)
         if (auto *t = currentTab())
             t->up();
         Q_EMIT activated(this);
+    });
+    connect(m_refresh, &QToolButton::clicked, this, [this]() {
+        if (auto *t = currentTab())
+            t->refresh();
+        Q_EMIT activated(this);
+    });
+    connect(m_home, &QToolButton::clicked, this, [this]() {
+        Q_EMIT activated(this);
+        if (auto *t = currentTab())
+            t->navigate(QDir::homePath());
     });
     connect(m_crumbs, &BreadcrumbBar::navigateRequested, this, [this](const QString &input) {
         Q_EMIT activated(this);
@@ -317,6 +415,8 @@ void FileDisplay::updateHeader()
     if (!t)
         return;
     m_crumbs->setPath(t->path());
+    static_cast<FolderHandle *>(m_folderIcon)->path = t->path();
+    m_recent->setEnabled(t->canGoBack() || t->canGoForward());
     m_back->setEnabled(t->canGoBack());
     m_forward->setEnabled(t->canGoForward());
     m_up->setEnabled(t->path() != QLatin1String("/"));
@@ -396,14 +496,72 @@ void FileDisplay::applyStyle()
     ap.setColor(QPalette::Window, accent.isValid() ? accent : pal.color(QPalette::Window));
     m_accent->setPalette(ap);
     // In single mode there is nothing to tell apart: no edge.
-    m_accent->setVisible(m_showBadge && accent.isValid());
+    m_accent->setVisible(false); // the whole location bar carries the color now
     QString bg = accent.isValid() ? accent.name() : QStringLiteral("transparent");
     fg = accent.isValid() ? textOn(accent) : pal.color(QPalette::PlaceholderText).name();
+    // The location bar in the role color, its icons and path in a color that reads on it.
+    const QColor barColor = accent.isValid() ? accent : pal.color(QPalette::Window);
+    const QColor ink = accent.isValid() ? QColor(textOn(accent)) : pal.color(QPalette::WindowText);
+    QPalette hp = m_header->palette();
+    hp.setColor(QPalette::Window, barColor);
+    hp.setColor(QPalette::WindowText, ink);
+    hp.setColor(QPalette::ButtonText, ink);
+    hp.setColor(QPalette::Text, ink);
+    m_header->setPalette(hp);
+    m_crumbs->setPalette(hp);
+    using Glyphs::Glyph;
+    m_back->setIcon(Glyphs::icon(Glyph::Back, ink));
+    m_forward->setIcon(Glyphs::icon(Glyph::Forward, ink));
+    m_up->setIcon(Glyphs::icon(Glyph::Up, ink));
+    m_refresh->setIcon(Glyphs::icon(Glyph::Refresh, ink));
+    m_home->setIcon(Glyphs::icon(Glyph::Home, ink));
+    m_star->setIcon(Glyphs::icon(Glyph::Star, ink));
+    m_recent->setIcon(Glyphs::icon(Glyph::ChevronDown, ink));
+    const int px = qMax(16, fontMetrics().height());
+    for (QToolButton *b : {m_back, m_forward, m_up, m_refresh, m_home, m_star, m_recent})
+        b->setIconSize(QSize(px, px));
+    m_folderIcon->setPixmap(Glyphs::pixmap(Glyph::Folder, ink, px, devicePixelRatioF()));
+    m_header->setToolTip(m_role == Role::Source ? QStringLiteral("Source")
+                         : m_role == Role::Dest ? (m_destLocked ? QStringLiteral("Destination (locked)") : QStringLiteral("Destination"))
+                                              : QString());
     const Role role = m_role;
     m_badge->setText(text);
     m_badge->setToolTip(role == Role::Dest && m_destLocked ? QStringLiteral("Destination (locked)") : QString());
     m_badge->setStyleSheet(QStringLiteral("QLabel { background: %1; color: %2; border-radius: 4px; font-weight: 600; }").arg(bg, fg));
-    m_badge->setVisible(m_showBadge);
+    // A locked destination says so in words too.
+    m_badge->setVisible(m_showBadge && role == Role::Dest && m_destLocked);
+}
+
+void FileDisplay::fillRecentMenu(QMenu *menu)
+{
+    menu->clear();
+    FolderTab *t = currentTab();
+    if (!t)
+        return;
+    QStringList seen{t->path()};
+    auto add = [&](const QString &p) {
+        if (seen.contains(p))
+            return;
+        seen << p;
+        QAction *a = menu->addAction(Location::title(p));
+        a->setToolTip(Location::display(p));
+        connect(a, &QAction::triggered, this, [this, p]() {
+            Q_EMIT activated(this);
+            if (auto *tab = currentTab())
+                tab->navigate(p);
+        });
+    };
+    const QStringList back = t->backHistory();
+    for (int i = back.size() - 1; i >= 0 && seen.size() <= 20; --i)
+        add(back.at(i));
+    const QStringList forward = t->forwardHistory();
+    if (!forward.isEmpty() && !menu->isEmpty())
+        menu->addSeparator();
+    for (int i = forward.size() - 1; i >= 0 && seen.size() <= 30; --i)
+        add(forward.at(i));
+    menu->setToolTipsVisible(true);
+    if (menu->isEmpty())
+        menu->addAction(QStringLiteral("(no other folders yet)"))->setEnabled(false);
 }
 
 void FileDisplay::setDestLocked(bool locked)

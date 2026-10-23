@@ -4,11 +4,14 @@
 
 #include <QWidget>
 
+#include <functional>
+
 class AliasManager;
 class FolderTree;
 class QSplitter;
 class BreadcrumbBar;
 class QLabel;
+class QMenu;
 class QStackedWidget;
 class QTabBar;
 class QToolButton;
@@ -40,6 +43,14 @@ public:
     void setShowRoleBadge(bool show);
 
     BreadcrumbBar *breadcrumb() const { return m_crumbs; }
+    // Fills the favorites menu of the location bar's star.
+    void setMenuProvider(std::function<void(QMenu *, const QString &)> p) { m_menuProvider = std::move(p); }
+    QWidget *locationBar() const { return m_header; }
+    QToolButton *refreshButton() const { return m_refresh; }
+    QToolButton *homeButton() const { return m_home; }
+    QToolButton *favoritesButton() const { return m_star; }
+    QToolButton *recentButton() const { return m_recent; }
+    void fillRecentMenu(QMenu *menu);
 
     // This display's own folder tree (Set TREE=separate).
     void setTreeVisible(bool visible);
@@ -90,6 +101,13 @@ private:
     QToolButton *m_back;
     QToolButton *m_forward;
     QToolButton *m_up;
+    QToolButton *m_refresh = nullptr;
+    QToolButton *m_home = nullptr;
+    QToolButton *m_star = nullptr;
+    QToolButton *m_recent = nullptr;
+    QLabel *m_folderIcon = nullptr;
+    QWidget *m_header = nullptr;
+    std::function<void(QMenu *, const QString &)> m_menuProvider;
     BreadcrumbBar *m_crumbs;
     QTabBar *m_tabs;
     QStackedWidget *m_stack;

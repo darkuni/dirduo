@@ -154,6 +154,7 @@ add_library(linopus_ui STATIC
     src/ui/ImageConvertDialog.cpp
     src/ui/ArchiveDialog.cpp
     src/ui/PropertiesDialog.cpp
+    src/ui/Glyphs.cpp
     src/ui/HistoryDialog.cpp
     src/ui/SelectDialog.cpp
     src/ui/Launch.cpp

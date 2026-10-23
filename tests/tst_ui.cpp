@@ -1928,6 +1928,47 @@ private Q_SLOTS:
         QVERIFY(!plain.menu());
     }
 
+    void locationBar()
+    {
+        FileDisplay *d = w->display(0);
+        FolderTab *t = d->currentTab();
+        const QString start = t->path();
+        QVERIFY(d->refreshButton() && d->homeButton() && d->favoritesButton() && d->recentButton());
+        // The bar wears the role color.
+        w->runCommand(QStringLiteral("Set DUAL=on"));
+        QTRY_COMPARE(d->locationBar()->palette().color(QPalette::Window),
+                     d->role() == FileDisplay::Role::Source ? Style::instance()->theme().sourceAccent
+                                                             : Style::instance()->theme().destAccent);
+        // Recent folders: where this tab has been.
+        t->navigate(root + QStringLiteral("/a"));
+        QTRY_COMPARE(t->path(), root + QStringLiteral("/a"));
+        t->navigate(root + QStringLiteral("/b"));
+        QTRY_COMPARE(t->path(), root + QStringLiteral("/b"));
+        QMenu recent;
+        d->fillRecentMenu(&recent);
+        QStringList texts;
+        for (QAction *a : recent.actions())
+            texts << a->text();
+        QVERIFY(texts.contains(QStringLiteral("a")));
+        for (QAction *a : recent.actions()) {
+            if (a->text() == QStringLiteral("a"))
+                a->trigger();
+        }
+        QTRY_COMPARE(t->path(), root + QStringLiteral("/a"));
+        // The star lists favorites and offers to add this folder.
+        QMenu *fav = d->favoritesButton()->menu();
+        QVERIFY(fav);
+        QMetaObject::invokeMethod(fav, "aboutToShow");
+        bool hasAdd = false;
+        for (QAction *a : fav->actions())
+            hasAdd = hasAdd || a->text().startsWith(QStringLiteral("Add This Folder"));
+        QVERIFY(hasAdd);
+        d->homeButton()->click();
+        QTRY_COMPARE(t->path(), QDir::homePath());
+        t->navigate(start);
+        QTRY_COMPARE(t->path(), start);
+    }
+
     void freeSpaceShown()
     {
         FileDisplay *d = w->display(0);
