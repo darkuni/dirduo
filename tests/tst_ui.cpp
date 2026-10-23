@@ -38,6 +38,7 @@
 #include "core/Location.h"
 #include "ui/ArchiveDialog.h"
 #include "ui/TagsDialog.h"
+#include "core/Condition.h"
 #include "ui/ChecksumDialog.h"
 #include "core/Checksum.h"
 #include <QTreeWidget>
@@ -474,6 +475,54 @@ private Q_SLOTS:
         QVERIFY(!w->menuBarCorner()->isVisibleTo(w));
         QVERIFY(store.remove(id));
         QTRY_VERIFY(!w->buttonBar(id));
+    }
+
+    void defaultToolbarsAndOpusArrangement()
+    {
+        ToolbarStore &store = m_app->toolbars();
+        // Every ready-made button runs a real command.
+        for (const ToolbarDef &p : ToolbarStore::presets()) {
+            QVERIFY2(!p.buttons.isEmpty(), qPrintable(p.id));
+            std::function<void(const QList<ButtonDef> &)> check = [&](const QList<ButtonDef> &list) {
+                for (const ButtonDef &b : list) {
+                    if (b.isItem() && b.field != QLatin1String("command"))
+                        continue;
+                    if (!b.left.isEmpty()) {
+                        const QString first = b.left.section(QLatin1Char(' '), 0, 0);
+                        QVERIFY2(CommandCatalog::find(first), qPrintable(p.id + QStringLiteral(": ") + b.left));
+                    }
+                    QString err;
+                    QVERIFY2(Condition::check(b.enableWhen, CommandCatalog::conditionNames(), &err), qPrintable(b.enableWhen + err));
+                    QVERIFY2(Condition::check(b.checkWhen, CommandCatalog::conditionNames(), &err), qPrintable(b.checkWhen + err));
+                    check(b.children);
+                }
+            };
+            check(p.buttons);
+        }
+        const QString id = store.addPreset(QStringLiteral("tools"));
+        QVERIFY(!id.isEmpty());
+        QCOMPARE(store.addPreset(QStringLiteral("tools")), id); // only once
+        QCOMPARE(store.toolbar(id).buttons.size(), ToolbarStore::preset(QStringLiteral("tools")).buttons.size());
+        QVERIFY(store.remove(id));
+
+        QVERIFY(w->runCommand(QStringLiteral("Set DUAL=horizontal\nToolbar ARRANGE=opus")));
+        QToolBar *ops = w->toolbarByName(QStringLiteral("operations"));
+        QToolBar *favs = w->toolbarByName(QStringLiteral("favorites"));
+        QToolBar *views = w->toolbarByName(QStringLiteral("views"));
+        QVERIFY(ops && favs && views);
+        QCOMPARE(w->toolbarPlace(ops), ListerWindow::ToolbarPlace::Between);
+        QCOMPARE(w->toolbarPlace(w->drivesBar()), ListerWindow::ToolbarPlace::Between);
+        QVERIFY(w->toolbarStrip()->isJoined(favs));
+        QCOMPARE(w->toolbarPlace(views), ListerWindow::ToolbarPlace::MenuBar);
+        QVERIFY(w->toolbarByName(QStringLiteral("buttons"))->isHidden());
+        // Back as it was for the tests after this one.
+        for (const QString &n : {QStringLiteral("Operations"), QStringLiteral("Favorites"), QStringLiteral("Views")}) {
+            for (const QString &tid : store.ids()) {
+                if (store.toolbar(tid).name == n)
+                    store.remove(tid);
+            }
+        }
+        QVERIFY(w->runCommand(QStringLiteral("Toolbar NAME=buttons PLACE=top STATE=on\nToolbar NAME=drives PLACE=between\nSet DUAL=vertical")));
     }
 
     void groupingAndFilter()

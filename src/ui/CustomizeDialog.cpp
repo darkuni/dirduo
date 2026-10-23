@@ -16,6 +16,8 @@
 #include <QMimeData>
 #include <QPushButton>
 #include <QTabWidget>
+#include <QScrollArea>
+#include <QJsonObject>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
@@ -111,6 +113,79 @@ protected:
         mime->setData(QLatin1String(ButtonBar::kMime), QJsonDocument(payload).toJson(QJsonDocument::Compact));
         return mime;
     }
+};
+
+// One ready-made toolbar's buttons, laid out as a toolbar would be; each can
+// be dragged onto a toolbar of yours.
+class PresetRow : public QListWidget
+{
+public:
+    PresetRow(const ToolbarDef &def, QWidget *parent)
+        : QListWidget(parent)
+        , m_def(def)
+    {
+        setFlow(QListView::LeftToRight);
+        setWrapping(true);
+        setResizeMode(QListView::Adjust);
+        setSpacing(2);
+        setDragEnabled(true);
+        setDragDropMode(QAbstractItemView::DragOnly);
+        setSelectionMode(QAbstractItemView::SingleSelection);
+        setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        for (int i = 0; i < def.buttons.size(); ++i) {
+            const ButtonDef &b = def.buttons.at(i);
+            QString text = b.label;
+            if (b.separator)
+                text = QStringLiteral("|");
+            else if (b.spacer)
+                text = QStringLiteral("[Spacer]");
+            else if (!b.field.isEmpty())
+                text = QStringLiteral("[%1 box]").arg(b.label);
+            else if (b.isMenu())
+                text += QStringLiteral(" \u25BE");
+            auto *item = new QListWidgetItem(QIcon::fromTheme(b.icon), text, this);
+            item->setData(Qt::UserRole, i);
+            item->setToolTip(b.isMenu() && !b.isSplit() ? b.tip : (b.tip.isEmpty() ? b.left : b.tip + QStringLiteral("\n") + b.left));
+        }
+    }
+    QSize sizeHint() const override
+    {
+        // Tall enough for its buttons at the width it has.
+        const int w = qMax(200, width());
+        int x = 0, rows = 1, rowH = 0;
+        for (int i = 0; i < count(); ++i) {
+            const QSize s = sizeHintForIndex(model()->index(i, 0)) + QSize(4, 4);
+            rowH = qMax(rowH, s.height());
+            if (x + s.width() > w - 8 && x > 0) {
+                ++rows;
+                x = 0;
+            }
+            x += s.width();
+        }
+        return QSize(QListWidget::sizeHint().width(), rows * qMax(rowH, 24) + 8);
+    }
+    void resizeEvent(QResizeEvent *e) override
+    {
+        QListWidget::resizeEvent(e);
+        setFixedHeight(sizeHint().height());
+    }
+
+protected:
+    QStringList mimeTypes() const override { return {QLatin1String(ButtonBar::kMime)}; }
+    QMimeData *mimeData(const QList<QListWidgetItem *> &items) const override
+    {
+        if (items.isEmpty())
+            return nullptr;
+        QJsonObject payload;
+        payload.insert(QStringLiteral("button"), m_def.buttons.value(items.first()->data(Qt::UserRole).toInt()).toJson());
+        auto *mime = new QMimeData;
+        mime->setData(QLatin1String(ButtonBar::kMime), QJsonDocument(payload).toJson(QJsonDocument::Compact));
+        return mime;
+    }
+
+private:
+    ToolbarDef m_def;
 };
 
 } // namespace
@@ -274,6 +349,53 @@ CustomizeDialog::CustomizeDialog(ListerWindow *lister, ToolbarStore &store)
     connect(m_commands, &QTreeWidget::itemDoubleClicked, this, addCurrent);
     connect(addHere, &QPushButton::clicked, this, addCurrent);
 
+    // Default toolbars, as in Opus: add one whole, or drag buttons from it.
+    auto *presetPage = new QWidget(tabs);
+    auto *pl = new QVBoxLayout(presetPage);
+    auto *presetIntro = new QLabel(QStringLiteral("Ready-made toolbars. Add one whole, or drag single buttons from them onto your own "
+                                                  "toolbars. Opus Arrangement puts Operations and the drives between the displays, "
+                                                  "Favorites beside the drives and Views in the menu bar."),
+                                   presetPage);
+    presetIntro->setWordWrap(true);
+    pl->addWidget(presetIntro);
+    auto *opus = new QPushButton(QIcon::fromTheme(QStringLiteral("view-split-top-bottom")), QStringLiteral("Use the Opus Arrangement"),
+                                 presetPage);
+    opus->setObjectName(QStringLiteral("opus-arrangement"));
+    connect(opus, &QPushButton::clicked, this, [this]() { m_lister->runCommand(QStringLiteral("Toolbar ARRANGE=opus")); });
+    pl->addWidget(opus, 0, Qt::AlignLeft);
+    auto *scroll = new QScrollArea(presetPage);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    auto *inner = new QWidget(scroll);
+    auto *il = new QVBoxLayout(inner);
+    for (const ToolbarDef &p : ToolbarStore::presets()) {
+        auto *head = new QHBoxLayout;
+        auto *title = new QLabel(QStringLiteral("<b>%1</b>").arg(p.name.toHtmlEscaped()), inner);
+        head->addWidget(title);
+        head->addStretch(1);
+        auto *add = new QPushButton(QStringLiteral("Add This Toolbar"), inner);
+        add->setObjectName(QStringLiteral("add-preset-") + p.id);
+        const QString pid = p.id;
+        connect(add, &QPushButton::clicked, this, [this, pid]() {
+            const QString id = m_store.addPreset(pid);
+            if (id.isEmpty())
+                return;
+            m_lister->setButtonBarVisible(id, true);
+            refreshBars();
+            for (int i = 0; i < m_bars->count(); ++i) {
+                if (m_bars->item(i)->data(Qt::UserRole).toString() == id)
+                    m_bars->setCurrentRow(i);
+            }
+        });
+        head->addWidget(add);
+        il->addLayout(head);
+        il->addWidget(new PresetRow(p, inner));
+    }
+    il->addStretch(1);
+    scroll->setWidget(inner);
+    pl->addWidget(scroll, 1);
+    tabs->addTab(presetPage, QStringLiteral("Default Toolbars"));
+
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::close);
     layout->addWidget(buttons);
@@ -282,7 +404,7 @@ CustomizeDialog::CustomizeDialog(ListerWindow *lister, ToolbarStore &store)
     connect(&m_store, &ToolbarStore::removed, this, &CustomizeDialog::refreshBars);
     refreshBars();
     m_bars->setCurrentRow(0);
-    resize(460, 520);
+    resize(680, 600);
 }
 
 QString CustomizeDialog::currentToolbar() const

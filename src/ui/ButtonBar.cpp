@@ -677,6 +677,201 @@ QList<ButtonDef> ToolbarStore::defaultButtons()
 }
 
 
+QList<ToolbarDef> ToolbarStore::presets()
+{
+    auto b = [](const char *label, const char *icon, const char *left, const char *tip = "", const char *enable = "",
+                const char *check = "", const char *right = "") {
+        ButtonDef d;
+        d.label = QString::fromUtf8(label);
+        d.icon = QString::fromUtf8(icon);
+        d.left = QString::fromUtf8(left);
+        d.tip = QString::fromUtf8(tip);
+        d.enableWhen = QString::fromUtf8(enable);
+        d.checkWhen = QString::fromUtf8(check);
+        d.right = QString::fromUtf8(right);
+        return d;
+    };
+    auto split = [](ButtonDef d, QList<ButtonDef> children) {
+        d.split = true;
+        d.children = std::move(children);
+        return d;
+    };
+    auto menu = [](const char *label, const char *icon, QList<ButtonDef> children, const char *tip = "") {
+        ButtonDef d;
+        d.label = QString::fromUtf8(label);
+        d.icon = QString::fromUtf8(icon);
+        d.tip = QString::fromUtf8(tip);
+        d.children = std::move(children);
+        return d;
+    };
+    auto dyn = [](const char *label, const char *icon, const char *kind, const char *tip) {
+        ButtonDef d;
+        d.label = QString::fromUtf8(label);
+        d.icon = QString::fromUtf8(icon);
+        d.dynamic = QString::fromUtf8(kind);
+        d.tip = QString::fromUtf8(tip);
+        return d;
+    };
+    const ButtonDef sep = ButtonDef::makeSeparator();
+    const ButtonDef spacer = ButtonDef::makeSpacer();
+    auto bar = [](const char *id, const char *name, QList<ButtonDef> buttons, const char *style = "auto") {
+        ToolbarDef t;
+        t.id = QString::fromUtf8(id);
+        t.name = QString::fromUtf8(name);
+        t.buttons = std::move(buttons);
+        t.style = QString::fromUtf8(style);
+        return t;
+    };
+    QList<ToolbarDef> out;
+    out << bar("operations", "Operations",
+               {split(b("Copy Files", "edit-copy", "Copy", "Copy to the destination", "selection && dest", "", "Copy AS"),
+                      {b("Copy As...", "edit-copy", "Copy AS", "", "selection && dest"),
+                       b("Copy to...", "folder-open", "Copy TO=ask", "", "selection"),
+                       b("Duplicate Here as...", "edit-copy", "Copy AS TO={sourcepath}", "", "selection"),
+                       b("Copy Flat", "view-list-text", "Copy STRUCTURE=flat", "", "selection && dest"),
+                       b("Copy Newer Only", "edit-copy", "Copy WHENEXISTS=newer", "", "selection && dest")}),
+                split(b("Move", "transform-move", "Copy MOVE", "Move to the destination", "selection && dest", "", "Copy MOVE AS"),
+                      {b("Move As...", "transform-move", "Copy MOVE AS", "", "selection && dest"),
+                       b("Move to...", "folder-open", "Copy MOVE TO=ask", "", "selection")}),
+                split(b("Rename", "edit-rename", "Rename", "Rename in place", "selection", "", "Rename ADVANCED"),
+                      {b("Advanced Rename...", "edit-rename", "Rename ADVANCED", "", "selection"),
+                       b("Undo Rename", "edit-undo", "Rename UNDO")}),
+                split(b("New Folder", "folder-new", "CreateFolder", "New folders (commas for several)"),
+                      {b("Paste as File...", "edit-paste", "Clipboard PASTE AS"),
+                       b("Make Link Here", "insert-link", "MakeLink", "", "selection"),
+                       b("Make Link in Destination", "insert-link", "MakeLink DEST", "", "selection && dest")}),
+                split(b("Delete", "edit-delete", "Delete", "To the trash", "selection"),
+                      {b("Delete Permanently", "edit-delete-shred", "Delete NORECYCLE", "", "selection"),
+                       b("Clean Junk Files", "edit-clear", "Clean")}),
+                sep,
+                split(b("Archive", "archive-insert", "Archive CREATE", "Put the selection in an archive", "selection"),
+                      {b("Quick Zip", "archive-insert", "Archive CREATE QUICK FORMAT=zip", "", "selection"),
+                       b("Extract Here", "archive-extract", "Archive EXTRACT", "", "archives"),
+                       b("Extract to Destination", "archive-extract", "Archive EXTRACT DEST", "", "archives && dest"),
+                       b("Extract and Trash", "archive-extract", "Archive EXTRACT TRASH", "", "archives")}),
+                split(b("Properties", "document-properties", "Properties", "Properties of the selection", "selection"),
+                      {b("Checksums...", "document-encrypt", "Checksum", "", "selection"),
+                       b("Tags and Description...", "tag", "Tag", "", "selection"),
+                       b("Change Date...", "view-calendar", "SetAttr", "", "selection")}),
+                spacer,
+                b("Terminal", "utilities-terminal", "Terminal", "Konsole in the source folder"),
+                b("Settings", "configure", "Settings", "Preferences")});
+    out << bar("navigation", "Navigation",
+               {b("Back", "go-previous", "Go BACK", "", "back"), b("Forward", "go-next", "Go FORWARD", "", "forward"),
+                b("Up", "go-up", "Go UP", "", "canup"), b("Refresh", "view-refresh", "Go REFRESH"), b("Home", "go-home", "Go ~"),
+                sep,
+                b("Swap", "view-split-left-right", "Go SWAP", "Swap the two displays' folders", "dual"),
+                b("Same", "go-jump", "Go {sourcepath} OPENINDEST", "Source folder in the destination", "dual"),
+                b("Lock Dest", "object-locked", "Set DESTLOCK=toggle", "Keep the destination where it is", "dual", "destlocked"),
+                b("Nav Lock", "link", "Set NAVLOCK=toggle", "Both displays follow each other", "dual", "navlock"),
+                spacer, ButtonDef::makeField(QStringLiteral("go"))},
+               "icons");
+    out << bar("views", "Views",
+               {b("Details", "view-list-details", "Set VIEW=details", "Details", "", "view=details"),
+                b("List", "view-list-text", "Set VIEW=list", "List", "", "view=list"),
+                b("Icons", "view-list-icons", "Set VIEW=icons", "Icons", "", "view=icons"),
+                b("Thumbnails", "view-preview", "Set VIEW=thumbnails", "Thumbnails", "", "view=thumbnails"),
+                sep,
+                split(b("Flat", "view-list-tree", "Set FLATVIEW=toggle", "Flat view", "", "flat"),
+                      {b("Grouped by Folder", "view-list-tree", "Set FLATVIEW=grouped"),
+                       b("Mixed", "view-list-details", "Set FLATVIEW=ungrouped"),
+                       b("Files Only", "view-list-text", "Set FLATVIEW=nofolders"), b("Off", "", "Set FLATVIEW=off")}),
+                menu("Group", "view-group",
+                     {b("None", "", "Set GROUPBY=none"), b("Type", "", "Set GROUPBY=type"), b("Name", "", "Set GROUPBY=name"),
+                      b("Size", "", "Set GROUPBY=size"), b("Modified", "", "Set GROUPBY=modified"), b("Label", "", "Set GROUPBY=label"),
+                      b("Rating", "", "Set GROUPBY=rating")},
+                     "Group by"),
+                b("Tree", "view-list-tree", "Set TREE=toggle", "Folder tree", "", "tree", "Set TREE=separate"),
+                b("Viewer", "view-preview", "Set VIEWER=toggle", "Viewer pane (F3)"),
+                b("Hidden", "view-hidden", "Set HIDDEN=toggle", "Hidden files", "", "hidden"),
+                b("Sizes", "folder-stats", "Set FOLDERSIZES=toggle", "Folder sizes", "", "foldersizes")},
+               "icons");
+    out << bar("selection", "Selection",
+               {b("All", "edit-select-all", "Select ALL", "Select all"), b("None", "edit-select-none", "Select NONE", "Select none"),
+                b("Invert", "edit-select-invert", "Select INVERT", "Invert the selection"),
+                b("Select...", "edit-select", "Select DIALOG", "By name, kind, size, age, label..."),
+                b("New Here", "edit-select", "Select COMPARE=newerormissing", "Newer here or not in the other display", "dual"),
+                b("Checkboxes", "checkbox", "Set CHECKBOXES=toggle", "Check boxes to select", "", "checkboxes"),
+                spacer, ButtonDef::makeField(QStringLiteral("filter"))});
+    out << bar("favorites", "Favorites",
+               {dyn("Favorites", "bookmarks", "favorites", "Your favorite folders (Ctrl+D adds)"),
+                dyn("Frequent", "view-history", "frequent", "Folders you use most"),
+                dyn("Aliases", "folder-favorites", "aliases", "/downloads, /sdcard and your own"),
+                dyn("Collections", "folder-bookmark", "collections", "Virtual folders"),
+                dyn("Servers", "network-server", "servers", "Saved servers"),
+                b("Add", "bookmark-new", "Favorite ADD", "Add the source folder to Favorites")});
+    {
+        QList<ButtonDef> labels;
+        for (const char *c : {"Red", "Orange", "Yellow", "Green", "Blue", "Purple", "Gray"})
+            labels << b(c, "", QStringLiteral("Tag LABEL=%1").arg(QString::fromLatin1(c)).toUtf8().constData(), "", "selection");
+        labels << sep << b("No Label", "", "Tag LABEL=none", "", "selection");
+        QList<ButtonDef> stars;
+        for (int i = 5; i >= 1; --i)
+            stars << b(QString(i, QChar(0x2605)).toUtf8().constData(), "", QStringLiteral("Tag RATING=%1").arg(i).toUtf8().constData(), "",
+                       "selection");
+        stars << sep << b("Not Rated", "", "Tag RATING=0", "", "selection");
+        out << bar("labels", "Labels and Tags",
+                   {menu("Label", "tag", labels, "Color label"), menu("Rating", "rating", stars, "Star rating"),
+                    b("Tags", "tag-edit", "Tag", "Tags and description", "selection"),
+                    menu("Select", "edit-select",
+                         {b("Red", "", "Select LABEL=Red"), b("Green", "", "Select LABEL=Green"), b("Blue", "", "Select LABEL=Blue"),
+                          b("Any Label", "", "Select LABEL=*"), b("4 Stars and Up", "", "Select RATING=4")},
+                         "Select by label or rating")});
+    }
+    out << bar("images", "Images",
+               {b("Show", "view-preview", "Show", "The picture viewer"),
+                split(b("Convert", "image-x-generic", "Image", "Convert, resize, turn", "files"),
+                      {b("To PNG", "", "Image CONVERT=png RUN", "", "files"), b("To JPEG", "", "Image CONVERT=jpg RUN", "", "files"),
+                       b("To WebP", "", "Image CONVERT=webp RUN", "", "files"),
+                       b("Half Size", "", "Image CONVERT=keep PERCENT=50 RUN", "", "files")}),
+                b("Turn Left", "object-rotate-left", "Image ROTATE=270 CONVERT=keep WHENEXISTS=replace RUN", "Turn left in place", "files"),
+                b("Turn Right", "object-rotate-right", "Image ROTATE=90 CONVERT=keep WHENEXISTS=replace RUN", "Turn right in place", "files"),
+                sep,
+                b("Thumbnails", "view-preview", "Set VIEW=thumbnails", "", "", "view=thumbnails"),
+                b("Viewer", "view-preview", "Set VIEWER=toggle", "Viewer pane (F3)"),
+                b("Date Taken", "view-calendar", "Set COLUMNSTOGGLE=taken", "Date Taken column")});
+    out << bar("tools", "Tools",
+               {b("Find", "edit-find", "Find", "Find files (Ctrl+Shift+F)"),
+                b("Synchronize", "folder-sync", "Sync", "Compare and copy what differs"),
+                b("Duplicates", "edit-copy", "Duplicates", "Find duplicate files"),
+                split(b("Checksums", "document-encrypt", "Checksum", "MD5 of the selection", "selection"),
+                      {b("SHA-256...", "", "Checksum ALGO=sha256", "", "selection"), b("CRC32 (SFV)...", "", "Checksum ALGO=crc32", "", "selection"),
+                       b("Copy MD5", "", "Checksum ALGO=md5 CLIPBOARD", "", "selection"),
+                       b("Verify a List", "", "Checksum VERIFY", "", "selection")}),
+                split(b("Split", "split", "Split SIZE=fat32", "Pieces a FAT32 card can hold", "files"),
+                      {b("Split into...", "", "Split", "", "files"), b("Join Pieces", "merge", "Join", "", "files")}),
+                b("Clean Junk", "edit-clear", "Clean", "Trash .DS_Store, Thumbs.db..."),
+                b("File Log", "view-history", "Undo LOG", "Every copy, move and delete")});
+    return out;
+}
+
+ToolbarDef ToolbarStore::preset(const QString &id)
+{
+    for (const ToolbarDef &t : presets()) {
+        if (t.id == id)
+            return t;
+    }
+    return {};
+}
+
+QString ToolbarStore::addPreset(const QString &presetId)
+{
+    const ToolbarDef p = preset(presetId);
+    if (p.id.isEmpty())
+        return {};
+    for (const ToolbarDef &d : std::as_const(m_bars)) {
+        if (d.name == p.name)
+            return d.id; // already added
+    }
+    const QString id = create(p.name);
+    m_bars[id].buttons = p.buttons;
+    m_bars[id].style = p.style;
+    m_bars[id].iconSize = p.iconSize;
+    save(id);
+    Q_EMIT changed(id);
+    return id;
+}
+
 // ---------------------------------------------------------------- ThreeButton
 
 // Buttons for some commands offer their choices on a long press (the click

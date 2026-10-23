@@ -325,7 +325,8 @@ QList<CommandInfo> buildCommands()
                       arg("NEWROW", {}, "Start a new row instead of sharing one"),
                       arg("SAMEROW", {}, "Between the displays: run on after the toolbar before it, in its row or column"),
                       arg("STATE=", onOff(), "Show or hide it"),
-                      arg("CUSTOMIZE", {}, "Enter customize mode")},
+                      arg("CUSTOMIZE", {}, "Enter customize mode"),
+                      arg("ARRANGE=", {QStringLiteral("opus")}, "Set up toolbars as Opus has them: Operations, the drives and Favorites between the displays, Views in the menu bar")},
                      QStringLiteral("Toolbar NAME=drives PLACE=between")};
     c << CommandInfo{QStringLiteral("Undo"), QStringLiteral("Undo a copy, move, new folder, trash or rename"),
                      {arg("ID=", {}, "Which one (the History window shows them); the latest when left out"),

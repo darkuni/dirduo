@@ -1113,6 +1113,38 @@ bool ListerWindow::toolbar(const ParsedCommand &cmd, QString *error)
         customize();
         return true;
     }
+    if (cmd.hasArg(QStringLiteral("ARRANGE"))) {
+        if (cmd.value(QStringLiteral("ARRANGE")).compare(QLatin1String("opus"), Qt::CaseInsensitive) != 0)
+            return fail(QStringLiteral("ARRANGE takes opus."));
+        // Opus's default: operations, then the drives with favorites beside
+        // them, between the displays; view buttons in the menu bar.
+        ToolbarStore &store = m_app.toolbars();
+        const QString ops = store.addPreset(QStringLiteral("operations"));
+        const QString favs = store.addPreset(QStringLiteral("favorites"));
+        const QString views = store.addPreset(QStringLiteral("views"));
+        for (const QString &id : {ops, favs, views})
+            createButtonBar(id, true);
+        QToolBar *opsBar = m_buttonBars.value(ops);
+        QToolBar *favBar = m_buttonBars.value(favs);
+        QToolBar *viewBar = m_buttonBars.value(views);
+        if (!opsBar || !favBar || !viewBar)
+            return fail(QStringLiteral("Could not make the toolbars."));
+        for (QToolBar *bar : m_strip->bars()) {
+            const bool hidden = bar->isHidden();
+            placeToolbar(bar, ToolbarPlace::Top, true);
+            bar->setVisible(!hidden); // moved out of the way, as it was
+        }
+        placeToolbar(opsBar, ToolbarPlace::Between);
+        placeToolbar(m_drives, ToolbarPlace::Between);
+        placeToolbar(favBar, ToolbarPlace::Between, false, true);
+        placeToolbar(viewBar, ToolbarPlace::MenuBar);
+        for (QToolBar *bar : {opsBar, favBar, viewBar, static_cast<QToolBar *>(m_drives)})
+            bar->setVisible(true);
+        if (m_buttons)
+            m_buttons->setVisible(false); // Operations does its job
+        m_strip->updateGeometryForBars();
+        return true;
+    }
     QString name = cmd.value(QStringLiteral("NAME"));
     if (name.isEmpty() && !cmd.positional.isEmpty())
         name = cmd.positional.first();

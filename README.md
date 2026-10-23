@@ -69,6 +69,7 @@ Servers and archives (KIO):
 - Split buttons (Copy Files ▾): a click runs the command, the arrow opens a menu of variations. Tick "Split button" in the button editor, or drag the ready-made Copy, Move and Delete ones from Customize > Commands > Toolbar pieces
 - Spacers push the buttons after them to the far end of a toolbar (Help at the right, like Opus); fields put a text box on a toolbar: Filter (the source list as you type), Find (by name, on Enter), Go To, or a Command box that runs any command with `{text}`. In customize mode, right-click a toolbar > Add Spacer / Add Field
 - Button Style per toolbar (customize mode, right-click > Button Style): icons only, labels only, label beside or under the icon, and icon size
+- Default toolbars (Customize > Default Toolbars): Operations, Navigation, Views, Selection, Favorites, Labels and Tags, Images and Tools, ready-made with split buttons and spacers. Add one whole, or drag single buttons from them. Use the Opus Arrangement (`Toolbar ARRANGE=opus`) sets up Operations and the drives with Favorites between the displays and Views in the menu bar
 - Toolbars in the menu bar (right-click a toolbar > In the Menu Bar): buttons at the right end of the menu bar, like Opus's View and Lister groups
 - Command console (Ctrl+Shift+P): type any command and run it in the lister; Tab completes, Up/Down for history, `help` and `help Set` explain
 

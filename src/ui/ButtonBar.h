@@ -97,6 +97,13 @@ public:
 
     QString fileFor(const QString &id) const;
     static QList<ButtonDef> defaultButtons();
+    // Ready-made toolbars to add whole or take buttons from (Customize >
+    // Default Toolbars), as Opus has: Operations, Navigation, Views...
+    static QList<ToolbarDef> presets();
+    static ToolbarDef preset(const QString &id);
+    // Adds a copy of a ready-made toolbar; returns its id. If it was added
+    // before and not renamed, that one's id (nothing new is made).
+    QString addPreset(const QString &presetId);
     static QList<ButtonDef> loadFile(const QString &file, QString *name, bool *ok, ToolbarDef *style = nullptr);
     static bool saveFile(const QString &file, const QString &name, const QList<ButtonDef> &buttons, const ToolbarDef *style = nullptr);
 

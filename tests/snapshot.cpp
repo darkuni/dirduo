@@ -587,6 +587,17 @@ int main(int argc, char *argv[])
         w->runCommand(QStringLiteral("Set DUAL=vertical"));
         QTest::qWait(500);
         shot(w, out, QStringLiteral("41-work-style-toolbars-side-by-side"));
+        w->runCommand(QStringLiteral("Toolbar NAME=work STATE=off\nToolbar NAME=views STATE=off\nSet DUAL=horizontal\nToolbar ARRANGE=opus"));
+        QTest::qWait(500);
+        shot(w, out, QStringLiteral("42-opus-arrangement"));
+        w->runCommand(QStringLiteral("Toolbar CUSTOMIZE"));
+        QTest::qWait(300);
+        if (CustomizeDialog *dlg = w->customizeDialog()) {
+            dlg->findChild<QTabWidget *>()->setCurrentIndex(2);
+            QTest::qWait(300);
+            dlg->grab().save(out + QStringLiteral("/43-default-toolbars.png"));
+            dlg->close();
+        }
     }
 
     w->close();
