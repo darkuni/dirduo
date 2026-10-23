@@ -36,7 +36,7 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Location bar: Refresh, Home, the star's favorites, drag the folder icon to the other display, the recent-folders arrow, then the two buttons at the far right: this folder into the other display, and swap the two. Source and destination bars have different colors.
 - [ ] Right-click empty space in a list > Open Konsole in This Folder: Konsole opens there. Shift+F4 does the same.
 - [ ] Middle-click the Home button in a folder; go elsewhere; click Home: back in that folder (in either display). Right-click Home > Reset.
-- [ ] Network button on the drives bar: Network shows what announces itself; the arrow > Windows Shares shows your Windows/Samba machines. Open a share, sign in, copy both ways.
+- [ ] Network button on the drives bar: your Windows/Samba machines show up. Open a share, sign in, copy both ways.
 - [ ] Network arrow > Add Server...: add your NAS (SFTP or SMB). It appears in the arrow menu, Go > Network and Servers, and the tree's Network group. Manage Servers... edits and removes.
 - [ ] Make a zip with a password, then Extract it: it asks; a wrong password says so and leaves nothing behind.
 - [ ] The status line shows free space for the internal drive and the SD card. Copy something bigger than the card's free space: it stops at once with "not enough room".

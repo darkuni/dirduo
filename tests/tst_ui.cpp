@@ -2030,7 +2030,6 @@ private Q_SLOTS:
         QStringList texts;
         for (QAction *a : menu.actions())
             texts << a->text();
-        QVERIFY(texts.contains(QStringLiteral("Network")));
         QVERIFY(texts.contains(QStringLiteral("Windows Shares")));
         QVERIFY(texts.contains(QStringLiteral("NAS")));
         QVERIFY(texts.contains(QStringLiteral("Add Server...")));

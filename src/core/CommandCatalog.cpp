@@ -322,7 +322,7 @@ QList<CatalogButton> buildButtons()
           "Archive CREATE QUICK FORMAT=zip"),
         b("File operations", "Extract", "archive-extract", "Extract the selected archives here", "Archive EXTRACT",
           "Archive EXTRACT DEST"),
-        b("Navigation", "Network", "network-workgroup", "Machines and shares on the network", "Go network:/", "Go smb:/"),
+        b("Navigation", "Network", "network-workgroup", "Windows and Samba machines on the network", "Go smb:/", "Server"),
         b("Navigation", "Terminal", "utilities-terminal", "Open Konsole in the source folder", "Terminal", "Terminal PATH={destpath}"),
         b("File operations", "Properties", "document-properties", "Size, dates and permissions of the selection", "Properties"),
         b("File operations", "Make Link", "insert-link", "Make links to the selection in the destination", "MakeLink DEST",

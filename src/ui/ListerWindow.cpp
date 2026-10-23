@@ -2694,8 +2694,6 @@ void ListerWindow::fillDynamicMenu(QMenu *menu, const QString &kind)
         for (const QString &name : aliases.names())
             goAction(menu, QLatin1Char('/') + name, QStringLiteral("Go /") + name, aliases.aliasPath(name), QStringLiteral("folder-bookmark"));
     } else if (kind == QLatin1String("servers")) {
-        goAction(menu, QStringLiteral("Network"), QStringLiteral("Go network:/"), QStringLiteral("Machines and shares on the network"),
-                 QStringLiteral("network-workgroup"));
         goAction(menu, QStringLiteral("Windows Shares"), QStringLiteral("Go smb:/"), QStringLiteral("Windows and Samba machines (SMB)"),
                  QStringLiteral("network-workgroup"));
         const QList<Server> saved = Servers::instance()->items();

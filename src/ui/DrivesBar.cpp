@@ -102,7 +102,7 @@ void DrivesBar::rebuild()
     m_network->setToolButtonStyle(m_network->icon().isNull() ? Qt::ToolButtonTextOnly : Qt::ToolButtonTextBesideIcon);
     m_network->setAutoRaise(true);
     m_network->setFocusPolicy(Qt::NoFocus);
-    m_network->setToolTip(QStringLiteral("<b>Network</b><br>Machines and shares on the network. The arrow: Windows shares and your saved servers."));
+    m_network->setToolTip(QStringLiteral("<b>Network</b><br>Windows and Samba machines and their shares. The arrow: your saved servers."));
     m_network->setPopupMode(QToolButton::MenuButtonPopup);
     auto *menu = new QMenu(m_network);
     connect(menu, &QMenu::aboutToShow, this, [this, menu]() {
@@ -111,7 +111,7 @@ void DrivesBar::rebuild()
             m_networkMenu(menu);
     });
     m_network->setMenu(menu);
-    connect(m_network, &QToolButton::clicked, this, [this]() { Q_EMIT commandTriggered(QStringLiteral("Go network:/")); });
+    connect(m_network, &QToolButton::clicked, this, [this]() { Q_EMIT commandTriggered(QStringLiteral("Go smb:/")); });
     addWidget(m_network);
     updateTips();
     setActivePath(m_activePath);

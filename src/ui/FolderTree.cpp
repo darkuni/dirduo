@@ -410,9 +410,7 @@ void FolderTree::rebuild(const QList<DriveEntry> &drives)
                                            QStringLiteral("Aliases")};
         }
     }
-    // The network: browse it, Windows shares, and the saved servers.
-    roots << FolderTreeModel::Root{QStringLiteral("Network"), QStringLiteral("network:/"), QStringLiteral("network-workgroup"),
-                                   QStringLiteral("Network")};
+    // The network: Windows and Samba shares, and the saved servers.
     roots << FolderTreeModel::Root{QStringLiteral("Windows Shares"), QStringLiteral("smb:/"), QStringLiteral("network-workgroup"),
                                    QStringLiteral("Network")};
     for (const Server &sv : Servers::instance()->items())
