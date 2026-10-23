@@ -9,6 +9,9 @@
 #include "core/FolderSync.h"
 #include "core/LabelRules.h"
 #include "core/Paths.h"
+#include "ui/ChecksumDialog.h"
+#include "core/StatusFormat.h"
+#include "core/Prefs.h"
 #include "core/RenameEngine.h"
 #include "ui/AdvancedRenameDialog.h"
 #include "ui/AppContext.h"
@@ -823,6 +826,87 @@ int main(int argc, char *argv[])
         QTest::keyClicks(w->metadataPane()->field(MetadataPane::Comment), QStringLiteral("Recorded on the road"));
         shot(w, QStringLiteral("20-dark-metadata-pane"), 900);
         run(QStringLiteral("Metadata PANE=off\nSet COLUMNSTOGGLE=modified\nSet COLUMNSTOGGLE=title\nSet COLUMNSTOGGLE=track\nSet COLUMNSTOGGLE=length\nSet DUAL=vertical"));
+    }
+
+    // 21-23. Horizontal displays with the shared tree, Opus-style: Operations
+    // and the drives with Favorites between the displays, Views in the menu
+    // bar, the Opus-style status bar, labels and star ratings.
+    {
+        Prefs::Values pv = Prefs::instance()->values();
+        pv.statusDefinition = StatusFormat::samples().at(1).second; // Opus style
+        Prefs::instance()->setValues(pv);
+        run(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet DUAL=horizontal\nSet TREE=shared\nSet VIEW=details\nToolbar ARRANGE=opus"));
+        treeDrives();
+        const QString c64 = r + QStringLiteral("/Emulation/roms/c64");
+        go(c64, r + QStringLiteral("/Pictures/Screenshots"));
+        source(1);
+        run(QStringLiteral("Set VIEW=thumbnails"));
+        source(0);
+        auto tag = [&](const QStringList &names, const QString &args) {
+            QStringList paths;
+            for (const QString &n : names)
+                paths << c64 + QLatin1Char('/') + n;
+            left->selectPaths(paths);
+            QTest::qWait(150);
+            run(QStringLiteral("Tag ") + args);
+        };
+        tag({QStringLiteral("Paradroid (1985).d64"), QStringLiteral("Uridium.d64")}, QStringLiteral("LABEL=Green RATING=5"));
+        tag({QStringLiteral("Impossible Mission.d64"), QStringLiteral("Wizball.d64")}, QStringLiteral("LABEL=Blue RATING=4"));
+        tag({QStringLiteral("Elite.d64")}, QStringLiteral("LABEL=Purple RATING=5"));
+        tag({QStringLiteral("Boulder Dash.d64")}, QStringLiteral("LABEL=Orange RATING=3"));
+        tag({QStringLiteral("Archon.d64")}, QStringLiteral("RATING=2"));
+        run(QStringLiteral("Set COLUMNSTOGGLE=rating\nSet COLUMNSTOGGLE=label\nSet COLUMNSTOGGLE=modified"));
+        left->selectPaths({c64 + QStringLiteral("/Paradroid (1985).d64"), c64 + QStringLiteral("/Elite.d64"), c64 + QStringLiteral("/Uridium.d64")});
+        if (w->sharedTree())
+            w->sharedTree()->setPath(c64);
+        shot(w, QStringLiteral("21-dark-horizontal-opus-toolbars-labels"), 2500);
+
+        // Grouped by label in Linopus Light, the SD card's SNES set below
+        // with MD5 checksums worked out in the background.
+        run(QStringLiteral("Set THEME=\"Linopus Light\"\nSet GROUPBY=label"));
+        treeDrives();
+        source(1);
+        run(QStringLiteral("Set VIEW=details"));
+        go(QString(), r + QStringLiteral("/Emulation/roms/snes"));
+        run(QStringLiteral("Set COLUMNSTOGGLE=md5\nSet COLUMNSTOGGLE=modified"));
+        source(0);
+        left->selectPaths({c64 + QStringLiteral("/Elite.d64")});
+        if (w->sharedTree())
+            w->sharedTree()->setPath(c64);
+        shot(w, QStringLiteral("22-light-horizontal-grouped-by-label-md5"), 2500);
+
+        // Workbench: verifying an SFV of the c64 set, over the lister.
+        run(QStringLiteral("Set THEME=Workbench\nSet GROUPBY=none"));
+        treeDrives();
+        left->selectPaths({});
+        run(QStringLiteral("Select ALL"));
+        run(QStringLiteral("Checksum ALGO=crc32 SAVE=\"%1/c64.sfv\"").arg(c64));
+        QTest::qWait(1500);
+        {
+            QFile bad(c64 + QStringLiteral("/Archon.d64")); // one disk went bad
+            if (bad.open(QIODevice::ReadWrite)) {
+                bad.seek(1000);
+                bad.write("x");
+            }
+        }
+        QTest::qWait(400);
+        left->selectPaths({c64 + QStringLiteral("/c64.sfv")});
+        run(QStringLiteral("Checksum VERIFY"));
+        if (auto *dlg = w->findChild<ChecksumDialog *>()) {
+            for (int i = 0; i < 50 && dlg->isRunning(); ++i)
+                QTest::qWait(100);
+            QTest::qWait(300);
+            dlg->resize(720, 380);
+            shotWithDialog(w, dlg, QStringLiteral("23-workbench-verify-sfv"));
+            dlg->close();
+        }
+        run(QStringLiteral("Set COLUMNSTOGGLE=rating\nSet COLUMNSTOGGLE=label\nSet COLUMNSTOGGLE=modified"));
+        source(1);
+        run(QStringLiteral("Set COLUMNSTOGGLE=md5\nSet COLUMNSTOGGLE=modified"));
+        source(0);
+        pv.statusDefinition.clear();
+        Prefs::instance()->setValues(pv);
+        run(QStringLiteral("Set DUAL=vertical\nSet THEME=\"Linopus Dark\""));
     }
 
     // 12. One view, four themes.
