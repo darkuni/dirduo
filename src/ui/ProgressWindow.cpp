@@ -51,6 +51,10 @@ QString verb(JobType t)
         return QStringLiteral("Packing");
     case JobType::Unpack:
         return QStringLiteral("Extracting");
+    case JobType::Split:
+        return QStringLiteral("Splitting");
+    case JobType::Join:
+        return QStringLiteral("Joining");
     }
     return {};
 }
@@ -197,7 +201,8 @@ void ProgressWindow::refresh()
         return;
     const JobSnapshot s = m_jobs.snapshot(m_id);
     const bool bytes = s.totalBytes > 0;
-    const bool copying = s.type == JobType::Copy || s.type == JobType::Move || s.type == JobType::Pack || s.type == JobType::Unpack;
+    const bool copying = s.type == JobType::Copy || s.type == JobType::Move || s.type == JobType::Pack || s.type == JobType::Unpack
+        || s.type == JobType::Split || s.type == JobType::Join;
 
     m_title->setText(s.title);
     setElided(m_from, s.fromFolder);

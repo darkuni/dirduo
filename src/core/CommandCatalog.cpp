@@ -47,6 +47,31 @@ QList<CommandInfo> buildCommands()
                       arg("DEFAULT", {}, "Also make it Linopus's default for this type of file"),
                       arg("FILE=", {}, "What to open instead of the selection")},
                      QStringLiteral("OpenWith APP=Kate")};
+    c << CommandInfo{QStringLiteral("Checksum"), QStringLiteral("CRC32, MD5, SHA-1 or SHA-256 of the selection (folders walked), to copy or save as a list; or check files against .md5, .sha1, .sha256 and .sfv lists"),
+                     {arg("ALGO=", {QStringLiteral("md5"), QStringLiteral("sha1"), QStringLiteral("sha256"), QStringLiteral("crc32")}, "Which checksum (MD5 unless given)"),
+                      arg("CLIPBOARD", {}, "Copy them when done, without showing the window"),
+                      arg("SAVE=", {QStringLiteral("ask")}, "Save a list when done (no value: next to the files, named after them)"),
+                      arg("VERIFY", {}, "Check the files named in the selected lists"),
+                      arg("FILE=", {}, "Files to use instead of the selection")},
+                     QStringLiteral("Checksum ALGO=sha256")};
+    c << CommandInfo{QStringLiteral("Clean"), QStringLiteral("Move .DS_Store, ._ files, Thumbs.db, desktop.ini and __MACOSX under a folder to the trash"),
+                     {arg("FILE=", {}, "Folder to clean (else the selected folders, else the source)"),
+                      arg("QUIET", {}, "No question")},
+                     QStringLiteral("Clean")};
+    c << CommandInfo{QStringLiteral("Split"), QStringLiteral("Cut a file into pieces (name.001, name.002...), for a FAT32 card or a size limit"),
+                     {arg("SIZE=", {QStringLiteral("fat32"), QStringLiteral("100M"), QStringLiteral("1G"), QStringLiteral("2G"), QStringLiteral("cd"), QStringLiteral("dvd")},
+                          "Size of each piece (asks when not given)"),
+                      arg("PIECES=", {}, "How many pieces instead of a size"),
+                      arg("TO=", {QStringLiteral("dest")}, "Where the pieces go (else beside the file)"),
+                      arg("WHENEXISTS=", {QStringLiteral("replace"), QStringLiteral("skip")}, "When pieces are already there"),
+                      arg("FILE=", {}, "File to split instead of the selection")},
+                     QStringLiteral("Split SIZE=fat32")};
+    c << CommandInfo{QStringLiteral("Join"), QStringLiteral("Put pieces back together; selecting name.001 finds the rest"),
+                     {arg("NAME=", {}, "Name of the joined file (else the pieces' name without .001)"),
+                      arg("TO=", {QStringLiteral("dest")}, "Where it goes (else beside the pieces)"),
+                      arg("WHENEXISTS=", {QStringLiteral("replace"), QStringLiteral("skip"), QStringLiteral("rename")}, "When the file is already there"),
+                      arg("FILE=", {}, "Pieces instead of the selection")},
+                     QStringLiteral("Join")};
     c << CommandInfo{QStringLiteral("Show"), QStringLiteral("The picture viewer: the selected picture, stepping through the folder"),
                      {arg("FILE=", {}, "Picture to show instead of the selection")},
                      QStringLiteral("Show")};
@@ -345,6 +370,11 @@ QList<CatalogButton> buildButtons()
           "Archive CREATE QUICK FORMAT=zip"),
         b("File operations", "Extract", "archive-extract", "Extract the selected archives here", "Archive EXTRACT",
           "Archive EXTRACT DEST"),
+        b("File operations", "Clean Junk", "edit-clear", "Trash .DS_Store, Thumbs.db and other clutter in the source or the selected folders", "Clean"),
+        b("File operations", "Split", "split", "Cut the selected file into pieces a FAT32 card can hold (right: asks the size)", "Split SIZE=fat32", "Split"),
+        b("File operations", "Join", "merge", "Put pieces (name.001...) back together", "Join"),
+        b("File operations", "Checksums", "document-encrypt", "MD5 of the selection (right: SHA-256); verifies a selected .md5, .sha256 or .sfv list",
+          "Checksum", "Checksum ALGO=sha256"),
         b("Navigation", "Network", "network-workgroup", "Windows and Samba machines on the network", "Go smb:/", "Server"),
         b("Navigation", "Terminal", "utilities-terminal", "Open Konsole in the source folder", "Terminal", "Terminal PATH={destpath}"),
         b("Labels and tags", "Tags", "tag", "Labels, ratings, tags and description of the selection", "Tag"),

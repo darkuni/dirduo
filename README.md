@@ -95,6 +95,9 @@ Servers and archives (KIO):
 - Editing tags: the Metadata pane (View > Metadata Pane, Shift+Alt+Enter) shows the selection's tags; with several files, shared values show and differing ones say "(several values)", and a field you type in is written to all of them on Apply (untouched fields stay). Music: title, artist, album artist, album, track, disc, year, genre, comment (MP3, FLAC, Ogg, Opus, M4A, WAV, AIFF, WMA...). Photos: date taken, description, artist, copyright (JPEG, PNG, WebP, TIFF). Edit > Tags: Copy Tags and Paste Tags (artist, album, genre, year, comment; Paste All adds titles, tracks and dates) for podcast episodes, Number Tracks in list order, and moving photo dates an hour either way for a camera clock left on the wrong time. All of it can be undone
 - Music and photo columns (right-click a column header > Music or Pictures): Title, Artist, Album, Track, Year, Genre, Length and Bitrate from music tags (TagLib); Dimensions, Date Taken and Camera from photos (Exiv2). C64 SID tunes show their name, composer and release line. Read in the background as you browse, then sortable and groupable (Group By > Artist, Album, Genre, Year, Camera, Date Taken). The viewer pane shows the full tags, and the camera line under a photo. Column layouts saved before these columns existed keep them hidden
 - Labels, ratings, tags and descriptions (right-click > Label, Rating, Tags and Description...; Edit > Labels and Tags; Alt+1..5 rates, Alt+0 clears; Ctrl+Shift+T): a colored label (the row takes its color), 0 to 5 stars, any number of tags and a description, for one item or many at once (a field left alone stays as each item had it). Stored in the same extended attributes Dolphin uses, so they show in both and travel with copies; where a drive cannot hold them (FAT SD cards), Linopus keeps them in ~/.local/share/linopus/tags.json. Columns (right-click a column header > Labels and Tags), Group By Label or Rating, `Select LABEL=Red RATING=4 TAG=cart`, and Undo
+- Checksums (right-click > Checksums, Tools > Checksums...): CRC32, MD5, SHA-1 or SHA-256 of the selection, folders walked, worked out in the background with a Stop button; copy them or save an .sfv, .md5, .sha1 or .sha256 list. Select a list and run it (or right-click > Verify Checksums) to check every file in it: OK, does not match, or missing. Columns too (right-click a column header > Checksums), made while they show
+- Junk: .DS_Store, ._ files, Thumbs.db, desktop.ini and __MACOSX count as hidden files (Show Hidden Files reveals them; Preferences > General turns this off). Tools > Clean Junk Files trashes them under the source or the selected folders, with Undo
+- Split and join (Tools > Split File..., Join Pieces): cut a file into name.001, name.002... of any size (`fat32` for the 4 GB a FAT32 card allows), and put them back together; selecting the first piece finds the rest. Run as file operations, with progress, pause and Undo
 
 ## Commands
 
@@ -122,6 +125,10 @@ Every button, menu item, hotkey, drop and inline rename runs one of these. Butto
 | `Show` | `FILE=...` (the picture viewer) |
 | `Sync` | `LEFT=`, `RIGHT=`, `MODE=update\|mirror\|twoway`, `COMPARE=datesize\|date\|size\|contents`, `EXCLUDE=*.tmp;...`, `RUN` |
 | `Tag` | `LABEL=<name>\|none`, `RATING=0-5\|+\|-`, `ADD=a,b`, `REMOVE=`, `SET=` (replace the tags), `CLEAR` (tags), `CLEARALL`, `DESCRIPTION=`, `FILE=...`; nothing: the Tags window |
+| `Checksum` | `ALGO=md5\|sha1\|sha256\|crc32`, `CLIPBOARD`, `SAVE[=<file>\|ask]`, `VERIFY`, `FILE=...`; nothing: the Checksums window (a selected list is checked) |
+| `Clean` | `FILE=<folder>`, `QUIET` |
+| `Split` | `SIZE=100M\|2G\|fat32\|cd\|dvd` (asks if not given), `PIECES=<n>`, `TO=<folder>\|dest`, `WHENEXISTS=replace\|skip`, `FILE=...` |
+| `Join` | `NAME=` (else the pieces' name without .001), `TO=<folder>\|dest`, `WHENEXISTS=`, `FILE=...` |
 | `Terminal` | `PATH=<folder>` (else the source folder), `PROGRAM=konsole\|gnome-terminal\|...` |
 | `Duplicates` | `IN=...` (several allowed), `BY=contents\|namesize\|name`, `MINSIZE=<bytes>`, `HIDDEN` |
 | `MakeLink` | `DEST`, `TO=<folder>`, `NAME=`, `RELATIVE`, `FILE=...` |

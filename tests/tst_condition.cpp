@@ -65,7 +65,7 @@ private Q_SLOTS:
     void completes()
     {
         QCOMPARE(CommandCatalog::complete(QStringLiteral("Cr")), QStringList{QStringLiteral("CreateFolder")});
-        QCOMPARE(CommandCatalog::complete(QStringLiteral("C")).size(), 4); // Clipboard, Collection, Copy, CreateFolder
+        QCOMPARE(CommandCatalog::complete(QStringLiteral("C")).size(), 6); // Checksum, Clean, Clipboard, Collection, Copy, CreateFolder
         QCOMPARE(CommandCatalog::complete(QStringLiteral("Set GROUPB")), QStringList{QStringLiteral("Set GROUPBY=")});
         QCOMPARE(CommandCatalog::complete(QStringLiteral("Set DUAL=on VIEW=ic")), QStringList{QStringLiteral("Set DUAL=on VIEW=icons")});
         QCOMPARE(CommandCatalog::complete(QStringLiteral("help Se")), (QStringList{QStringLiteral("help Select"), QStringLiteral("help Server"), QStringLiteral("help Set"), QStringLiteral("help SetAttr"), QStringLiteral("help Settings")}));

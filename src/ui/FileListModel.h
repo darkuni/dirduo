@@ -45,12 +45,18 @@ public:
         LabelColumn,
         TagsColumn,
         DescriptionColumn,
+        // Checksums, made in the background while the column shows (Checksum).
+        Crc32Column,
+        Md5Column,
+        Sha1Column,
+        Sha256Column,
         ColumnCount
     };
     // Saved column layouts from before the metadata columns had this many.
     static constexpr int ColumnsBeforeMetadata = TitleColumn;
     static bool isMetadataColumn(int column) { return column >= TitleColumn && column <= CameraColumn; }
     static bool isTagColumn(int column) { return column >= RatingColumn && column <= DescriptionColumn; }
+    static bool isChecksumColumn(int column) { return column >= Crc32Column && column <= Sha256Column; }
     enum Role {
         PathRole = Qt::UserRole + 1,
         IsDirRole,
@@ -146,6 +152,7 @@ private:
     void onThumbnailReady(const QString &path);
     QVariant thumbnailFor(int row) const;
     QVariant metadataValue(int row, int column, bool forSorting) const;
+    QVariant checksumValue(int row, int column) const;
     QPair<QString, QString> groupFor(int row) const;
     QString folderSizeText(int row) const;
     QIcon iconFor(int row) const;

@@ -33,7 +33,9 @@ public:
         fillCommon(s);
         s.state = m_done ? JobState::Failed : JobState::Queued;
         if (m_done)
-            s.errors << ((m_spec.type == JobType::Pack || m_spec.type == JobType::Unpack)
+            s.errors << ((m_spec.type == JobType::Split || m_spec.type == JobType::Join)
+                             ? QStringLiteral("Splitting and joining work in local folders (SD cards and drives too); copy it here first.")
+                         : (m_spec.type == JobType::Pack || m_spec.type == JobType::Unpack)
                              ? QStringLiteral("Archives are made and extracted in local folders (SD cards and drives too); copy it here first.")
                              : QStringLiteral("Remote locations need the KIO build of Linopus."));
         return s;
@@ -77,7 +79,8 @@ JobManager::~JobManager()
 QString JobManager::queueKeyFor(const JobSpec &spec)
 {
     QString where;
-    if (spec.type == JobType::Copy || spec.type == JobType::Move || spec.type == JobType::Pack || spec.type == JobType::Unpack)
+    if (spec.type == JobType::Copy || spec.type == JobType::Move || spec.type == JobType::Pack || spec.type == JobType::Unpack
+        || spec.type == JobType::Split || spec.type == JobType::Join)
         where = spec.destDir; // the drive written to
     else if (!spec.sources.isEmpty())
         where = spec.sources.first();
@@ -91,7 +94,8 @@ int JobManager::enqueue(const JobSpec &spec)
     const int id = m_nextId++;
     Entry e;
     const QString key = queueKeyFor(spec);
-    const bool archive = spec.type == JobType::Pack || spec.type == JobType::Unpack;
+    const bool archive = spec.type == JobType::Pack || spec.type == JobType::Unpack || spec.type == JobType::Split
+        || spec.type == JobType::Join; // local folders only
     if (archive && involvesRemote(spec)) {
         e.job = std::make_shared<UnsupportedJob>(id, spec, key); // archives: local folders only
     } else if (involvesRemote(spec)) {

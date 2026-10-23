@@ -38,6 +38,11 @@ QStringList createFolders(const QString &parent, const QString &commaSeparatedNa
 // Natural order: "audio2" before "audio10", case-insensitive, locale-aware
 // for the text between numbers. Negative, zero or positive like strcmp.
 int naturalCompare(const QString &a, const QString &b);
+// Clutter other systems leave on drives and cards: .DS_Store, ._* (macOS),
+// Thumbs.db, desktop.ini (Windows), __MACOSX and the like.
+bool isJunk(const QString &name, bool isDir);
+// Every junk item under these folders (junk folders whole, not what is in them).
+QStringList findJunk(const QStringList &roots);
 
 // "1.5 MB" style, base 1024 with one decimal like Opus.
 QString formatSize(qint64 bytes);

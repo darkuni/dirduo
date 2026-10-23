@@ -37,6 +37,7 @@ private:
     void refilter();
 
     bool m_showHidden = false;
+    bool m_junkHidden = true;
     QString m_filterText;
     bool m_filterInvert = false;
     FilterScope m_filterScope = FilterScope::Files;

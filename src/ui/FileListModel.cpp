@@ -5,6 +5,7 @@
 #include "core/FolderSizes.h"
 #include "core/Location.h"
 #include "core/Metadata.h"
+#include "core/Checksum.h"
 #include "core/Thumbnails.h"
 #include "ui/Style.h"
 
@@ -30,6 +31,7 @@ FileListModel::FileListModel(QObject *parent)
 {
     connect(FolderSizes::instance(), &FolderSizes::ready, this, &FileListModel::onFolderSizeReady);
     connect(MetadataCache::instance(), &MetadataCache::ready, this, &FileListModel::onMetadataReady);
+    connect(ChecksumCache::instance(), &ChecksumCache::ready, this, &FileListModel::onMetadataReady);
     connect(ThumbnailCache::instance(), &ThumbnailCache::ready, this, &FileListModel::onThumbnailReady);
     connect(Style::instance(), &Style::changed, this, [this]() {
         if (!m_items.isEmpty())
@@ -92,6 +94,14 @@ QString FileListModel::columnName(int column)
         return QStringLiteral("Tags");
     case DescriptionColumn:
         return QStringLiteral("Description");
+    case Crc32Column:
+        return QStringLiteral("CRC32");
+    case Md5Column:
+        return QStringLiteral("MD5");
+    case Sha1Column:
+        return QStringLiteral("SHA-1");
+    case Sha256Column:
+        return QStringLiteral("SHA-256");
     }
     return {};
 }
@@ -535,6 +545,21 @@ QVariant FileListModel::metadataValue(int row, int column, bool forSorting) cons
         return info.camera;
     }
     return {};
+}
+
+QVariant FileListModel::checksumValue(int row, int column) const
+{
+    if (row < 0 || row >= m_items.size())
+        return {};
+    const FileItem &it = m_items.at(row);
+    if (it.isDir || !Location::isLocal(it.path) || (it.isSymlink && !QFileInfo(it.path).isFile()))
+        return {};
+    static const Checksum::Algo algos[] = {Checksum::Algo::Crc32, Checksum::Algo::Md5, Checksum::Algo::Sha1,
+                                           Checksum::Algo::Sha256};
+    QString hash;
+    if (ChecksumCache::instance()->lookup(it.path, algos[column - Crc32Column], it.size, it.modified, &hash))
+        return hash;
+    return QStringLiteral("\u2026");
 }
 
 void FileListModel::rebuildIndex()
@@ -985,6 +1010,8 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
         default:
             if (isMetadataColumn(col))
                 return metadataValue(index.row(), col, false);
+            if (isChecksumColumn(col))
+                return checksumValue(index.row(), col);
         }
         break;
     case Qt::EditRole:
@@ -1131,6 +1158,8 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
         default:
             if (isMetadataColumn(col))
                 return metadataValue(index.row(), col, true);
+            if (isChecksumColumn(col))
+                return checksumValue(index.row(), col).toString();
             return it.name;
         }
     }

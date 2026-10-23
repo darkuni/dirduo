@@ -13,9 +13,10 @@
 #include <functional>
 #include <vector>
 
+class QFile;
 class QThread;
 
-enum class JobType { Copy, Move, Trash, Delete, Pack, Unpack };
+enum class JobType { Copy, Move, Trash, Delete, Pack, Unpack, Split, Join };
 
 enum class JobState {
     Queued,         // waiting for another job on the same device
@@ -68,6 +69,10 @@ struct JobSpec
     QString password; // Pack: encrypt (zip); Unpack: for encrypted archives
     bool trashAfter = false; // Unpack: each archive that extracted cleanly goes to the trash
     bool askOnError = false; // ask Retry / Skip / Abort when an item fails (else skip and list it)
+    // Split: each source into pieces of this many bytes, name.001, name.002...
+    // in destDir. Join: the sources, in order, into joinName in destDir.
+    qint64 pieceSize = 0;
+    QString joinName;
 };
 
 // What a finished job did with one item, for undo and the file log. For
@@ -208,6 +213,9 @@ private:
     void runDelete();
     void runPack();
     void runUnpack();
+    void runSplit();
+    void runJoin();
+    bool copyBytes(QFile &in, QFile &out, qint64 bytes, const QString &shownPath);
     bool copyFile(const QString &src, const QString &dst, QString *error);
     bool copySymlink(const QString &src, const QString &dst, QString *error);
 

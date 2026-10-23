@@ -17,6 +17,7 @@ public:
         bool statusSelection = true; // "- 2 selected (4 MB)"
         bool statusFree = true;      // "12 GB free of 64 GB"
         bool askOnError = true;      // Retry / Skip / Abort when a copy fails
+        bool junkHidden = true;      // .DS_Store, Thumbs.db... count as hidden files
         QString terminal;            // empty: Konsole, else the first one installed
     };
 

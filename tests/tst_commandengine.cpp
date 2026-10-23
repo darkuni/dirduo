@@ -5,6 +5,7 @@
 #include "core/Servers.h"
 #include "core/JobManager.h"
 #include "core/Paths.h"
+#include "core/FileOps.h"
 
 #include <QClipboard>
 #include <QDir>
@@ -315,6 +316,88 @@ private Q_SLOTS:
         QVERIFY(m_engine->run(QStringLiteral("Delete NORECYCLE"), ctx));
         QVERIFY(m_jobs->waitForIdle(5000));
         QVERIFY(!QFile::exists(ctx.source + QStringLiteral("/t2")));
+    }
+
+    void pieceSizes()
+    {
+        qint64 b = 0;
+        QVERIFY(CommandEngine::parsePieceSize(QStringLiteral("100M"), &b));
+        QCOMPARE(b, Q_INT64_C(100) * 1024 * 1024);
+        QVERIFY(CommandEngine::parsePieceSize(QStringLiteral("1.5 GB"), &b));
+        QCOMPARE(b, Q_INT64_C(1610612736));
+        QVERIFY(CommandEngine::parsePieceSize(QStringLiteral("fat32"), &b));
+        QCOMPARE(b, Q_INT64_C(4294967295));
+        QVERIFY(CommandEngine::parsePieceSize(QStringLiteral("4096"), &b));
+        QCOMPARE(b, Q_INT64_C(4096));
+        QVERIFY(!CommandEngine::parsePieceSize(QStringLiteral("big"), &b));
+        QVERIFY(!CommandEngine::parsePieceSize(QStringLiteral("-3M"), &b));
+    }
+
+    void splitAndJoin()
+    {
+        QByteArray data(10000, Qt::Uninitialized);
+        for (int i = 0; i < data.size(); ++i)
+            data[i] = char(i * 7);
+        writeFile(ctx.source + QStringLiteral("/game.iso"), data);
+        ctx.selection = {ctx.source + QStringLiteral("/game.iso")};
+        QVERIFY(m_engine->run(QStringLiteral("Split SIZE=4K"), ctx));
+        QVERIFY(m_jobs->waitForIdle(5000));
+        QCOMPARE(QFileInfo(ctx.source + QStringLiteral("/game.iso.001")).size(), 4096);
+        QCOMPARE(QFileInfo(ctx.source + QStringLiteral("/game.iso.002")).size(), 4096);
+        QCOMPARE(QFileInfo(ctx.source + QStringLiteral("/game.iso.003")).size(), 10000 - 8192);
+        QVERIFY(!QFile::exists(ctx.source + QStringLiteral("/game.iso.004")));
+        // Already there: not touched unless told to replace.
+        QVERIFY(m_engine->run(QStringLiteral("Split SIZE=4K"), ctx));
+        QVERIFY(m_jobs->waitForIdle(5000));
+        QCOMPARE(QFileInfo(ctx.source + QStringLiteral("/game.iso.003")).size(), 10000 - 8192);
+        // PIECES= splits evenly, into the destination.
+        QVERIFY(m_engine->run(QStringLiteral("Split PIECES=2 TO=dest"), ctx));
+        QVERIFY(m_jobs->waitForIdle(5000));
+        QCOMPARE(QFileInfo(ctx.dest + QStringLiteral("/game.iso.001")).size(), 5000);
+        QCOMPARE(QFileInfo(ctx.dest + QStringLiteral("/game.iso.002")).size(), 5000);
+        // Join from the first piece alone, into the destination.
+        QCOMPARE(CommandEngine::piecesFrom({ctx.source + QStringLiteral("/game.iso.001")}).size(), 3);
+        QFile::remove(ctx.dest + QStringLiteral("/game.iso.001"));
+        QFile::remove(ctx.dest + QStringLiteral("/game.iso.002"));
+        ctx.selection = {ctx.source + QStringLiteral("/game.iso.001")};
+        QVERIFY(m_engine->run(QStringLiteral("Join TO=dest"), ctx));
+        QVERIFY(m_jobs->waitForIdle(5000));
+        QCOMPARE(readFile(ctx.dest + QStringLiteral("/game.iso")), data);
+        // Undo takes the joined file away.
+        QVERIFY(m_engine->run(QStringLiteral("Undo"), ctx));
+        QVERIFY(m_jobs->waitForIdle(5000));
+        QVERIFY(!QFile::exists(ctx.dest + QStringLiteral("/game.iso")));
+        ctx.selection = {ctx.source + QStringLiteral("/game.iso")};
+        QVERIFY(!m_engine->run(QStringLiteral("Join"), ctx)); // one file is no set
+        QVERIFY(!m_engine->run(QStringLiteral("Split SIZE=huge"), ctx));
+    }
+
+    void cleanJunk()
+    {
+        QVERIFY(FileOps::isJunk(QStringLiteral(".DS_Store"), false));
+        QVERIFY(FileOps::isJunk(QStringLiteral("._Turrican.d64"), false));
+        QVERIFY(FileOps::isJunk(QStringLiteral("Thumbs.db"), false));
+        QVERIFY(FileOps::isJunk(QStringLiteral("__MACOSX"), true));
+        QVERIFY(!FileOps::isJunk(QStringLiteral("__MACOSX"), false));
+        QVERIFY(!FileOps::isJunk(QStringLiteral("._"), false));
+        QVERIFY(!FileOps::isJunk(QStringLiteral("readme.txt"), false));
+        QDir().mkpath(ctx.source + QStringLiteral("/roms/__MACOSX/roms"));
+        writeFile(ctx.source + QStringLiteral("/roms/__MACOSX/roms/._a.d64"));
+        writeFile(ctx.source + QStringLiteral("/roms/a.d64"));
+        writeFile(ctx.source + QStringLiteral("/roms/._a.d64"));
+        writeFile(ctx.source + QStringLiteral("/roms/.DS_Store"));
+        writeFile(ctx.source + QStringLiteral("/roms/Desktop.ini"));
+        const QStringList junk = FileOps::findJunk({ctx.source + QStringLiteral("/roms")});
+        QCOMPARE(junk.size(), 4); // __MACOSX whole, not what is in it
+        ctx.selection = {ctx.source + QStringLiteral("/roms")};
+        ctx.confirmAnswer = false;
+        QVERIFY(!m_engine->run(QStringLiteral("Clean"), ctx));
+        QVERIFY(QFile::exists(ctx.source + QStringLiteral("/roms/.DS_Store")));
+        ctx.confirmAnswer = true;
+        QVERIFY(m_engine->run(QStringLiteral("Clean"), ctx));
+        QVERIFY(m_jobs->waitForIdle(5000));
+        QCOMPARE(QDir(ctx.source + QStringLiteral("/roms")).entryList(QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot),
+                 QStringList{QStringLiteral("a.d64")});
     }
 
     void renameInlineAndExplicit()

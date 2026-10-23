@@ -117,6 +117,10 @@ QString JobBase::describe(const JobSpec &spec)
         return QStringLiteral("Packing %1 into %2").arg(what, spec.archiveName);
     case JobType::Unpack:
         return QStringLiteral("Extracting %1 to %2").arg(what, Location::title(spec.destDir));
+    case JobType::Split:
+        return QStringLiteral("Splitting %1 into %2 pieces").arg(what, FileOps::formatSize(spec.pieceSize));
+    case JobType::Join:
+        return QStringLiteral("Joining %1 into %2").arg(what, spec.joinName);
     }
     return {};
 }
@@ -407,6 +411,12 @@ void Job::run(const CollisionNotifier &notifier)
         break;
     case JobType::Unpack:
         runUnpack();
+        break;
+    case JobType::Split:
+        runSplit();
+        break;
+    case JobType::Join:
+        runJoin();
         break;
     }
 
@@ -891,6 +901,192 @@ void Job::runPack()
         ::unlink(enc(target).constData());
     if (::rename(enc(part).constData(), enc(target).constData()) != 0) {
         addError(QStringLiteral("%1: %2").arg(target, errnoText()));
+        QFile::remove(part);
+        return;
+    }
+    addOutcome(m_spec.sources.value(0), target);
+}
+
+bool Job::copyBytes(QFile &in, QFile &out, qint64 bytes, const QString &shownPath)
+{
+    QByteArray buf(1 << 20, Qt::Uninitialized);
+    while (bytes > 0) {
+        if (!checkpoint())
+            return false;
+        const qint64 n = in.read(buf.data(), qMin<qint64>(buf.size(), bytes));
+        if (n <= 0) {
+            addError(QStringLiteral("%1: %2").arg(in.fileName(), n < 0 ? in.errorString() : QStringLiteral("ended early")));
+            return false;
+        }
+        if (out.write(buf.constData(), n) != n) {
+            addError(QStringLiteral("%1: %2").arg(shownPath, out.errorString()));
+            return false;
+        }
+        bytes -= n;
+        addDone(n, 0);
+    }
+    return true;
+}
+
+void Job::runSplit()
+{
+    const QString dest = QDir::cleanPath(m_spec.destDir);
+    if (!isRealDir(dest)) {
+        addError(QStringLiteral("The destination \"%1\" is not a folder.").arg(dest));
+        return;
+    }
+    if (m_spec.pieceSize <= 0) {
+        addError(QStringLiteral("No piece size given."));
+        return;
+    }
+    qint64 total = 0;
+    int pieces = 0;
+    for (const QString &s : m_spec.sources) {
+        const qint64 size = QFileInfo(s).size();
+        total += size;
+        pieces += int(qMax<qint64>(1, (size + m_spec.pieceSize - 1) / m_spec.pieceSize));
+    }
+    {
+        QMutexLocker lock(&m_mutex);
+        m_totalBytes = total;
+        m_totalItems = pieces;
+    }
+    setState(JobState::Running);
+    for (const QString &raw : m_spec.sources) {
+        if (!checkpoint())
+            return;
+        const QString source = QDir::cleanPath(raw);
+        const QFileInfo fi(source);
+        if (!fi.isFile()) {
+            addError(QStringLiteral("%1 is not a file.").arg(fi.fileName()));
+            continue;
+        }
+        const qint64 size = fi.size();
+        const int count = int(qMax<qint64>(1, (size + m_spec.pieceSize - 1) / m_spec.pieceSize));
+        const int digits = qMax(3, int(QString::number(count).size()));
+        auto pieceName = [&](int i) {
+            return dest + QLatin1Char('/') + fi.fileName() + QLatin1Char('.') + QStringLiteral("%1").arg(i, digits, 10, QLatin1Char('0'));
+        };
+        bool clash = false;
+        for (int i = 1; i <= count && !clash; ++i)
+            clash = existsNoFollow(pieceName(i));
+        if (clash && m_spec.whenExists != CollisionAction::Replace) {
+            addError(QStringLiteral("Pieces of %1 are already there.").arg(fi.fileName()));
+            addDone(size, count);
+            continue;
+        }
+        QFile in(source);
+        if (!in.open(QIODevice::ReadOnly)) {
+            addError(QStringLiteral("%1: %2").arg(source, in.errorString()));
+            addDone(size, count);
+            continue;
+        }
+        QStringList made;
+        bool ok = true;
+        for (int i = 1; i <= count && ok; ++i) {
+            const QString target = pieceName(i);
+            const qint64 bytes = qMin(m_spec.pieceSize, size - (i - 1) * m_spec.pieceSize);
+            setCurrent(QFileInfo(target).fileName(), bytes);
+            const QString part = target + QStringLiteral(".linopus-part");
+            QFile out(part);
+            if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+                addError(QStringLiteral("%1: %2").arg(target, out.errorString()));
+                ok = false;
+                break;
+            }
+            ok = copyBytes(in, out, bytes, target) && out.flush();
+            out.close();
+            if (ok) {
+                if (existsNoFollow(target))
+                    ::unlink(enc(target).constData());
+                ok = ::rename(enc(part).constData(), enc(target).constData()) == 0;
+                if (!ok)
+                    addError(QStringLiteral("%1: %2").arg(target, errnoText()));
+            }
+            if (!ok) {
+                QFile::remove(part);
+                break;
+            }
+            made << target;
+            addDone(0, 1);
+        }
+        if (!ok) {
+            for (const QString &m : std::as_const(made)) // half a set is no use
+                QFile::remove(m);
+            if (m_canceled)
+                return;
+            continue;
+        }
+        for (const QString &m : std::as_const(made))
+            addOutcome(source, m);
+    }
+}
+
+void Job::runJoin()
+{
+    const QString dest = QDir::cleanPath(m_spec.destDir);
+    if (!isRealDir(dest)) {
+        addError(QStringLiteral("The destination \"%1\" is not a folder.").arg(dest));
+        return;
+    }
+    if (m_spec.joinName.isEmpty() || m_spec.joinName.contains(QLatin1Char('/'))) {
+        addError(QStringLiteral("No name for the joined file."));
+        return;
+    }
+    qint64 total = 0;
+    for (const QString &s : m_spec.sources) {
+        const QFileInfo fi(s);
+        if (!fi.isFile()) {
+            addError(QStringLiteral("%1 is not a file.").arg(fi.fileName()));
+            return;
+        }
+        total += fi.size();
+    }
+    {
+        QMutexLocker lock(&m_mutex);
+        m_totalBytes = total;
+        m_totalItems = int(m_spec.sources.size());
+    }
+    QString target = dest + QLatin1Char('/') + m_spec.joinName;
+    if (existsNoFollow(target)) {
+        if (m_spec.whenExists == CollisionAction::Skip) {
+            addError(QStringLiteral("%1 is already there.").arg(m_spec.joinName));
+            return;
+        }
+        if (m_spec.whenExists != CollisionAction::Replace)
+            target = dest + QLatin1Char('/') + FileOps::uniqueName(dest, m_spec.joinName);
+    }
+    setState(JobState::Running);
+    const QString part = target + QStringLiteral(".linopus-part");
+    QFile out(part);
+    if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        addError(QStringLiteral("%1: %2").arg(target, out.errorString()));
+        return;
+    }
+    bool ok = true;
+    for (const QString &s : m_spec.sources) {
+        QFile in(s);
+        setCurrent(QFileInfo(s).fileName(), in.size());
+        if (!in.open(QIODevice::ReadOnly)) {
+            addError(QStringLiteral("%1: %2").arg(s, in.errorString()));
+            ok = false;
+            break;
+        }
+        if (!copyBytes(in, out, in.size(), target)) {
+            ok = false;
+            break;
+        }
+        addDone(0, 1);
+    }
+    ok = ok && out.flush();
+    out.close();
+    if (ok && existsNoFollow(target))
+        ::unlink(enc(target).constData());
+    if (ok && ::rename(enc(part).constData(), enc(target).constData()) != 0) {
+        addError(QStringLiteral("%1: %2").arg(target, errnoText()));
+        ok = false;
+    }
+    if (!ok) {
         QFile::remove(part);
         return;
     }

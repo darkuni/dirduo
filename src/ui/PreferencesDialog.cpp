@@ -230,6 +230,10 @@ QWidget *PreferencesDialog::buildGeneral()
     box(QStringLiteral("ask"), QStringLiteral("Ask Retry / Skip / Abort when an item fails (otherwise skip it and list it at the end)"),
         v.askOnError, cl, copies);
     layout->addWidget(copies);
+    auto *files = new QGroupBox(QStringLiteral("Files"), page);
+    auto *fl = new QVBoxLayout(files);
+    box(QStringLiteral("junk"), QStringLiteral("Treat .DS_Store, ._ files, Thumbs.db, desktop.ini and __MACOSX as hidden files"), v.junkHidden, fl, files);
+    layout->addWidget(files);
     auto *term = new QGroupBox(QStringLiteral("Terminal"), page);
     auto *tl = new QFormLayout(term);
     m_terminal = new QComboBox(term);
@@ -925,6 +929,7 @@ bool PreferencesDialog::apply(QString *error)
     v.statusSelection = m_general.value(QStringLiteral("selection"))->isChecked();
     v.statusFree = m_general.value(QStringLiteral("free"))->isChecked();
     v.askOnError = m_general.value(QStringLiteral("ask"))->isChecked();
+    v.junkHidden = m_general.value(QStringLiteral("junk"))->isChecked();
     const QString typed = m_terminal->currentText().trimmed();
     const int at = m_terminal->findText(typed);
     v.terminal = at >= 0 ? m_terminal->itemData(at).toString() : typed;

@@ -16,6 +16,8 @@
 #include "ui/HistoryDialog.h"
 #include "ui/ArchiveDialog.h"
 #include "ui/TagsDialog.h"
+#include "ui/ChecksumDialog.h"
+#include "core/Checksum.h"
 #include "core/FileTags.h"
 #include "ui/ImageViewer.h"
 #include "ui/OpenWithDialog.h"
@@ -561,6 +563,10 @@ void ListerWindow::buildMenus()
     tools->addAction(commandAction(QStringLiteral("Add to Archive..."), QStringLiteral("Archive CREATE"), {}, QStringLiteral("archive-insert")));
     tools->addAction(commandAction(QStringLiteral("Extract Here"), QStringLiteral("Archive EXTRACT"), {}, QStringLiteral("archive-extract")));
     tools->addAction(commandAction(QStringLiteral("Convert Images..."), QStringLiteral("Image"), {}, QStringLiteral("image-x-generic")));
+    tools->addAction(commandAction(QStringLiteral("Checksums..."), QStringLiteral("Checksum"), {}, QStringLiteral("document-encrypt")));
+    tools->addAction(commandAction(QStringLiteral("Split File..."), QStringLiteral("Split"), {}, QStringLiteral("split")));
+    tools->addAction(commandAction(QStringLiteral("Join Pieces"), QStringLiteral("Join"), {}, QStringLiteral("merge")));
+    tools->addAction(commandAction(QStringLiteral("Clean Junk Files..."), QStringLiteral("Clean"), {}, QStringLiteral("edit-clear")));
     tools->addAction(commandAction(QStringLiteral("File Log..."), QStringLiteral("Undo LOG"), {}, QStringLiteral("view-history")));
     tools->addAction(commandAction(QStringLiteral("Advanced Rename..."), QStringLiteral("Rename ADVANCED"), {}, QStringLiteral("edit-rename")));
 
@@ -2123,6 +2129,21 @@ void ListerWindow::fillContextMenu(QMenu &menu, FileDisplay *d, bool onItem)
         rateMenu->addSeparator();
         rateMenu->addAction(commandAction(QStringLiteral("Not Rated"), QStringLiteral("Tag RATING=0")));
         menu.addAction(commandAction(QStringLiteral("Tags and Description..."), QStringLiteral("Tag"), {}, QStringLiteral("tag-edit")));
+        bool lists = true;
+        for (const QString &p : sel)
+            lists = lists && Checksum::isListFile(Location::fileName(p));
+        if (lists)
+            menu.addAction(commandAction(QStringLiteral("Verify Checksums"), QStringLiteral("Checksum VERIFY"), {}, QStringLiteral("document-encrypt")));
+        static const QRegularExpression piece(QStringLiteral("\\.\\d{3,}$"));
+        if (sel.size() >= 1 && piece.match(sel.first()).hasMatch())
+            menu.addAction(commandAction(QStringLiteral("Join Pieces"), QStringLiteral("Join"), {}, QStringLiteral("merge")));
+        QMenu *sums = menu.addMenu(QIcon::fromTheme(QStringLiteral("document-encrypt")), QStringLiteral("Checksums"));
+        for (Checksum::Algo a : Checksum::all())
+            sums->addAction(commandAction(Checksum::label(a) + QStringLiteral("..."), QStringLiteral("Checksum ALGO=%1").arg(Checksum::name(a))));
+        sums->addSeparator();
+        sums->addAction(commandAction(QStringLiteral("Copy MD5"), QStringLiteral("Checksum ALGO=md5 CLIPBOARD")));
+        sums->addAction(commandAction(QStringLiteral("Copy SHA-256"), QStringLiteral("Checksum ALGO=sha256 CLIPBOARD")));
+        sums->addAction(commandAction(QStringLiteral("Save SHA-256 List"), QStringLiteral("Checksum ALGO=sha256 SAVE")));
     }
     if ((onItem && localSel) || (!onItem && t && Location::isLocal(t->path()))) {
         menu.addSeparator();
@@ -2589,6 +2610,55 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
     }
     if (cmd.is(QStringLiteral("Image")))
         return imageCommand(cmd, error);
+    if (cmd.is(QStringLiteral("Checksum"))) {
+        QStringList paths;
+        for (const QString &f : cmd.values(QStringLiteral("FILE")))
+            paths << m_app.engine().resolvePath(f, sourcePath());
+        if (paths.isEmpty())
+            paths = selectedPaths();
+        if (paths.isEmpty() && !focusedPath().isEmpty())
+            paths << focusedPath();
+        if (paths.isEmpty())
+            return fail(QStringLiteral("Select something first."));
+        for (const QString &p : std::as_const(paths)) {
+            if (!Location::isLocal(p))
+                return fail(QStringLiteral("Checksums work with items on this computer and its cards for now."));
+        }
+        // Lists selected (and nothing else): check them, unless told to make.
+        bool allLists = true;
+        for (const QString &p : std::as_const(paths))
+            allLists = allLists && Checksum::isListFile(Location::fileName(p)) && QFileInfo(p).isFile();
+        const bool verify = cmd.hasFlag(QStringLiteral("VERIFY"))
+            || (allLists && !cmd.hasArg(QStringLiteral("ALGO")) && !cmd.hasArg(QStringLiteral("SAVE")) && !cmd.hasFlag(QStringLiteral("CLIPBOARD")));
+        if (verify && !allLists)
+            return fail(QStringLiteral("VERIFY needs .md5, .sha1, .sha256 or .sfv lists selected."));
+        Checksum::Algo algo = Checksum::Algo::Md5;
+        if (cmd.hasArg(QStringLiteral("ALGO")))
+            Checksum::fromName(cmd.value(QStringLiteral("ALGO")), &algo);
+        auto *dlg = new ChecksumDialog(verify ? ChecksumDialog::Mode::Verify : ChecksumDialog::Mode::Make, paths, algo, this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        connect(dlg, &ChecksumDialog::listSaved, this, [this](const QString &path) { afterLocalChange({path}); });
+        const bool quiet = !verify && (cmd.hasFlag(QStringLiteral("CLIPBOARD")) || cmd.hasArg(QStringLiteral("SAVE")));
+        if (quiet) {
+            QString saveTo;
+            if (cmd.hasArg(QStringLiteral("SAVE"))) {
+                saveTo = cmd.value(QStringLiteral("SAVE"));
+                if (saveTo.compare(QLatin1String("ask"), Qt::CaseInsensitive) == 0) {
+                    dlg->show(); // the window, then Save List
+                    dlg->start();
+                    return true;
+                }
+                if (!saveTo.isEmpty())
+                    saveTo = m_app.engine().resolvePath(saveTo, sourcePath());
+            }
+            dlg->setThen(cmd.hasFlag(QStringLiteral("CLIPBOARD")) ? ChecksumDialog::Then::Copy : ChecksumDialog::Then::Save, saveTo);
+            dlg->start(); // out of sight; shows itself if something goes wrong
+            return true;
+        }
+        dlg->show();
+        dlg->start();
+        return true;
+    }
     if (cmd.is(QStringLiteral("Tag"))) {
         QStringList paths;
         for (const QString &f : cmd.values(QStringLiteral("FILE")))

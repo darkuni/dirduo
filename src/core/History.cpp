@@ -212,6 +212,8 @@ void UndoHistory::onJobFinished(int id)
         : spec->type == JobType::Trash                   ? QStringLiteral("Trash")
         : spec->type == JobType::Pack                    ? QStringLiteral("Pack")
         : spec->type == JobType::Unpack                  ? QStringLiteral("Extract")
+        : spec->type == JobType::Split                   ? QStringLiteral("Split")
+        : spec->type == JobType::Join                    ? QStringLiteral("Join")
                                                          : QStringLiteral("Delete");
     if (spec->type == JobType::Delete) {
         for (const QString &s : spec->sources)
@@ -233,7 +235,9 @@ void UndoHistory::onJobFinished(int id)
         return;
     UndoEntry e;
     // A new archive, or what came out of one, goes away like a copy.
-    e.kind = (spec->type == JobType::Copy || spec->type == JobType::Pack || spec->type == JobType::Unpack) ? UndoEntry::Kind::Copy
+    e.kind = (spec->type == JobType::Copy || spec->type == JobType::Pack || spec->type == JobType::Unpack
+              || spec->type == JobType::Split || spec->type == JobType::Join)
+        ? UndoEntry::Kind::Copy
         : spec->type == JobType::Move                                                                      ? UndoEntry::Kind::Move
                                                                                                            : UndoEntry::Kind::Trash;
     e.isUndo = byUndo;
@@ -257,6 +261,11 @@ void UndoHistory::onJobFinished(int id)
     case UndoEntry::Kind::Copy:
         if (spec->type == JobType::Pack)
             e.title = QStringLiteral("Pack %1").arg(Location::fileName(e.items.first().second));
+        else if (spec->type == JobType::Split)
+            e.title = QStringLiteral("Split %1").arg(spec->sources.size() == 1 ? Location::fileName(spec->sources.first())
+                                                                              : QStringLiteral("%1 files").arg(spec->sources.size()));
+        else if (spec->type == JobType::Join)
+            e.title = QStringLiteral("Join %1").arg(Location::fileName(e.items.first().second));
         else if (spec->type == JobType::Unpack)
             e.title = QStringLiteral("Extract %1").arg(spec->sources.size() == 1 ? Location::fileName(spec->sources.first())
                                                                                 : QStringLiteral("%1 archives").arg(spec->sources.size()));

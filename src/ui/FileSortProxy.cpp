@@ -3,6 +3,7 @@
 #include "ui/FileListModel.h"
 
 #include "core/FileOps.h"
+#include "core/Prefs.h"
 
 #include <QDateTime>
 
@@ -11,6 +12,15 @@ FileSortProxy::FileSortProxy(QObject *parent)
 {
     setSortRole(FileListModel::SortRole);
     setDynamicSortFilter(true);
+    m_junkHidden = Prefs::instance()->values().junkHidden;
+    connect(Prefs::instance(), &Prefs::changed, this, [this]() {
+        const bool junk = Prefs::instance()->values().junkHidden;
+        if (junk != m_junkHidden) {
+            m_junkHidden = junk;
+            if (!m_showHidden)
+                refilter();
+        }
+    });
 }
 
 void FileSortProxy::setShowHidden(bool show)
@@ -62,7 +72,7 @@ bool FileSortProxy::filterAcceptsRow(int sourceRow, const QModelIndex &) const
 {
     const auto *model = static_cast<const FileListModel *>(sourceModel());
     const FileItem &item = model->item(sourceRow);
-    if (!m_showHidden && item.isHidden)
+    if (!m_showHidden && (item.isHidden || (m_junkHidden && FileOps::isJunk(item.name, item.isDir))))
         return false;
     if (m_filterText.isEmpty())
         return true;

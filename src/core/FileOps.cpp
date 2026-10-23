@@ -249,3 +249,35 @@ QString formatSize(qint64 bytes)
 }
 
 } // namespace FileOps
+
+bool FileOps::isJunk(const QString &name, bool isDir)
+{
+    if (isDir) {
+        static const QStringList dirs = {QStringLiteral("__MACOSX"), QStringLiteral(".AppleDouble"), QStringLiteral(".Spotlight-V100"),
+                                         QStringLiteral(".fseventsd"), QStringLiteral(".TemporaryItems")};
+        return dirs.contains(name);
+    }
+    if (name.startsWith(QLatin1String("._")) && name.size() > 2)
+        return true;
+    static const QStringList files = {QStringLiteral(".ds_store"), QStringLiteral("thumbs.db"), QStringLiteral("ehthumbs.db"),
+                                      QStringLiteral("desktop.ini"), QStringLiteral(".directory~")};
+    return files.contains(name.toLower());
+}
+
+QStringList FileOps::findJunk(const QStringList &roots)
+{
+    QStringList out;
+    QStringList todo = roots;
+    while (!todo.isEmpty()) {
+        const QString dir = todo.takeFirst();
+        const QFileInfoList entries = QDir(dir).entryInfoList(QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot, QDir::Name);
+        for (const QFileInfo &fi : entries) {
+            const bool isDir = fi.isDir() && !fi.isSymLink();
+            if (isJunk(fi.fileName(), isDir))
+                out << fi.absoluteFilePath();
+            else if (isDir)
+                todo << fi.absoluteFilePath();
+        }
+    }
+    return out;
+}

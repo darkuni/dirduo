@@ -24,6 +24,7 @@ void Prefs::reload()
     v.statusSelection = s.value(QStringLiteral("statusSelection"), true).toBool();
     v.statusFree = s.value(QStringLiteral("statusFree"), true).toBool();
     v.askOnError = s.value(QStringLiteral("askOnError"), true).toBool();
+    v.junkHidden = s.value(QStringLiteral("junkHidden"), true).toBool();
     v.terminal = s.value(QStringLiteral("terminal")).toString();
     m_values = v;
 }
@@ -37,6 +38,7 @@ void Prefs::setValues(const Values &v)
     s.setValue(QStringLiteral("statusSelection"), v.statusSelection);
     s.setValue(QStringLiteral("statusFree"), v.statusFree);
     s.setValue(QStringLiteral("askOnError"), v.askOnError);
+    s.setValue(QStringLiteral("junkHidden"), v.junkHidden);
     s.setValue(QStringLiteral("terminal"), v.terminal);
     Q_EMIT changed();
 }

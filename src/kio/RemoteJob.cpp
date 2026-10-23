@@ -122,6 +122,8 @@ void RemoteJob::start(const CollisionNotifier &notifier, const DoneCallback &don
         break;
     case JobType::Pack:
     case JobType::Unpack:
+    case JobType::Split:
+    case JobType::Join:
         finish(); // never routed here (archives are local)
         break;
     }

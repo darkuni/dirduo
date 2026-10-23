@@ -1187,6 +1187,9 @@ void FolderTab::showHeaderMenu(const QPoint &globalPos)
     QMenu *tagMenu = menu.addMenu(QIcon::fromTheme(QStringLiteral("tag")), QStringLiteral("Labels and Tags"));
     for (int c : {M::RatingColumn, M::LabelColumn, M::TagsColumn, M::DescriptionColumn})
         addColumn(tagMenu, c);
+    QMenu *sums = menu.addMenu(QIcon::fromTheme(QStringLiteral("document-encrypt")), QStringLiteral("Checksums"));
+    for (int c : {M::Crc32Column, M::Md5Column, M::Sha1Column, M::Sha256Column})
+        addColumn(sums, c);
     QMenu *group = menu.addMenu(QStringLiteral("Group By"));
     using G = FileListModel::GroupBy;
     for (G g : FileListModel::allGroupings()) {

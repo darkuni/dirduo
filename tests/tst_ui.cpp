@@ -38,6 +38,9 @@
 #include "core/Location.h"
 #include "ui/ArchiveDialog.h"
 #include "ui/TagsDialog.h"
+#include "ui/ChecksumDialog.h"
+#include "core/Checksum.h"
+#include <QTreeWidget>
 #include "core/FileTags.h"
 #include "core/Prefs.h"
 #include "ui/ImageViewer.h"
@@ -1340,6 +1343,99 @@ private Q_SLOTS:
         QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=none")));
         t->setColumnVisible(FileListModel::RatingColumn, false);
         t->setColumnVisible(FileListModel::LabelColumn, false);
+        t->navigate(back);
+        waitListed(t, QDir(back).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
+    }
+
+    void checksums()
+    {
+        QTemporaryDir dir;
+        const QString d = dir.path();
+        auto write = [](const QString &path, const QByteArray &data) {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(data);
+        };
+        write(d + QStringLiteral("/abc.txt"), "abc");
+        QDir(d).mkdir(QStringLiteral("disk"));
+        write(d + QStringLiteral("/disk/side b.d64"), "123456789");
+        FolderTab *t = w->display(0)->currentTab();
+        const QString back = t->path();
+        t->navigate(d);
+        waitListed(t, 2);
+        // To the clipboard without a window.
+        t->selectPaths({d + QStringLiteral("/abc.txt")});
+        QApplication::clipboard()->clear();
+        QVERIFY(w->runCommand(QStringLiteral("Checksum ALGO=md5 CLIPBOARD")));
+        QTRY_COMPARE(QApplication::clipboard()->text(), QStringLiteral("900150983cd24fb0d6963f7d28e17f72  abc.txt"));
+        QTRY_VERIFY(!w->findChild<ChecksumDialog *>());
+        // A list of both (the folder walked), saved next to them.
+        t->selectPaths({d + QStringLiteral("/abc.txt"), d + QStringLiteral("/disk")});
+        QVERIFY(w->runCommand(QStringLiteral("Checksum ALGO=crc32 SAVE=all.sfv")));
+        QTRY_VERIFY(QFile::exists(d + QStringLiteral("/all.sfv")));
+        QTRY_VERIFY(!w->findChild<ChecksumDialog *>());
+        const auto entries = Checksum::readList(d + QStringLiteral("/all.sfv"));
+        QCOMPARE(entries.size(), 2);
+        QCOMPARE(entries.at(1).name, QStringLiteral("disk/side b.d64"));
+        QCOMPARE(entries.at(1).hash, QStringLiteral("CBF43926"));
+        // Change a file, then check the list: selecting a list verifies it.
+        write(d + QStringLiteral("/abc.txt"), "abd");
+        QTRY_VERIFY(t->fileModel()->rowForPath(d + QStringLiteral("/all.sfv")) >= 0);
+        t->selectPaths({d + QStringLiteral("/all.sfv")});
+        QMenu menu;
+        w->fillContextMenu(menu, w->display(0), true);
+        QStringList texts;
+        for (QAction *a : menu.actions())
+            texts << a->text();
+        QVERIFY(texts.contains(QStringLiteral("Verify Checksums")));
+        QVERIFY(texts.contains(QStringLiteral("Checksums")));
+        QVERIFY(w->runCommand(QStringLiteral("Checksum")));
+        ChecksumDialog *dlg = nullptr;
+        QTRY_VERIFY((dlg = w->findChild<ChecksumDialog *>()));
+        QTRY_VERIFY(!dlg->isRunning() && dlg->okCount() + dlg->badCount() == 2);
+        QCOMPARE(dlg->okCount(), 1);
+        QCOMPARE(dlg->badCount(), 1);
+        QCOMPARE(dlg->list()->topLevelItem(0)->text(1), QStringLiteral("Does not match"));
+        dlg->close();
+        QTRY_VERIFY(!w->findChild<ChecksumDialog *>());
+        QVERIFY(!runFailing(QStringLiteral("Checksum ALGO=sha512")));
+        // The MD5 column fills in.
+        t->setColumnVisible(FileListModel::Md5Column, true);
+        auto *model = t->fileModel();
+        QTRY_VERIFY([&] {
+            const int r = model->rowForPath(d + QStringLiteral("/abc.txt"));
+            return r >= 0 && model->data(model->index(r, FileListModel::Md5Column), Qt::DisplayRole).toString()
+                == Checksum::computeData("abd", Checksum::Algo::Md5);
+        }());
+        t->setColumnVisible(FileListModel::Md5Column, false);
+        t->navigate(back);
+        waitListed(t, QDir(back).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
+    }
+
+    void junkCountsAsHidden()
+    {
+        QTemporaryDir dir;
+        const QString d = dir.path();
+        touch(d + QStringLiteral("/game.d64"));
+        touch(d + QStringLiteral("/Thumbs.db"));
+        touch(d + QStringLiteral("/desktop.ini"));
+        FolderTab *t = w->display(0)->currentTab();
+        const QString back = t->path();
+        const bool hidden = t->showHidden();
+        QVERIFY(w->runCommand(QStringLiteral("Set HIDDEN=off")));
+        t->navigate(d);
+        waitListed(t, 1);
+        QVERIFY(w->runCommand(QStringLiteral("Set HIDDEN=on")));
+        QTRY_COMPARE(t->view()->model()->rowCount(), 3);
+        QVERIFY(w->runCommand(QStringLiteral("Set HIDDEN=off")));
+        Prefs::Values v = Prefs::instance()->values();
+        v.junkHidden = false;
+        Prefs::instance()->setValues(v);
+        QTRY_COMPARE(t->view()->model()->rowCount(), 3);
+        v.junkHidden = true;
+        Prefs::instance()->setValues(v);
+        QTRY_COMPARE(t->view()->model()->rowCount(), 1);
+        QVERIFY(w->runCommand(hidden ? QStringLiteral("Set HIDDEN=on") : QStringLiteral("Set HIDDEN=off")));
         t->navigate(back);
         waitListed(t, QDir(back).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
     }

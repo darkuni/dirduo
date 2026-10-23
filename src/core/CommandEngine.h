@@ -213,6 +213,14 @@ private:
     bool cmdServer(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool runScript(const QString &script, CommandContext &ctx);
     bool cmdOpenWith(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
+    bool cmdClean(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
+    bool cmdSplitJoin(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
+public:
+    // "100M", "2G", "fat32", "cd", "dvd": bytes.
+    static bool parsePieceSize(const QString &text, qint64 *out);
+    // The set of pieces to join, in order: one "name.001" brings its siblings.
+    static QStringList piecesFrom(const QStringList &picked);
+private:
     bool cmdTag(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     void recordNew(const QStringList &paths, const QString &what);
 

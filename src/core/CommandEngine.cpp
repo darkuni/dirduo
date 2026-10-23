@@ -7,6 +7,7 @@
 #include "core/Servers.h"
 #include "core/Apps.h"
 #include "core/FileTags.h"
+#include "core/Checksum.h"
 #include "core/Prefs.h"
 #include "core/Collections.h"
 #include "core/FileOps.h"
@@ -99,12 +100,12 @@ void CommandEngine::recordNew(const QStringList &paths, const QString &what)
 
 QStringList CommandEngine::commandNames()
 {
-    return {QStringLiteral("Archive"), QStringLiteral("Clipboard"), QStringLiteral("Collection"), QStringLiteral("Copy"), QStringLiteral("CreateFolder"),
+    return {QStringLiteral("Archive"), QStringLiteral("Checksum"), QStringLiteral("Clean"), QStringLiteral("Clipboard"), QStringLiteral("Collection"), QStringLiteral("Copy"), QStringLiteral("CreateFolder"),
             QStringLiteral("Delete"), QStringLiteral("Duplicates"), QStringLiteral("Favorite"), QStringLiteral("Find"), QStringLiteral("Go"),
-            QStringLiteral("Image"),
+            QStringLiteral("Image"), QStringLiteral("Join"),
             QStringLiteral("Layout"), QStringLiteral("MakeLink"), QStringLiteral("Metadata"), QStringLiteral("Move"), QStringLiteral("OpenWith"), QStringLiteral("Print"),
             QStringLiteral("Properties"), QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Server"), QStringLiteral("Set"), QStringLiteral("SetAttr"), QStringLiteral("Settings"), QStringLiteral("Show"),
-            QStringLiteral("Sync"), QStringLiteral("Tag"), QStringLiteral("Terminal"), QStringLiteral("Toolbar"), QStringLiteral("Undo")};
+            QStringLiteral("Split"), QStringLiteral("Sync"), QStringLiteral("Tag"), QStringLiteral("Terminal"), QStringLiteral("Toolbar"), QStringLiteral("Undo")};
 }
 
 QString CommandEngine::resolvePath(const QString &input, const QString &base) const
@@ -240,6 +241,18 @@ bool CommandEngine::execute(const ParsedCommand &cmd, CommandContext &ctx, QStri
         return cmdOpenWith(cmd, ctx, error);
     if (cmd.is(QStringLiteral("Tag")))
         return cmdTag(cmd, ctx, error);
+    if (cmd.is(QStringLiteral("Clean")))
+        return cmdClean(cmd, ctx, error);
+    if (cmd.is(QStringLiteral("Split")) || cmd.is(QStringLiteral("Join")))
+        return cmdSplitJoin(cmd, ctx, error);
+    if (cmd.is(QStringLiteral("Checksum"))) {
+        if (cmd.hasArg(QStringLiteral("ALGO")) && !Checksum::fromName(cmd.value(QStringLiteral("ALGO")), nullptr)) {
+            if (error)
+                *error = QStringLiteral("ALGO takes md5, sha1, sha256 or crc32.");
+            return false;
+        }
+        return ctx.tool(cmd, error); // the Checksums window
+    }
     if (cmd.is(QStringLiteral("Show")))
         return ctx.tool(cmd, error); // the picture viewer
     if (cmd.is(QStringLiteral("Sync")) || cmd.is(QStringLiteral("Duplicates")) || cmd.is(QStringLiteral("Find"))
@@ -1045,6 +1058,213 @@ bool CommandEngine::cmdDelete(const ParsedCommand &cmd, CommandContext &ctx, QSt
     } else {
         trashItems(sources);
     }
+    return true;
+}
+
+bool CommandEngine::parsePieceSize(const QString &text, qint64 *out)
+{
+    QString t = text.trimmed().toLower().remove(QLatin1Char(' '));
+    if (t == QLatin1String("fat32") || t == QLatin1String("fat")) {
+        *out = Q_INT64_C(4294967295); // the largest file FAT32 holds
+        return true;
+    }
+    if (t == QLatin1String("cd")) {
+        *out = Q_INT64_C(650) * 1024 * 1024;
+        return true;
+    }
+    if (t == QLatin1String("dvd")) {
+        *out = Q_INT64_C(4480) * 1024 * 1024;
+        return true;
+    }
+    for (const char *suffix : {"ib", "b"}) {
+        if (t.endsWith(QLatin1String(suffix)) && t.size() > int(qstrlen(suffix))) {
+            t.chop(int(qstrlen(suffix)));
+            break;
+        }
+    }
+    qint64 mult = 1;
+    if (!t.isEmpty()) {
+        switch (t.back().toLatin1()) {
+        case 'k': mult = 1024; break;
+        case 'm': mult = 1024 * 1024; break;
+        case 'g': mult = Q_INT64_C(1024) * 1024 * 1024; break;
+        case 't': mult = Q_INT64_C(1024) * 1024 * 1024 * 1024; break;
+        default: break;
+        }
+        if (mult > 1)
+            t.chop(1);
+    }
+    bool ok = false;
+    const double v = t.toDouble(&ok);
+    if (!ok || v <= 0)
+        return false;
+    *out = qint64(v * double(mult));
+    return *out > 0;
+}
+
+QStringList CommandEngine::piecesFrom(const QStringList &picked)
+{
+    static const QRegularExpression numbered(QStringLiteral("^(.*)\\.(\\d{3,})$"));
+    if (picked.size() == 1) {
+        // One piece picked: the rest of the set, in order, from the first.
+        const auto m = numbered.match(picked.first());
+        if (!m.hasMatch())
+            return picked;
+        const QString stem = m.captured(1);
+        const int digits = int(m.captured(2).size());
+        QStringList out;
+        for (int i = 1;; ++i) {
+            const QString p = stem + QLatin1Char('.') + QStringLiteral("%1").arg(i, digits, 10, QLatin1Char('0'));
+            if (!QFileInfo(p).isFile())
+                break;
+            out << p;
+        }
+        return out.isEmpty() ? picked : out;
+    }
+    QStringList out = picked;
+    std::sort(out.begin(), out.end(), [](const QString &a, const QString &b) { return FileOps::naturalCompare(a, b) < 0; });
+    return out;
+}
+
+bool CommandEngine::cmdSplitJoin(const ParsedCommand &cmd, CommandContext &ctx, QString *error)
+{
+    auto fail = [error](const QString &msg) {
+        if (error)
+            *error = msg;
+        return false;
+    };
+    const bool split = cmd.is(QStringLiteral("Split"));
+    QStringList sources = sourcesFor(cmd, ctx, {QStringLiteral("DEST")});
+    QStringList files;
+    for (const QString &p : std::as_const(sources)) {
+        if (QFileInfo(p).isFile())
+            files << p;
+    }
+    if (files.isEmpty())
+        return fail(split ? QStringLiteral("Select a file to split first.") : QStringLiteral("Select the pieces to join first (the first one is enough)."));
+    QString dest;
+    if (cmd.hasArg(QStringLiteral("TO")) && !cmd.value(QStringLiteral("TO")).isEmpty()) {
+        dest = cmd.value(QStringLiteral("TO")).compare(QLatin1String("dest"), Qt::CaseInsensitive) == 0
+            ? ctx.destPath()
+            : resolvePath(cmd.value(QStringLiteral("TO")), ctx.sourcePath());
+    } else if (cmd.hasFlag(QStringLiteral("DEST"))) {
+        dest = ctx.destPath();
+    } else {
+        dest = Location::parent(files.first());
+    }
+    if (dest.isEmpty())
+        return fail(QStringLiteral("There is no destination: turn on the second display or give TO=."));
+    for (const QString &p : std::as_const(files)) {
+        if (!Location::isLocal(p))
+            return fail(QStringLiteral("Splitting and joining work in folders on this computer and its cards."));
+    }
+    if (!Location::isLocal(dest) || !QFileInfo(dest).isDir())
+        return fail(QStringLiteral("%1 is not a folder on this computer.").arg(dest));
+    CollisionAction whenExists = CollisionAction::Rename;
+    if (cmd.hasArg(QStringLiteral("WHENEXISTS")) && !parseWhenExists(cmd.value(QStringLiteral("WHENEXISTS")), whenExists))
+        return fail(QStringLiteral("WHENEXISTS takes replace, skip or rename."));
+    JobSpec spec;
+    spec.destDir = dest;
+    spec.whenExists = whenExists;
+    if (split) {
+        QString size = cmd.value(QStringLiteral("SIZE"));
+        qint64 bytes = 0;
+        if (cmd.hasArg(QStringLiteral("PIECES"))) {
+            bool ok = false;
+            const int n = cmd.value(QStringLiteral("PIECES")).toInt(&ok);
+            if (!ok || n < 2)
+                return fail(QStringLiteral("PIECES takes a number from 2 up."));
+            qint64 biggest = 0;
+            for (const QString &f : std::as_const(files))
+                biggest = qMax(biggest, QFileInfo(f).size());
+            bytes = qMax<qint64>(1, (biggest + n - 1) / n);
+        } else {
+            if (size.isEmpty()) {
+                size = QStringLiteral("fat32");
+                if (!ctx.promptText(QStringLiteral("Split"),
+                                    QStringLiteral("Size of each piece (like 100M or 2G; fat32 for the largest a FAT32 card holds; cd, dvd):"), size)) {
+                    if (error)
+                        *error = kCanceled;
+                    return false;
+                }
+            }
+            if (!parsePieceSize(size, &bytes))
+                return fail(QStringLiteral("\"%1\" is not a size: try 100M, 2G or fat32.").arg(size));
+        }
+        if (bytes < 1024 && !cmd.hasArg(QStringLiteral("PIECES")))
+            return fail(QStringLiteral("Pieces need to be at least 1 KB."));
+        spec.type = JobType::Split;
+        spec.sources = files;
+        spec.pieceSize = bytes;
+    } else {
+        const QStringList pieces = piecesFrom(files);
+        if (pieces.size() < 2)
+            return fail(QStringLiteral("Joining needs at least two pieces."));
+        QString name = cmd.value(QStringLiteral("NAME"));
+        if (name.isEmpty()) {
+            static const QRegularExpression numbered(QStringLiteral("\\.\\d{3,}$"));
+            name = Location::fileName(pieces.first());
+            if (numbered.match(name).hasMatch())
+                name.remove(numbered);
+            else if (!ctx.promptText(QStringLiteral("Join"), QStringLiteral("Name of the joined file:"), name)) {
+                if (error)
+                    *error = kCanceled;
+                return false;
+            }
+        }
+        QString why;
+        if (!FileOps::isValidFileName(name, &why))
+            return fail(why);
+        spec.type = JobType::Join;
+        spec.sources = pieces;
+        spec.joinName = name;
+    }
+    m_jobs.enqueue(spec);
+    return true;
+}
+
+bool CommandEngine::cmdClean(const ParsedCommand &cmd, CommandContext &ctx, QString *error)
+{
+    auto fail = [error](const QString &msg) {
+        if (error)
+            *error = msg;
+        return false;
+    };
+    // Folders named, else the selected folders, else the source folder.
+    QStringList roots;
+    for (const QString &f : cmd.values(QStringLiteral("FILE")))
+        roots << resolvePath(f, ctx.sourcePath());
+    if (roots.isEmpty()) {
+        for (const QString &p : ctx.selectedPaths())
+            if (QFileInfo(p).isDir() && !FileOps::isJunk(Location::fileName(p), true))
+                roots << p;
+    }
+    if (roots.isEmpty())
+        roots << ctx.sourcePath();
+    for (const QString &r : std::as_const(roots)) {
+        if (!Location::isLocal(r) || !QFileInfo(r).isDir())
+            return fail(QStringLiteral("Clean works in folders on this computer and its cards."));
+    }
+    const QStringList junk = FileOps::findJunk(roots);
+    if (junk.isEmpty()) {
+        if (!cmd.hasFlag(QStringLiteral("QUIET")))
+            ctx.showError(QStringLiteral("Clean"), QStringLiteral("No junk files here."));
+        return true;
+    }
+    if (!cmd.hasFlag(QStringLiteral("QUIET"))) {
+        QStringList names;
+        for (const QString &j : junk.mid(0, 12))
+            names << QStringLiteral("  ") + j.mid(roots.size() == 1 ? roots.first().size() + 1 : 0);
+        if (junk.size() > 12)
+            names << QStringLiteral("  ... and %1 more").arg(junk.size() - 12);
+        if (!ctx.confirm(QStringLiteral("Clean"),
+                         QStringLiteral("Move %1 junk item(s) to the trash?\n\n%2").arg(junk.size()).arg(names.join(QLatin1Char('\n'))))) {
+            if (error)
+                *error = kCanceled;
+            return false;
+        }
+    }
+    trashItems(junk);
     return true;
 }
 
