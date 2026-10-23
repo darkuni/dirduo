@@ -1,6 +1,7 @@
 #include "core/AliasManager.h"
 #include "core/CommandEngine.h"
 #include "core/HostRun.h"
+#include "core/Servers.h"
 #include "core/JobManager.h"
 #include "core/Paths.h"
 
@@ -184,6 +185,36 @@ private Q_SLOTS:
         // A folder with a quote in its name stays one argument.
         const QStringList cmd = HostRun::terminalCommand(QStringLiteral("/tmp/it's here"), {});
         QVERIFY(cmd.last().contains(QStringLiteral("'/tmp/it'\\''s here'")));
+    }
+
+    void serverAddressBook()
+    {
+        QCOMPARE(Servers::makeUrl(QStringLiteral("sftp"), QStringLiteral("nas"), 0, QStringLiteral("deck"), QStringLiteral("media")),
+                 QStringLiteral("sftp://deck@nas/media"));
+        QCOMPARE(Servers::makeUrl(QStringLiteral("smb"), QStringLiteral("box"), 445, {}, QStringLiteral("/Games")),
+                 QStringLiteral("smb://box:445/Games"));
+        QVERIFY(Servers::isServerUrl(QStringLiteral("smb://box/share")));
+        QVERIFY(!Servers::isServerUrl(QStringLiteral("/home/deck")));
+        QVERIFY(!Servers::isServerUrl(QStringLiteral("http://example.com")));
+        QCOMPARE(Servers::suggestedName(QStringLiteral("sftp://deck@nas/media")), QStringLiteral("nas media (SFTP)"));
+
+        QVERIFY(m_engine->run(QStringLiteral("Server ADD URL=sftp://deck@nas/media NAME=NAS"), ctx));
+        QVERIFY(m_engine->run(QStringLiteral("Server ADD URL=smb://box/Games"), ctx));
+        QCOMPARE(Servers::instance()->items().size(), 2);
+        QCOMPARE(Servers::instance()->items().value(1).name, QStringLiteral("box Games (Windows share)"));
+        // Same name: replaced, not doubled.
+        QVERIFY(m_engine->run(QStringLiteral("Server ADD URL=sftp://deck@nas2/media NAME=nas"), ctx));
+        QCOMPARE(Servers::instance()->items().size(), 2);
+        QCOMPARE(Servers::instance()->urlFor(QStringLiteral("NAS")), QStringLiteral("sftp://deck@nas2/media"));
+        QVERIFY(!m_engine->run(QStringLiteral("Server ADD URL=/home/deck NAME=x"), ctx));
+        // GO opens it like Go would.
+        QVERIFY(m_engine->run(QStringLiteral("Server GO=NAS NEWTAB"), ctx));
+        QCOMPARE(ctx.goCalls.last(), QStringLiteral("sftp://deck@nas2/media NEWTAB"));
+        QVERIFY(!m_engine->run(QStringLiteral("Server GO=nowhere"), ctx));
+        QVERIFY(m_engine->run(QStringLiteral("Server REMOVE=NAS"), ctx));
+        QCOMPARE(Servers::instance()->items().size(), 1);
+        QVERIFY(!m_engine->run(QStringLiteral("Server REMOVE=NAS"), ctx));
+        Servers::instance()->setItems({});
     }
 
     void copySelectionToDest()

@@ -1,4 +1,5 @@
 #include "ui/FolderTree.h"
+#include "core/Servers.h"
 #include "ui/Style.h"
 
 #include <QApplication>
@@ -68,7 +69,7 @@ void FolderTreeModel::setRoots(const QList<Root> &roots)
                 node->label = r.group;
                 node->heading = true;
                 node->fetched = true;
-                node->iconName = QStringLiteral("bookmarks");
+                node->iconName = r.group == QLatin1String("Network") ? QStringLiteral("network-workgroup") : QStringLiteral("bookmarks");
                 node->parent = m_root.get();
                 h = node.get();
                 m_root->children.push_back(std::move(node));
@@ -80,6 +81,7 @@ void FolderTreeModel::setRoots(const QList<Root> &roots)
         node->path = Location::clean(r.path);
         node->iconName = r.icon;
         node->parent = parent;
+        node->fetched = !Location::isLocal(r.path); // servers open in the list, not in the tree
         parent->children.push_back(std::move(node));
     }
     endResetModel();
@@ -408,6 +410,13 @@ void FolderTree::rebuild(const QList<DriveEntry> &drives)
                                            QStringLiteral("Aliases")};
         }
     }
+    // The network: browse it, Windows shares, and the saved servers.
+    roots << FolderTreeModel::Root{QStringLiteral("Network"), QStringLiteral("network:/"), QStringLiteral("network-workgroup"),
+                                   QStringLiteral("Network")};
+    roots << FolderTreeModel::Root{QStringLiteral("Windows Shares"), QStringLiteral("smb:/"), QStringLiteral("network-workgroup"),
+                                   QStringLiteral("Network")};
+    for (const Server &sv : Servers::instance()->items())
+        roots << FolderTreeModel::Root{sv.name, sv.url, QStringLiteral("network-server"), QStringLiteral("Network")};
     auto same = [](const QList<FolderTreeModel::Root> &a, const QList<FolderTreeModel::Root> &b) {
         if (a.size() != b.size())
             return false;

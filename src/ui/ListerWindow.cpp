@@ -15,6 +15,8 @@
 #include "core/FindEngine.h"
 #include "ui/HistoryDialog.h"
 #include "ui/ArchiveDialog.h"
+#include "ui/ServerDialog.h"
+#include "core/Servers.h"
 #include "ui/PropertiesDialog.h"
 #include "ui/ImageConvertDialog.h"
 #include "core/FileKind.h"
@@ -502,8 +504,13 @@ void ListerWindow::buildMenus()
     location->setShortcuts({QKeySequence(QStringLiteral("Ctrl+L")), QKeySequence(QStringLiteral("Alt+D"))});
     connect(location, &QAction::triggered, this, [this]() { sourceDisplay()->breadcrumb()->startEditing(); });
     go->addSeparator();
-    // Windows and Samba shares on the network (KIO's smb worker).
-    go->addAction(commandAction(QStringLiteral("Network (Windows Shares)"), QStringLiteral("Go smb:/"), {}, QStringLiteral("network-workgroup")));
+    // The network: machines found on it, Windows and Samba shares (KIO's smb
+    // worker), and the saved servers.
+    QMenu *servers = go->addMenu(QIcon::fromTheme(QStringLiteral("network-workgroup")), QStringLiteral("Network and Servers"));
+    connect(servers, &QMenu::aboutToShow, this, [this, servers]() {
+        servers->clear();
+        fillDynamicMenu(servers, QStringLiteral("servers"));
+    });
     go->addAction(commandAction(QStringLiteral("Collections"), QStringLiteral("Collection OPEN"), {}, QStringLiteral("folder-favorites")));
     m_aliasMenu = go->addMenu(QIcon::fromTheme(QStringLiteral("bookmarks")), QStringLiteral("Aliases"));
     connect(m_aliasMenu, &QMenu::aboutToShow, this, &ListerWindow::rebuildAliasMenu);
@@ -595,6 +602,7 @@ void ListerWindow::buildToolbar()
 
     m_drives = new DrivesBar(this);
     connect(m_drives, &DrivesBar::commandTriggered, this, [this](const QString &cmd) { runCommand(cmd); });
+    m_drives->setNetworkMenuProvider([this](QMenu *menu) { fillDynamicMenu(menu, QStringLiteral("servers")); });
     setupToolbarMenu(m_drives);
     // Opus puts the drives between the displays; so does Linopus by default.
     placeToolbar(m_drives, ToolbarPlace::Between);
@@ -2437,6 +2445,30 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
     }
     if (cmd.is(QStringLiteral("Image")))
         return imageCommand(cmd, error);
+    if (cmd.is(QStringLiteral("Server"))) {
+        if (cmd.hasFlag(QStringLiteral("ADD"))) {
+            // Starting from the server folder being shown, with HERE (or when it is one).
+            Server start;
+            if (Servers::isServerUrl(sourcePath()))
+                start.url = sourcePath();
+            auto *dlg = new ServerDialog(start, this);
+            dlg->setAttribute(Qt::WA_DeleteOnClose);
+            connect(dlg, &QDialog::accepted, this, [this, dlg]() {
+                QString err;
+                if (!Servers::instance()->add(dlg->server(), &err))
+                    showError(QStringLiteral("Add Server"), err);
+            });
+            dlg->open();
+            return true;
+        }
+        auto *dlg = new ServersDialog(this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        connect(dlg, &ServersDialog::openRequested, this, [this](const QString &url) {
+            runCommand(QStringLiteral("Go \"%1\"").arg(url));
+        });
+        dlg->open();
+        return true;
+    }
     if (cmd.is(QStringLiteral("Properties")) || cmd.is(QStringLiteral("SetAttr"))) {
         QStringList paths;
         for (const QString &f : cmd.values(QStringLiteral("FILE")))
@@ -2661,6 +2693,23 @@ void ListerWindow::fillDynamicMenu(QMenu *menu, const QString &kind)
         AliasManager &aliases = m_app.aliases();
         for (const QString &name : aliases.names())
             goAction(menu, QLatin1Char('/') + name, QStringLiteral("Go /") + name, aliases.aliasPath(name), QStringLiteral("folder-bookmark"));
+    } else if (kind == QLatin1String("servers")) {
+        goAction(menu, QStringLiteral("Network"), QStringLiteral("Go network:/"), QStringLiteral("Machines and shares on the network"),
+                 QStringLiteral("network-workgroup"));
+        goAction(menu, QStringLiteral("Windows Shares"), QStringLiteral("Go smb:/"), QStringLiteral("Windows and Samba machines (SMB)"),
+                 QStringLiteral("network-workgroup"));
+        const QList<Server> saved = Servers::instance()->items();
+        if (!saved.isEmpty())
+            menu->addSeparator();
+        for (const Server &sv : saved)
+            goAction(menu, sv.name, QStringLiteral("Go ") + quoted(sv.url), sv.url, QStringLiteral("network-server"));
+        menu->addSeparator();
+        connect(menu->addAction(QIcon::fromTheme(QStringLiteral("list-add")), QStringLiteral("Add Server...")), &QAction::triggered, this,
+                [this]() { runCommand(QStringLiteral("Server ADD")); });
+        if (sourceTab() && Servers::isServerUrl(sourceTab()->path()))
+            connect(menu->addAction(QStringLiteral("Add This Location...")), &QAction::triggered, this,
+                    [this]() { runCommand(QStringLiteral("Server ADD HERE")); });
+        connect(menu->addAction(QStringLiteral("Manage Servers...")), &QAction::triggered, this, [this]() { runCommand(QStringLiteral("Server")); });
     } else if (kind == QLatin1String("collections")) {
         for (const QString &name : Collections::instance()->names())
             goAction(menu, name, QStringLiteral("Collection OPEN=") + quoted(name), Collections::location(name),

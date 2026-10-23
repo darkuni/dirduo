@@ -6,6 +6,10 @@
 #include <QToolBar>
 
 class ThreeButton;
+class QMenu;
+class QToolButton;
+
+#include <functional>
 
 // Opus-style drives toolbar: Root, Home, then every SD card, USB stick and
 // extra disk that is mounted right now. It updates itself as cards and sticks
@@ -29,6 +33,10 @@ public:
     // For tests: show this list and stop polling.
     void setDrivesForTesting(const QList<DriveEntry> &drives);
 
+    // Fills the Network button's menu (the network and saved servers).
+    void setNetworkMenuProvider(std::function<void(QMenu *)> p) { m_networkMenu = std::move(p); }
+    QToolButton *networkButton() const { return m_network; }
+
 Q_SIGNALS:
     void commandTriggered(const QString &command);
 
@@ -41,4 +49,6 @@ private:
     QList<ThreeButton *> m_buttons;
     QString m_activePath;
     QTimer m_poll;
+    QToolButton *m_network = nullptr;
+    std::function<void(QMenu *)> m_networkMenu;
 };

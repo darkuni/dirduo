@@ -1,4 +1,6 @@
 #include "ui/DrivesBar.h"
+#include <QToolButton>
+#include <QMenu>
 
 #include "core/FileOps.h"
 #include "ui/ButtonBar.h"
@@ -93,6 +95,24 @@ void DrivesBar::rebuild()
         addWidget(b);
         m_buttons << b;
     }
+    // Network: a click browses it; the arrow lists Windows shares and your servers.
+    m_network = new QToolButton(this);
+    m_network->setText(QStringLiteral("Network"));
+    m_network->setIcon(QIcon::fromTheme(QStringLiteral("network-workgroup")));
+    m_network->setToolButtonStyle(m_network->icon().isNull() ? Qt::ToolButtonTextOnly : Qt::ToolButtonTextBesideIcon);
+    m_network->setAutoRaise(true);
+    m_network->setFocusPolicy(Qt::NoFocus);
+    m_network->setToolTip(QStringLiteral("<b>Network</b><br>Machines and shares on the network. The arrow: Windows shares and your saved servers."));
+    m_network->setPopupMode(QToolButton::MenuButtonPopup);
+    auto *menu = new QMenu(m_network);
+    connect(menu, &QMenu::aboutToShow, this, [this, menu]() {
+        menu->clear();
+        if (m_networkMenu)
+            m_networkMenu(menu);
+    });
+    m_network->setMenu(menu);
+    connect(m_network, &QToolButton::clicked, this, [this]() { Q_EMIT commandTriggered(QStringLiteral("Go network:/")); });
+    addWidget(m_network);
     updateTips();
     setActivePath(m_activePath);
 }

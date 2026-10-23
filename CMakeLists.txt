@@ -61,6 +61,7 @@ add_library(linopus_core STATIC
     src/core/ImageConvert.cpp
     src/core/Attributes.cpp
     src/core/HostRun.cpp
+    src/core/Servers.cpp
     src/core/Metadata.cpp
     src/core/Thumbnails.cpp
     src/core/History.cpp
@@ -156,6 +157,7 @@ add_library(linopus_ui STATIC
     src/ui/ArchiveDialog.cpp
     src/ui/PropertiesDialog.cpp
     src/ui/Glyphs.cpp
+    src/ui/ServerDialog.cpp
     src/ui/HistoryDialog.cpp
     src/ui/SelectDialog.cpp
     src/ui/Launch.cpp

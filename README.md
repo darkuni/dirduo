@@ -26,7 +26,7 @@ Targets: SteamOS Desktop Mode on the Steam Deck (x86_64) and Steam Frame (aarch6
 
 Servers and archives (KIO):
 
-- Type a server address in any address bar: `sftp://deck@nas/media`, `ftp://host/pub`, `smb://box/share`, `webdav://...`. Go > Network (Windows Shares) browses `smb:/` for machines and shares on the network; the Flatpak bundles Samba's client for it. Server folders behave like local ones: browse, tabs, Copy/Move between a server and a drive (either direction), Copy As, Delete, Rename, New Folder, drag and drop
+- Type a server address in any address bar: `sftp://deck@nas/media`, `ftp://host/pub`, `smb://box/share`, `webdav://...`. Network, as in Dolphin: the Network button on the drives bar, the Network group in the folder tree and Go > Network and Servers open `network:/` (everything that announces itself on the network: SMB, SFTP, NFS, WebDAV) and Windows Shares (`smb:/`, Windows and Samba machines; the Flatpak bundles Samba's client). Server address book: Add Server... (name, kind, server, port, user, folder; or Add This Location while on a server) keeps servers by name in all of those places; Manage Servers... edits them. Passwords stay with KDE's wallet. Server folders behave like local ones: browse, tabs, Copy/Move between a server and a drive (either direction), Copy As, Delete, Rename, New Folder, drag and drop
 - Copies to and from servers run in their own progress windows with pause, cancel and speed, and use the same "already exists" dialog as local copies. Jobs to the same server queue behind each other
 - Archives open as folders: double-click (or Enter) on a zip, tar or 7z goes inside it; Up leaves it. Copy files straight out of them. Right-click > Open in Application still hands the archive to an archiver
 - Aliases can point at servers: an alias `nas` = `sftp://deck@nas/media` makes `/nas/Movies` work anywhere
@@ -110,6 +110,7 @@ Every button, menu item, hotkey, drop and inline rename runs one of these. Butto
 | `Collection` | `ADD=<name>\|ask`, `REMOVE`, `CREATE=`, `DELETE=`, `OPEN=<name>`, `NEWTAB` |
 | `Metadata` | `TITLE=`, `ARTIST=`, `ALBUMARTIST=`, `ALBUM=`, `GENRE=`, `COMMENT=`, `YEAR=`, `TRACK=<n>\|auto` (`START=`), `DISC=`, `TAKEN=`, `SHIFT=+1h\|-30m\|+2d`, `DESCRIPTION=`, `COPYRIGHT=` (empty clears), `COPY`, `PASTE` (`ALL`), `FILE=`, `PANE=toggle\|on\|off` |
 | `Undo` | no arguments: the latest; `ID=`, `LIST`, `LOG` (`FIND=`) |
+| `Server` | `GO=<name>` (`NEWTAB`, `OPENINDEST`), `ADD` (asks) or `ADD URL=... NAME=...`, `REMOVE=<name>`; nothing: the list |
 | `Sync` | `LEFT=`, `RIGHT=`, `MODE=update\|mirror\|twoway`, `COMPARE=datesize\|date\|size\|contents`, `EXCLUDE=*.tmp;...`, `RUN` |
 | `Terminal` | `PATH=<folder>` (else the source folder), `PROGRAM=konsole\|gnome-terminal\|...` |
 | `Duplicates` | `IN=...` (several allowed), `BY=contents\|namesize\|name`, `MINSIZE=<bytes>`, `HIDDEN` |

@@ -4,6 +4,7 @@
 #include "core/Archive.h"
 #include "core/Attributes.h"
 #include "core/HostRun.h"
+#include "core/Servers.h"
 #include "core/Collections.h"
 #include "core/FileOps.h"
 #include "core/JobManager.h"
@@ -95,7 +96,7 @@ QStringList CommandEngine::commandNames()
             QStringLiteral("Delete"), QStringLiteral("Duplicates"), QStringLiteral("Favorite"), QStringLiteral("Find"), QStringLiteral("Go"),
             QStringLiteral("Image"),
             QStringLiteral("Layout"), QStringLiteral("MakeLink"), QStringLiteral("Metadata"), QStringLiteral("Move"), QStringLiteral("Print"),
-            QStringLiteral("Properties"), QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Set"), QStringLiteral("SetAttr"), QStringLiteral("Settings"),
+            QStringLiteral("Properties"), QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Server"), QStringLiteral("Set"), QStringLiteral("SetAttr"), QStringLiteral("Settings"),
             QStringLiteral("Sync"), QStringLiteral("Terminal"), QStringLiteral("Toolbar"), QStringLiteral("Undo")};
 }
 
@@ -224,6 +225,8 @@ bool CommandEngine::execute(const ParsedCommand &cmd, CommandContext &ctx, QStri
         return cmdMakeLink(cmd, ctx, error);
     if (cmd.is(QStringLiteral("Terminal")))
         return cmdTerminal(cmd, ctx, error);
+    if (cmd.is(QStringLiteral("Server")))
+        return cmdServer(cmd, ctx, error);
     if (cmd.is(QStringLiteral("Sync")) || cmd.is(QStringLiteral("Duplicates")) || cmd.is(QStringLiteral("Find"))
         || cmd.is(QStringLiteral("Favorite")) || cmd.is(QStringLiteral("Layout")) || cmd.is(QStringLiteral("Image")))
         return ctx.tool(cmd, error);
@@ -643,6 +646,44 @@ bool CommandEngine::cmdTerminal(const ParsedCommand &cmd, CommandContext &ctx, Q
         return false;
     }
     return HostRun::openTerminal(dir, cmd.value(QStringLiteral("PROGRAM")), error);
+}
+
+bool CommandEngine::cmdServer(const ParsedCommand &cmd, CommandContext &ctx, QString *error)
+{
+    auto fail = [error](const QString &msg) {
+        if (error)
+            *error = msg;
+        return false;
+    };
+    Servers *servers = Servers::instance();
+    if (cmd.hasArg(QStringLiteral("GO"))) {
+        const QString name = cmd.value(QStringLiteral("GO"));
+        const QString url = servers->urlFor(name);
+        if (url.isEmpty())
+            return fail(QStringLiteral("There is no server called \"%1\".").arg(name));
+        ParsedCommand go;
+        go.name = QStringLiteral("Go");
+        go.positional << url;
+        for (const QString &f : {QStringLiteral("NEWTAB"), QStringLiteral("OPENINDEST")}) {
+            if (cmd.hasFlag(f))
+                go.positional << f;
+        }
+        return cmdGo(go, ctx, error);
+    }
+    if (cmd.hasArg(QStringLiteral("REMOVE"))) {
+        if (!servers->remove(cmd.value(QStringLiteral("REMOVE"))))
+            return fail(QStringLiteral("There is no server called \"%1\".").arg(cmd.value(QStringLiteral("REMOVE"))));
+        return true;
+    }
+    if (cmd.hasFlag(QStringLiteral("ADD")) && cmd.hasArg(QStringLiteral("URL"))) {
+        const QString url = cmd.value(QStringLiteral("URL"));
+        QString name = cmd.value(QStringLiteral("NAME"));
+        if (name.isEmpty())
+            name = Servers::suggestedName(url);
+        return servers->add(Server{name, url}, error);
+    }
+    // ADD without an address, or nothing: the window (Add Server, or the list).
+    return ctx.tool(cmd, error);
 }
 
 int CommandEngine::trashItems(const QStringList &paths)

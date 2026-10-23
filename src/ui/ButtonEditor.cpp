@@ -119,6 +119,7 @@ ButtonEditor::ButtonEditor(const ButtonDef &def, QWidget *parent)
     m_dynamic->addItem(QStringLiteral("Frequent folders"), QStringLiteral("frequent"));
     m_dynamic->addItem(QStringLiteral("Aliases"), QStringLiteral("aliases"));
     m_dynamic->addItem(QStringLiteral("Collections"), QStringLiteral("collections"));
+    m_dynamic->addItem(QStringLiteral("Network and servers"), QStringLiteral("servers"));
     m_dynamic->setCurrentIndex(qMax(0, m_dynamic->findData(def.dynamic)));
     dynRow->addWidget(m_dynamic, 1);
     menuOuter->addLayout(dynRow);

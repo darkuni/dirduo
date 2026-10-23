@@ -37,6 +37,9 @@
 #include "ui/Style.h"
 #include "core/Location.h"
 #include "ui/ArchiveDialog.h"
+#include "ui/DrivesBar.h"
+#include "ui/ServerDialog.h"
+#include "core/Servers.h"
 #include "ui/PropertiesDialog.h"
 #include "ui/ListerWindow.h"
 
@@ -45,6 +48,7 @@
 #include <QDir>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QSpinBox>
 #include <QDateTimeEdit>
 #include <QPushButton>
 #include <QTreeWidget>
@@ -535,7 +539,7 @@ private Q_SLOTS:
         QStringList top;
         for (int r = 0; r < m->rowCount(); ++r)
             top << m->index(r, 0).data().toString();
-        QCOMPARE(top, (QStringList{QStringLiteral("Home"), QStringLiteral("Root"), QStringLiteral("Games"), QStringLiteral("Aliases")}));
+        QCOMPARE(top, (QStringList{QStringLiteral("Home"), QStringLiteral("Root"), QStringLiteral("Games"), QStringLiteral("Aliases"), QStringLiteral("Network")}));
         const QModelIndex aliases = m->index(3, 0);
         QCOMPARE(m->rowCount(aliases), 1);
         QCOMPARE(m->index(0, 0, aliases).data().toString(), QStringLiteral("/roms"));
@@ -2015,6 +2019,39 @@ private Q_SLOTS:
         w->fillContextMenu(onItem, w->display(0), true);
         for (QAction *a : onItem.actions())
             QVERIFY(a->text() != QStringLiteral("Open Konsole in This Folder"));
+    }
+
+    void networkAndServers()
+    {
+        Servers::instance()->setItems({Server{QStringLiteral("NAS"), QStringLiteral("sftp://deck@nas/media")}});
+        // The Go menu, the drives bar and buttons share one menu.
+        QMenu menu;
+        w->fillDynamicMenu(&menu, QStringLiteral("servers"));
+        QStringList texts;
+        for (QAction *a : menu.actions())
+            texts << a->text();
+        QVERIFY(texts.contains(QStringLiteral("Network")));
+        QVERIFY(texts.contains(QStringLiteral("Windows Shares")));
+        QVERIFY(texts.contains(QStringLiteral("NAS")));
+        QVERIFY(texts.contains(QStringLiteral("Add Server...")));
+        QVERIFY(texts.contains(QStringLiteral("Manage Servers...")));
+        // The drives bar has a Network button.
+        auto *drives = w->findChild<DrivesBar *>();
+        QVERIFY(drives);
+        QTRY_VERIFY(drives->networkButton());
+        // The add dialog builds the address and a name from the parts.
+        ServerDialog dlg(Server{}, nullptr);
+        dlg.kindBox()->setCurrentIndex(dlg.kindBox()->findData(QStringLiteral("smb")));
+        dlg.hostEdit()->setText(QStringLiteral("box"));
+        dlg.folderEdit()->setText(QStringLiteral("Games"));
+        QCOMPARE(dlg.server().url, QStringLiteral("smb://box/Games"));
+        QCOMPARE(dlg.nameEdit()->text(), QStringLiteral("box Games (Windows share)"));
+        ServerDialog edit(Server{QStringLiteral("NAS"), QStringLiteral("sftp://deck@nas:2222/media")}, nullptr);
+        QCOMPARE(edit.hostEdit()->text(), QStringLiteral("nas"));
+        QCOMPARE(edit.portBox()->value(), 2222);
+        QCOMPARE(edit.userEdit()->text(), QStringLiteral("deck"));
+        QCOMPARE(edit.server(), (Server{QStringLiteral("NAS"), QStringLiteral("sftp://deck@nas:2222/media")}));
+        Servers::instance()->setItems({});
     }
 
     void freeSpaceShown()
