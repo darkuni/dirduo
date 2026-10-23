@@ -105,6 +105,47 @@ private Q_SLOTS:
         QVERIFY(FileOps::bytesTotal(dst) >= FileOps::bytesFree(dst));
     }
 
+    void failedItemsAskRetrySkipAbort()
+    {
+        // /proc/self/mem cannot be read from the start: a reliable failure.
+        if (QFile f(QStringLiteral("/proc/self/mem")); f.open(QIODevice::ReadOnly) && f.read(1).size() == 1)
+            QSKIP("/proc/self/mem is readable here");
+        writeFile(src + QStringLiteral("/fine.txt"), "fine");
+        JobManager jm;
+        QList<CollisionRequest> asked;
+        QList<CollisionAction> answers = {CollisionAction::Retry, CollisionAction::Skip};
+        connect(&jm, &JobManager::collisionRequested, this, [&](const CollisionRequest &r) {
+            asked << r;
+            CollisionDecision d;
+            d.action = answers.isEmpty() ? CollisionAction::Skip : answers.takeFirst();
+            jm.resolveCollision(r.jobId, d);
+        });
+        JobSpec sp = spec(JobType::Copy, {QStringLiteral("/proc/self/mem"), src + QStringLiteral("/fine.txt")}, dst);
+        sp.askOnError = true;
+        int id = jm.enqueue(sp);
+        QVERIFY(jm.waitForIdle(10000));
+        QCOMPARE(asked.size(), 2); // asked, retried, asked again, skipped
+        QVERIFY(!asked.first().problem.isEmpty());
+        QCOMPARE(asked.first().source, QStringLiteral("/proc/self/mem"));
+        QCOMPARE(jm.snapshot(id).errors.size(), 1);
+        QVERIFY(QFile::exists(dst + QStringLiteral("/fine.txt"))); // the rest carried on
+        // Abort stops the job.
+        asked.clear();
+        answers = {CollisionAction::CancelJob};
+        QFile::remove(dst + QStringLiteral("/fine.txt"));
+        id = jm.enqueue(sp);
+        QVERIFY(jm.waitForIdle(10000));
+        QCOMPARE(asked.size(), 1);
+        QCOMPARE(jm.snapshot(id).state, JobState::Canceled);
+        // Without askOnError nothing is asked: listed at the end.
+        asked.clear();
+        sp.askOnError = false;
+        id = jm.enqueue(sp);
+        QVERIFY(jm.waitForIdle(10000));
+        QCOMPARE(asked.size(), 0);
+        QCOMPARE(jm.snapshot(id).errors.size(), 1);
+    }
+
     void copyIntoSameFolderMakesACopy()
     {
         writeFile(src + QStringLiteral("/a.txt"), "1");

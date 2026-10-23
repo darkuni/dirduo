@@ -276,5 +276,5 @@ QT_QPA_PLATFORM=offscreen ./build/linopus_snapshot /tmp/linopus-shots
 
 - **Local copies run on Linopus's own engine, remote ones on KIO.** Local copies have per-file progress and the folder-merge rules described above; remote copies follow KIO's rules (a folder copied onto an existing folder merges into it).
 - **Navigation lock** only mirrors local folders.
-- **Error handling inside a job** skips and reports the item that failed (listed when the job finishes) rather than asking Retry/Skip/Abort per file.
+- **Retry / Skip / Abort** is asked for local copies and moves; copies to and from servers follow KIO's own rules.
 - **A single display uses the most recently used other lister as its destination**, as in Opus; with only one lister open, Copy asks for a folder.

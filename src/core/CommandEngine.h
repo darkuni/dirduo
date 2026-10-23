@@ -141,6 +141,8 @@ public:
     // Runs every line in order; stops at the first failure and reports it
     // through ctx.showError (canceled prompts stop silently).
     bool run(const QString &script, CommandContext &ctx);
+    // In the app (not tests): copies ask Retry / Skip / Abort when an item fails.
+    void setInteractive(bool on) { m_interactive = on; }
     // Scripts still running (tests wait on them).
     QList<ScriptRunner *> runningScripts() const;
     bool execute(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
@@ -214,5 +216,6 @@ private:
     AliasManager &m_aliases;
     JobManager &m_jobs;
     UndoHistory m_history;
+    bool m_interactive = false;
     std::optional<MediaInfo> m_copiedTags;
 };

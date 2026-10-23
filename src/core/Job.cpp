@@ -293,6 +293,42 @@ CollisionDecision Job::askCollision(const CollisionRequest &req)
     return d;
 }
 
+CollisionAction Job::askProblem(const QString &path, const QString &message)
+{
+    if (!m_spec.askOnError || m_skipAllProblems || !m_notifier)
+        return CollisionAction::Skip;
+    CollisionRequest req;
+    req.jobId = m_id;
+    req.source = path;
+    req.problem = message;
+    JobState previous;
+    {
+        QMutexLocker lock(&m_mutex);
+        previous = m_state;
+        m_state = JobState::WaitingForUser;
+        m_hasDecision = false;
+    }
+    m_notifier(req);
+    CollisionDecision d;
+    {
+        QMutexLocker lock(&m_mutex);
+        while (!m_hasDecision && !m_canceled)
+            m_wake.wait(&m_mutex);
+        d = m_canceled ? CollisionDecision{CollisionAction::CancelJob, {}, false} : m_decision;
+        if (m_state == JobState::WaitingForUser)
+            m_state = m_paused ? JobState::Paused : previous;
+    }
+    if (d.action == CollisionAction::CancelJob) {
+        m_canceled = true;
+        return CollisionAction::CancelJob;
+    }
+    if (d.action == CollisionAction::Retry)
+        return CollisionAction::Retry;
+    if (d.applyToAll)
+        m_skipAllProblems = true;
+    return CollisionAction::Skip;
+}
+
 bool Job::scan(const QString &path, const QString &name, int parent, std::vector<Entry> &out)
 {
     if (m_canceled)
@@ -557,16 +593,32 @@ void Job::runCopyMove()
                 markIncomplete(e.parent);
                 continue;
             }
-            if (::mkdir(enc(target).constData(), mode) != 0) {
-                if (errno != EEXIST) {
-                    addError(QStringLiteral("%1: %2").arg(target, errnoText()));
-                    skipped[i] = 1;
-                    markIncomplete(e.parent);
-                    continue;
+            bool made = false;
+            bool failed = false;
+            while (true) {
+                if (::mkdir(enc(target).constData(), mode) == 0) {
+                    made = true;
+                    break;
                 }
-            } else {
-                record(i, target, false);
+                if (errno == EEXIST)
+                    break;
+                const QString why = errnoText();
+                const CollisionAction a = askProblem(target, why);
+                if (a == CollisionAction::CancelJob)
+                    return;
+                if (a == CollisionAction::Retry)
+                    continue;
+                addError(QStringLiteral("%1: %2").arg(target, why));
+                failed = true;
+                break;
             }
+            if (failed) {
+                skipped[i] = 1;
+                markIncomplete(e.parent);
+                continue;
+            }
+            if (made)
+                record(i, target, false);
             targetPath[i] = target;
             dirTimes.emplace_back(target, QFileInfo(e.src).lastModified());
             addDone(0, 1);
@@ -575,18 +627,38 @@ void Job::runCopyMove()
 
         QString error;
         bool ok = false;
-        if (move && FileOps::sameDevice(e.src, parentTarget)) {
-            ok = ::rename(enc(e.src).constData(), enc(target).constData()) == 0;
-            if (!ok)
-                error = errnoText();
-            addDone(e.size, 0);
-        } else if (e.isSymlink) {
-            if (replacing)
-                ::unlink(enc(target).constData());
-            ok = copySymlink(e.src, target, &error);
-            addDone(0, 0);
-        } else {
-            ok = copyFile(e.src, target, &error);
+        while (true) {
+            qint64 doneBefore;
+            {
+                QMutexLocker lock(&m_mutex);
+                doneBefore = m_doneBytes;
+            }
+            error.clear();
+            if (move && FileOps::sameDevice(e.src, parentTarget)) {
+                ok = ::rename(enc(e.src).constData(), enc(target).constData()) == 0;
+                if (!ok)
+                    error = errnoText();
+                addDone(e.size, 0);
+            } else if (e.isSymlink) {
+                if (replacing)
+                    ::unlink(enc(target).constData());
+                ok = copySymlink(e.src, target, &error);
+                addDone(0, 0);
+            } else {
+                ok = copyFile(e.src, target, &error);
+            }
+            if (ok || m_canceled)
+                break;
+            // Ask (Retry / Skip / Skip All / Abort) when this job may.
+            const CollisionAction a = askProblem(e.src, error);
+            if (a == CollisionAction::CancelJob)
+                return;
+            if (a != CollisionAction::Retry)
+                break;
+            QMutexLocker lock(&m_mutex);
+            const qint64 counted = m_doneBytes - doneBefore;
+            m_doneBytes = doneBefore; // the retry counts the file again
+            m_currentDone = qMax<qint64>(0, m_currentDone - counted);
         }
         if (m_canceled)
             return;

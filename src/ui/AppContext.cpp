@@ -1,4 +1,6 @@
 #include "ui/AppContext.h"
+#include "core/Location.h"
+#include <QPushButton>
 #include "ui/FolderTab.h"
 #include "ui/FileDisplay.h"
 
@@ -243,6 +245,33 @@ void AppContext::onCollision(const CollisionRequest &request)
     QWidget *parent = m_progress->windowFor(request.jobId);
     if (!parent || !parent->isVisible())
         parent = activeLister();
+    if (!request.problem.isEmpty()) {
+        // An item failed: Retry, Skip, Skip All or Abort, as in Opus.
+        QMessageBox box(QMessageBox::Warning, QStringLiteral("Problem"),
+                        QStringLiteral("<b>%1</b> could not be copied.<p>%2</p>")
+                            .arg(Location::display(request.source).toHtmlEscaped(), request.problem.toHtmlEscaped()),
+                        QMessageBox::NoButton, parent);
+        box.setObjectName(QStringLiteral("problemBox"));
+        QPushButton *retry = box.addButton(QStringLiteral("&Retry"), QMessageBox::AcceptRole);
+        QPushButton *skip = box.addButton(QStringLiteral("&Skip"), QMessageBox::RejectRole);
+        QPushButton *skipAll = box.addButton(QStringLiteral("Skip &All"), QMessageBox::RejectRole);
+        QPushButton *abort = box.addButton(QStringLiteral("A&bort"), QMessageBox::DestructiveRole);
+        box.setDefaultButton(retry);
+        box.setEscapeButton(skip);
+        box.exec();
+        CollisionDecision d;
+        if (box.clickedButton() == retry)
+            d.action = CollisionAction::Retry;
+        else if (box.clickedButton() == abort)
+            d.action = CollisionAction::CancelJob;
+        else {
+            d.action = CollisionAction::Skip;
+            d.applyToAll = box.clickedButton() == skipAll;
+        }
+        Q_UNUSED(skip)
+        m_jobs->resolveCollision(request.jobId, d);
+        return;
+    }
     CollisionDialog dlg(request, 0, parent);
     dlg.exec();
     CollisionDecision d = dlg.decision();

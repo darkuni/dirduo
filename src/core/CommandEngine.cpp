@@ -288,6 +288,7 @@ int CommandEngine::copyItems(const QStringList &sources, const QString &destDir,
     spec.destDir = destDir;
     spec.whenExists = whenExists;
     spec.targetNames = newNames;
+    spec.askOnError = m_interactive;
     return m_jobs.enqueue(spec);
 }
 

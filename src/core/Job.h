@@ -28,7 +28,7 @@ enum class JobState {
     Canceled,
 };
 
-enum class CollisionAction { Ask, Replace, ReplaceIfNewer, Skip, Rename, CancelJob };
+enum class CollisionAction { Ask, Replace, ReplaceIfNewer, Skip, Rename, CancelJob, Retry };
 
 struct CollisionRequest
 {
@@ -38,6 +38,10 @@ struct CollisionRequest
     QString suggestedName; // free name in the target folder
     bool sourceIsDir = false;
     bool targetIsDir = false;
+    // Not a name clash but an item that failed (read error, card pulled,
+    // no permission): the answer is Retry, Skip (applyToAll: Skip All) or
+    // CancelJob.
+    QString problem;
 };
 
 struct CollisionDecision
@@ -63,6 +67,7 @@ struct JobSpec
     ExtractMode extractMode = ExtractMode::Smart;
     QString password; // Pack: encrypt (zip); Unpack: for encrypted archives
     bool trashAfter = false; // Unpack: each archive that extracted cleanly goes to the trash
+    bool askOnError = false; // ask Retry / Skip / Abort when an item fails (else skip and list it)
 };
 
 // What a finished job did with one item, for undo and the file log. For
@@ -194,6 +199,9 @@ private:
 
     bool scan(const QString &path, const QString &name, int parent, std::vector<Entry> &out);
     CollisionDecision askCollision(const CollisionRequest &req);
+    // An item failed: Retry, Skip or CancelJob (asked when the spec says so).
+    CollisionAction askProblem(const QString &path, const QString &message);
+    bool m_skipAllProblems = false;
 
     void runCopyMove();
     void runTrash();

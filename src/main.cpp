@@ -52,6 +52,7 @@ int main(int argc, char *argv[])
     KioBackend kio; // servers and archives
 #endif
     AppContext context;
+    context.engine().setInteractive(true); // copies ask Retry / Skip / Abort when an item fails
     InstanceServer server;
     if (!parser.isSet(separate)) {
         server.listen();
