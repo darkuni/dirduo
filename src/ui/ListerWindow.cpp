@@ -15,6 +15,7 @@
 #include "core/FindEngine.h"
 #include "ui/HistoryDialog.h"
 #include "ui/ArchiveDialog.h"
+#include "ui/PropertiesDialog.h"
 #include "ui/ImageConvertDialog.h"
 #include "core/FileKind.h"
 #include "core/Archive.h"
@@ -322,6 +323,11 @@ void ListerWindow::buildMenus()
     print->addAction(commandAction(QStringLiteral("Save as HTML..."), QStringLiteral("Print FOLDER AS=html TO=ask")));
     print->addSeparator();
     print->addAction(commandAction(QStringLiteral("Selected Items to Clipboard"), QStringLiteral("Print FOLDER SELECTED")));
+    file->addAction(commandAction(QStringLiteral("Properties..."), QStringLiteral("Properties"), QKeySequence(QStringLiteral("Alt+Return")),
+                                  QStringLiteral("document-properties")));
+    file->addAction(commandAction(QStringLiteral("Make Link in Destination"), QStringLiteral("MakeLink DEST"), {},
+                                  QStringLiteral("insert-link")));
+    file->addSeparator();
     file->addAction(commandAction(QStringLiteral("Preferences..."), QStringLiteral("Settings"), QKeySequence(QStringLiteral("Ctrl+,")),
                                   QStringLiteral("configure")));
     QMenu *settingsMenu = file->addMenu(QIcon::fromTheme(QStringLiteral("configure")), QStringLiteral("Settings"));
@@ -438,7 +444,7 @@ void ListerWindow::buildMenus()
     view->addAction(commandAction(QStringLiteral("Viewer Pane"), QStringLiteral("Set VIEWER=toggle"), QKeySequence(Qt::Key_F3),
                                   QStringLiteral("view-preview")));
     view->addAction(commandAction(QStringLiteral("Metadata Pane"), QStringLiteral("Metadata PANE=toggle"),
-                                  QKeySequence(QStringLiteral("Alt+Return")), QStringLiteral("document-properties")));
+                                  QKeySequence(QStringLiteral("Shift+Alt+Return")), QStringLiteral("document-properties")));
     QMenu *viewerPos = view->addMenu(QStringLiteral("Viewer Position"));
     viewerPos->addAction(commandAction(QStringLiteral("Right"), QStringLiteral("Set VIEWERPOS=right")));
     viewerPos->addAction(commandAction(QStringLiteral("Bottom"), QStringLiteral("Set VIEWERPOS=bottom")));
@@ -1942,6 +1948,23 @@ void ListerWindow::fillContextMenu(QMenu &menu, FileDisplay *d, bool onItem)
     menu.addSeparator();
     menu.addAction(commandAction(QStringLiteral("New Folder..."), QStringLiteral("CreateFolder"), {}, QStringLiteral("folder-new")));
     menu.addAction(m_actHidden);
+    // Links and properties, for items on this computer.
+    bool localSel = !sel.isEmpty();
+    for (const QString &p : sel)
+        localSel = localSel && Location::isLocal(p);
+    if (onItem && localSel) {
+        menu.addSeparator();
+        if (!destPath().isEmpty() && Location::isLocal(destPath()))
+            menu.addAction(commandAction(QStringLiteral("Make Link in Destination"), QStringLiteral("MakeLink DEST"), {},
+                                         QStringLiteral("insert-link")));
+        menu.addAction(commandAction(QStringLiteral("Make Link Here"), QStringLiteral("MakeLink"), {}, QStringLiteral("insert-link")));
+    }
+    if ((onItem && localSel) || (!onItem && t && Location::isLocal(t->path()))) {
+        menu.addSeparator();
+        menu.addAction(commandAction(onItem ? QStringLiteral("Properties...") : QStringLiteral("Folder Properties..."),
+                                     onItem ? QStringLiteral("Properties") : QStringLiteral("Properties FILE={sourcepath}"), {},
+                                     QStringLiteral("document-properties")));
+    }
 }
 
 void ListerWindow::openFile(const QString &path)
@@ -2393,6 +2416,31 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
     }
     if (cmd.is(QStringLiteral("Image")))
         return imageCommand(cmd, error);
+    if (cmd.is(QStringLiteral("Properties")) || cmd.is(QStringLiteral("SetAttr"))) {
+        QStringList paths;
+        for (const QString &f : cmd.values(QStringLiteral("FILE")))
+            paths << m_app.engine().resolvePath(f, sourcePath());
+        if (paths.isEmpty())
+            paths = selectedPaths();
+        if (paths.isEmpty() && Location::isLocal(sourcePath()))
+            paths = {sourcePath()}; // nothing selected: the folder itself
+        if (paths.isEmpty())
+            return fail(QStringLiteral("Select something first."));
+        for (const QString &p : std::as_const(paths)) {
+            if (!Location::isLocal(p))
+                return fail(QStringLiteral("Properties work with items on this computer and its cards for now."));
+        }
+        auto *dlg = new PropertiesDialog(paths, this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        connect(dlg, &PropertiesDialog::changed, this, [this]() {
+            for (FileDisplay *d : m_displays) {
+                if (FolderTab *t = d->currentTab())
+                    t->refresh();
+            }
+        });
+        dlg->open();
+        return true;
+    }
     if (cmd.is(QStringLiteral("Archive"))) {
         // Add to Archive without a name: ask. Runs the command again with one.
         const QStringList sel = selectedPaths();

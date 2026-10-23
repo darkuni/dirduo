@@ -34,6 +34,8 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Make a zip with a password, then Extract it: it asks; a wrong password says so and leaves nothing behind.
 - [ ] The status line shows free space for the internal drive and the SD card. Copy something bigger than the card's free space: it stops at once with "not enough room".
 - [ ] Copy files from an ungrouped flat view with Ctrl+C, paste with Ctrl+V: it asks Keep Folder Structure or Same Folder.
+- [ ] Alt+Enter on a file, a folder and a few items: size (folders count up), dates, permissions. Tick Group > Write and change the date; OK; the list shows the new date.
+- [ ] Right-click > Make Link in Destination on a ROM folder: the link opens in the other display. Ctrl+Z removes it.
 - [ ] Right-click one or several pictures: Convert Image(s)... is there; it is not there when a non-picture is selected.
 - [ ] Ctrl+F filter: type `*.png` and only PNGs stay; Esc clears it.
 - [ ] Sizes button on a big folder (Emulation, for example): sizes and bars fill in without freezing.
@@ -74,7 +76,7 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Ctrl+, opens Preferences; type "color" in the search box; change the SOURCE color in the Theme Editor (it shows at once); Cancel puts it back.
 - [ ] Ctrl+D in a few folders, then the Favorites button: they are listed; Organize Favorites to group them.
 - [ ] Tools > Find Duplicates on a ROM folder: groups show; check copies, then Move Checked to Trash.
-- [ ] Select a few podcast MP3s, Alt+Enter: type an album name, Apply; Edit > Tags > Number Tracks. Ctrl+Z undoes it.
+- [ ] Select a few podcast MP3s, Shift+Alt+Enter: type an album name, Apply; Edit > Tags > Number Tracks. Ctrl+Z undoes it.
 - [ ] A music folder: right-click the column header > Music > Artist and Album; they fill in. Group By > Artist. F3 on a song shows its tags.
 - [ ] A folder of phone or camera photos: Pictures > Date Taken and Camera fill in; Group By > Date Taken.
 - [ ] Select a few Steam screenshots, Tools > Convert Images: JPEG, Width 1280, Destination; Convert. The JPEGs land in the other display.

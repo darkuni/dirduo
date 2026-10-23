@@ -2,6 +2,7 @@
 
 #include "core/AliasManager.h"
 #include "core/Archive.h"
+#include "core/Attributes.h"
 #include "core/Collections.h"
 #include "core/FileOps.h"
 #include "core/JobManager.h"
@@ -92,8 +93,8 @@ QStringList CommandEngine::commandNames()
     return {QStringLiteral("Archive"), QStringLiteral("Clipboard"), QStringLiteral("Collection"), QStringLiteral("Copy"), QStringLiteral("CreateFolder"),
             QStringLiteral("Delete"), QStringLiteral("Duplicates"), QStringLiteral("Favorite"), QStringLiteral("Find"), QStringLiteral("Go"),
             QStringLiteral("Image"),
-            QStringLiteral("Layout"), QStringLiteral("Metadata"), QStringLiteral("Move"), QStringLiteral("Print"),
-            QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Set"), QStringLiteral("Settings"),
+            QStringLiteral("Layout"), QStringLiteral("MakeLink"), QStringLiteral("Metadata"), QStringLiteral("Move"), QStringLiteral("Print"),
+            QStringLiteral("Properties"), QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Set"), QStringLiteral("SetAttr"), QStringLiteral("Settings"),
             QStringLiteral("Sync"), QStringLiteral("Toolbar"), QStringLiteral("Undo")};
 }
 
@@ -214,6 +215,12 @@ bool CommandEngine::execute(const ParsedCommand &cmd, CommandContext &ctx, QStri
         return cmdMetadata(cmd, ctx, error);
     if (cmd.is(QStringLiteral("Archive")))
         return cmdArchive(cmd, ctx, error);
+    if (cmd.is(QStringLiteral("SetAttr")))
+        return cmdSetAttr(cmd, ctx, error);
+    if (cmd.is(QStringLiteral("Properties")))
+        return ctx.tool(cmd, error);
+    if (cmd.is(QStringLiteral("MakeLink")))
+        return cmdMakeLink(cmd, ctx, error);
     if (cmd.is(QStringLiteral("Sync")) || cmd.is(QStringLiteral("Duplicates")) || cmd.is(QStringLiteral("Find"))
         || cmd.is(QStringLiteral("Favorite")) || cmd.is(QStringLiteral("Layout")) || cmd.is(QStringLiteral("Image")))
         return ctx.tool(cmd, error);
@@ -515,6 +522,108 @@ bool CommandEngine::cmdArchive(const ParsedCommand &cmd, CommandContext &ctx, QS
         return true;
     }
     return fail(QStringLiteral("Archive takes CREATE or EXTRACT."));
+}
+
+bool CommandEngine::cmdSetAttr(const ParsedCommand &cmd, CommandContext &ctx, QString *error)
+{
+    auto fail = [error](const QString &msg) {
+        if (error)
+            *error = msg;
+        return false;
+    };
+    const QStringList flags = {QStringLiteral("RECURSE")};
+    const QStringList paths = sourcesFor(cmd, ctx, flags);
+    if (paths.isEmpty())
+        return fail(QStringLiteral("Select something first."));
+    Attributes::Change change;
+    change.recurse = cmd.hasFlag(QStringLiteral("RECURSE"));
+    if (cmd.hasArg(QStringLiteral("MODIFIED"))) {
+        const QDateTime t = Attributes::parseDate(cmd.value(QStringLiteral("MODIFIED")));
+        if (!t.isValid())
+            return fail(QStringLiteral("MODIFIED takes a date like 2024-05-01 13:30, or now."));
+        change.modified = t;
+    }
+    if (cmd.hasArg(QStringLiteral("ACCESSED"))) {
+        const QDateTime t = Attributes::parseDate(cmd.value(QStringLiteral("ACCESSED")));
+        if (!t.isValid())
+            return fail(QStringLiteral("ACCESSED takes a date like 2024-05-01 13:30, or now."));
+        change.accessed = t;
+    }
+    if (cmd.hasArg(QStringLiteral("PERMS"))) {
+        if (!Attributes::parseMode(cmd.value(QStringLiteral("PERMS")), change.mode))
+            return fail(QStringLiteral("PERMS takes 644, rwxr-xr-x, or changes like u+x,go-w."));
+    }
+    // Nothing to change: the Properties window.
+    if (change.isEmpty())
+        return ctx.tool(cmd, error);
+    for (const QString &p : paths) {
+        if (!Location::isLocal(p))
+            return fail(QStringLiteral("Permissions and dates are changed on this computer and its cards for now."));
+    }
+    QStringList problems;
+    Attributes::apply(paths, change, &problems);
+    ctx.afterLocalChange({});
+    if (!problems.isEmpty()) {
+        const QString shown = problems.mid(0, 10).join(QLatin1Char('\n'));
+        return fail(problems.size() > 10 ? shown + QStringLiteral("\n...and %1 more.").arg(problems.size() - 10) : shown);
+    }
+    return true;
+}
+
+bool CommandEngine::cmdMakeLink(const ParsedCommand &cmd, CommandContext &ctx, QString *error)
+{
+    auto fail = [error](const QString &msg) {
+        if (error)
+            *error = msg;
+        return false;
+    };
+    const QStringList flags = {QStringLiteral("DEST"), QStringLiteral("RELATIVE"), QStringLiteral("HERE")};
+    const QStringList targets = sourcesFor(cmd, ctx, flags);
+    if (targets.isEmpty())
+        return fail(QStringLiteral("Select what the link should point to first."));
+    // Where: TO=, DEST, else beside the item ("Name (link)").
+    QString folder;
+    if (cmd.hasArg(QStringLiteral("TO")))
+        folder = resolvePath(cmd.value(QStringLiteral("TO")), ctx.sourcePath());
+    else if (cmd.hasFlag(QStringLiteral("DEST"))) {
+        folder = ctx.destPath();
+        if (folder.isEmpty())
+            return fail(QStringLiteral("There is no destination: turn on the second display or give TO=."));
+    }
+    if (!folder.isEmpty() && (!Location::isLocal(folder) || !QFileInfo(folder).isDir()))
+        return fail(QStringLiteral("Links are made in folders on this computer and its cards."));
+    const QString name = cmd.value(QStringLiteral("NAME"));
+    if (!name.isEmpty() && targets.size() > 1)
+        return fail(QStringLiteral("NAME= works with one item at a time."));
+    QStringList made;
+    for (const QString &target : targets) {
+        if (!Location::isLocal(target))
+            return fail(QStringLiteral("Links point to items on this computer and its cards."));
+        const QFileInfo fi(target);
+        const QString dir = folder.isEmpty() ? fi.absolutePath() : folder;
+        QString linkName = name;
+        if (linkName.isEmpty()) {
+            linkName = fi.fileName();
+            if (dir == fi.absolutePath()) {
+                // Beside the original: "Game (link)", "notes (link).txt".
+                const QString suffix = fi.isDir() ? QString() : fi.suffix();
+                const QString base = suffix.isEmpty() ? fi.fileName() : fi.completeBaseName();
+                linkName = base + QStringLiteral(" (link)") + (suffix.isEmpty() ? QString() : QLatin1Char('.') + suffix);
+            }
+            if (QFileInfo::exists(dir + QLatin1Char('/') + linkName) || QFileInfo(dir + QLatin1Char('/') + linkName).isSymLink())
+                linkName = FileOps::uniqueName(dir, linkName);
+        }
+        QString why;
+        if (!FileOps::isValidFileName(linkName, &why))
+            return fail(why);
+        const QString linkPath = dir + QLatin1Char('/') + linkName;
+        if (!Attributes::makeLink(target, linkPath, cmd.hasFlag(QStringLiteral("RELATIVE")), &why))
+            return fail(why);
+        made << linkPath;
+    }
+    recordNew(made, QStringLiteral("link"));
+    ctx.afterLocalChange(folder.isEmpty() ? made : QStringList());
+    return true;
 }
 
 int CommandEngine::trashItems(const QStringList &paths)

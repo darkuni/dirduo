@@ -1,5 +1,7 @@
 #include "core/CommandCatalog.h"
 
+#include <algorithm>
+
 namespace {
 
 QStringList onOff()
@@ -30,6 +32,24 @@ QList<CommandInfo> buildCommands()
                       arg("PASSWORD=", {}, "Extract: for encrypted archives (asked for otherwise). Create: encrypt a zip with AES-256"),
                       arg("FILE=", {}, "What to use instead of the selection")},
                      QStringLiteral("Archive EXTRACT DEST")};
+    c << CommandInfo{QStringLiteral("MakeLink"), QStringLiteral("Make symbolic links to the selected items"),
+                     {arg("DEST", {}, "In the destination folder (otherwise beside each item, as \"Name (link)\")"),
+                      arg("TO=", {}, "In this folder"),
+                      arg("NAME=", {}, "The link's name (one item)"),
+                      arg("RELATIVE", {}, "Point to the item by a relative path, so both can move together"),
+                      arg("FILE=", {}, "What to link to instead of the selection")},
+                     QStringLiteral("MakeLink DEST RELATIVE")};
+    c << CommandInfo{QStringLiteral("Properties"), QStringLiteral("Size, link target, dates and permissions of the selection"),
+                     {arg("FILE=", {}, "Show these instead of the selection")},
+                     QStringLiteral("Properties")};
+    c << CommandInfo{QStringLiteral("SetAttr"), QStringLiteral("Change dates and permissions (the Properties window when given nothing to change)"),
+                     {arg("MODIFIED=", {QStringLiteral("now")}, "Modified date: 2024-05-01 13:30, or now"),
+                      arg("ACCESSED=", {QStringLiteral("now")}, "Accessed date"),
+                      arg("PERMS=", {QStringLiteral("644"), QStringLiteral("755"), QStringLiteral("u+x"), QStringLiteral("go-w")},
+                          "Permissions: 644, rwxr-xr-x, or changes like u+x,go-w"),
+                      arg("RECURSE", {}, "Everything inside folders too"),
+                      arg("FILE=", {}, "What to change instead of the selection")},
+                     QStringLiteral("SetAttr MODIFIED=now RECURSE")};
     c << CommandInfo{QStringLiteral("Clipboard"), QStringLiteral("Cut, copy or paste files"),
                      {arg("COPY", {}, "Copy the selection to the clipboard"),
                       arg("CUT", {}, "Cut the selection (it moves on paste)"),
@@ -249,6 +269,8 @@ QList<CommandInfo> buildCommands()
                       arg("LOG", {}, "Show the file log"),
                       arg("FIND=", {}, "With LOG: show only entries with this in their path")},
                      QStringLiteral("Undo LOG FIND=Galaga")};
+    // Listed (and offered for completion) in alphabetical order.
+    std::sort(c.begin(), c.end(), [](const CommandInfo &a, const CommandInfo &b) { return a.name.compare(b.name, Qt::CaseInsensitive) < 0; });
     return c;
 }
 
@@ -285,6 +307,10 @@ QList<CatalogButton> buildButtons()
           "Archive CREATE QUICK FORMAT=zip"),
         b("File operations", "Extract", "archive-extract", "Extract the selected archives here", "Archive EXTRACT",
           "Archive EXTRACT DEST"),
+        b("File operations", "Properties", "document-properties", "Size, dates and permissions of the selection", "Properties"),
+        b("File operations", "Make Link", "insert-link", "Make links to the selection in the destination", "MakeLink DEST",
+          "MakeLink"),
+        b("File operations", "Touch", "chronometer", "Set the selection's modified date to now", "SetAttr MODIFIED=now"),
         b("File operations", "Convert Images", "image-x-generic", "Convert, resize or turn the selected pictures", "Image", "Image CONVERT=png RUN"),
         b("Folder", "Synchronize", "folder-sync", "Compare the source and destination and make them match", "Sync"),
         b("Folder", "Duplicates", "edit-copy", "Find duplicate files under the source folder", "Duplicates"),

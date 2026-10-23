@@ -190,6 +190,8 @@ private:
     bool cmdUndo(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool cmdMetadata(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool cmdArchive(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
+    bool cmdSetAttr(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
+    bool cmdMakeLink(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     void recordNew(const QStringList &paths, const QString &what);
 
     QStringList sourcesFor(const ParsedCommand &cmd, CommandContext &ctx, const QStringList &flags) const;

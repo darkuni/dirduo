@@ -131,6 +131,36 @@ private Q_SLOTS:
         ctx.source = from;
     }
 
+    void setAttrAndMakeLink()
+    {
+        writeFile(ctx.source + QStringLiteral("/a.txt"), "a");
+        writeFile(ctx.source + QStringLiteral("/Game/x.d64"), "x");
+        ctx.selection = {ctx.source + QStringLiteral("/a.txt")};
+        QVERIFY(m_engine->run(QStringLiteral("SetAttr MODIFIED=\"2010-01-02 03:04\" PERMS=600"), ctx));
+        QCOMPARE(QFileInfo(ctx.source + QStringLiteral("/a.txt")).lastModified(), QDateTime(QDate(2010, 1, 2), QTime(3, 4)));
+        QCOMPARE(QFileInfo(ctx.source + QStringLiteral("/a.txt")).permissions() & (QFileDevice::ReadGroup | QFileDevice::ReadOther),
+                 QFileDevice::Permissions());
+        QVERIFY(!m_engine->run(QStringLiteral("SetAttr PERMS=banana"), ctx));
+        QVERIFY(!m_engine->run(QStringLiteral("SetAttr MODIFIED=soon"), ctx));
+        QVERIFY(!m_engine->run(QStringLiteral("SetAttr"), ctx)); // the window: none here
+        // Links: beside the item, in the destination, by a relative path.
+        ctx.selection = {ctx.source + QStringLiteral("/a.txt"), ctx.source + QStringLiteral("/Game")};
+        QVERIFY(m_engine->run(QStringLiteral("MakeLink"), ctx));
+        QVERIFY(QFileInfo(ctx.source + QStringLiteral("/a (link).txt")).isSymLink());
+        QVERIFY(QFileInfo(ctx.source + QStringLiteral("/Game (link)")).isSymLink());
+        QVERIFY(m_engine->run(QStringLiteral("MakeLink DEST RELATIVE"), ctx));
+        QVERIFY(QFileInfo(ctx.dest + QStringLiteral("/Game")).isSymLink());
+        QCOMPARE(QFileInfo(ctx.dest + QStringLiteral("/Game")).symLinkTarget(), ctx.source + QStringLiteral("/Game"));
+        QVERIFY(QFile::exists(ctx.dest + QStringLiteral("/Game/x.d64")));
+        QVERIFY(m_engine->run(QStringLiteral("MakeLink DEST"), ctx)); // taken: new names
+        QVERIFY(QFileInfo(ctx.dest + QStringLiteral("/Game (2)")).isSymLink());
+        // Undo removes the newest links.
+        QVERIFY(m_engine->run(QStringLiteral("Undo"), ctx));
+        QVERIFY(m_jobs->waitForIdle(5000));
+        QTRY_VERIFY(!QFileInfo(ctx.dest + QStringLiteral("/Game (2)")).isSymLink());
+        QVERIFY(QFile::exists(ctx.source + QStringLiteral("/Game/x.d64")));
+    }
+
     void copySelectionToDest()
     {
         writeFile(ctx.source + QStringLiteral("/a.txt"), "a");

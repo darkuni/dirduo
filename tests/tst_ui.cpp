@@ -36,6 +36,7 @@
 #include "ui/GroupTreeView.h"
 #include "ui/Style.h"
 #include "ui/ArchiveDialog.h"
+#include "ui/PropertiesDialog.h"
 #include "ui/ListerWindow.h"
 
 #include <QAbstractItemView>
@@ -43,6 +44,7 @@
 #include <QDir>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDateTimeEdit>
 #include <QPushButton>
 #include <QTreeWidget>
 #include <QClipboard>
@@ -1842,6 +1844,69 @@ private Q_SLOTS:
         QVERIFY(!w->evaluateCondition(QStringLiteral("archives"), true));
         t->navigate(root);
         waitListed(t, QDir(root).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
+    }
+
+    void propertiesAndLinks()
+    {
+        QTemporaryDir own;
+        const QString base = own.path();
+        touch(base + QStringLiteral("/one.txt"));
+        touch(base + QStringLiteral("/Folder/a.txt"));
+        touch(base + QStringLiteral("/Folder/sub/b.txt"));
+        QFile::setPermissions(base + QStringLiteral("/one.txt"), QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ReadGroup);
+        FolderTab *t = w->display(0)->currentTab();
+        const QString back = t->path();
+        t->navigate(base);
+        waitListed(t, 2);
+        t->selectPaths({base + QStringLiteral("/one.txt")});
+        QMenu menu;
+        w->fillContextMenu(menu, w->display(0), true);
+        QStringList texts;
+        for (QAction *a : menu.actions())
+            texts << a->text();
+        QVERIFY(texts.contains(QStringLiteral("Properties...")));
+        QVERIFY(texts.contains(QStringLiteral("Make Link Here")));
+
+        QVERIFY(w->runCommand(QStringLiteral("Properties")));
+        auto *dlg = w->findChild<PropertiesDialog *>();
+        QVERIFY(dlg);
+        QVERIFY(dlg->sizeText().startsWith(QStringLiteral("1 byte")) || dlg->sizeText().contains(QStringLiteral("1 B")));
+        QCOMPARE(dlg->permissionBox(1, 0)->checkState(), Qt::Checked);   // group read
+        QCOMPARE(dlg->permissionBox(1, 1)->checkState(), Qt::Unchecked); // group write
+        QVERIFY(dlg->change().isEmpty());
+        dlg->permissionBox(1, 1)->setChecked(true);
+        dlg->modifiedEdit()->setDateTime(QDateTime(QDate(2020, 6, 7), QTime(8, 9, 10)));
+        QCOMPARE(dlg->change().mode.add, 020);
+        dlg->accept();
+        QVERIFY(QFileInfo(base + QStringLiteral("/one.txt")).permissions() & QFileDevice::WriteGroup);
+        QCOMPARE(QFileInfo(base + QStringLiteral("/one.txt")).lastModified(), QDateTime(QDate(2020, 6, 7), QTime(8, 9, 10)));
+        QTRY_VERIFY(!w->findChild<PropertiesDialog *>());
+
+        // A folder is measured in the background; mixed permissions show as mixed.
+        t->selectPaths({base + QStringLiteral("/Folder"), base + QStringLiteral("/one.txt")});
+        QVERIFY(w->runCommand(QStringLiteral("Properties")));
+        dlg = w->findChild<PropertiesDialog *>();
+        QVERIFY(dlg);
+        QTRY_VERIFY(!dlg->measuring());
+        QTRY_VERIFY(dlg->sizeText().contains(QStringLiteral("3 files")));
+        QVERIFY(dlg->sizeText().contains(QStringLiteral("2 folders")));
+        QVERIFY(dlg->recurseBox()->isVisible() || !dlg->isVisible());
+        QCOMPARE(dlg->permissionBox(0, 2)->checkState(), Qt::PartiallyChecked); // folder x, file not
+        dlg->reject();
+        QTRY_VERIFY(!w->findChild<PropertiesDialog *>());
+
+        // A link shows where it points.
+        t->selectPaths({base + QStringLiteral("/one.txt")});
+        QVERIFY(w->runCommand(QStringLiteral("MakeLink")));
+        QVERIFY(QFileInfo(base + QStringLiteral("/one (link).txt")).isSymLink());
+        QVERIFY(w->runCommand(QStringLiteral("Properties FILE=\"%1\"").arg(base + QStringLiteral("/one (link).txt"))));
+        QTRY_VERIFY(w->findChild<PropertiesDialog *>());
+        dlg = w->findChild<PropertiesDialog *>();
+        QCOMPARE(dlg->linkText(), base + QStringLiteral("/one.txt"));
+        dlg->reject();
+        QTRY_VERIFY(!w->findChild<PropertiesDialog *>());
+        t->navigate(back);
+        waitListed(t, QDir(back).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
     }
 
     void freeSpaceShown()
