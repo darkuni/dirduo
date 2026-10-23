@@ -29,7 +29,7 @@ jobs:
           status=${PIPESTATUS[0]}
           if [ $status -ne 0 ]; then
             # Failing tests as annotations, readable without the full log.
-            grep -E "^FAIL!|Loc: \[|Actual|Expected|tests failed|\*\*\*Failed|\(Failed\)|Timeout" ctest.log | head -40 | while IFS= read -r line; do echo "::error::$line"; done
+            grep -E "^FAIL!|Loc: \[|Actual|Expected|tests failed|\*\*\*|\(Failed\)|Timeout|Exception|SegFault|Subprocess|QFATAL|Received a fatal" ctest.log | head -40 | while IFS= read -r line; do echo "::error::$line"; done
           fi
           exit $status
 
@@ -61,7 +61,7 @@ jobs:
           status=${PIPESTATUS[0]}
           if [ $status -ne 0 ]; then
             # Failing tests as annotations, readable without the full log.
-            grep -E "^FAIL!|Loc: \[|Actual|Expected|tests failed|\*\*\*Failed|\(Failed\)|Timeout" ctest.log | head -40 | while IFS= read -r line; do echo "::error::$line"; done
+            grep -E "^FAIL!|Loc: \[|Actual|Expected|tests failed|\*\*\*|\(Failed\)|Timeout|Exception|SegFault|Subprocess|QFATAL|Received a fatal" ctest.log | head -40 | while IFS= read -r line; do echo "::error::$line"; done
           fi
           exit $status
       - name: Remote tests (FTP, SFTP, archives)
