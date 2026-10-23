@@ -99,9 +99,14 @@ jobs:
           ARCH: ${{ matrix.variant.arch }}
         run: |
           flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          # Build as an ordinary user, as Flathub does: Samba's configure
+          # tests switching user ids, which fails for root in the sandbox.
+          id builder >/dev/null 2>&1 || useradd -m builder
+          chown -R builder: "$PWD"
+          runuser -u builder -- flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           # The log goes to a file; on failure its tail becomes an annotation,
           # readable without access to the raw job log.
-          if ! flatpak-builder --arch="$ARCH" --repo=repo --disable-rofiles-fuse \
+          if ! runuser -u builder -- flatpak-builder --user --arch="$ARCH" --repo=repo --disable-rofiles-fuse \
                  --install-deps-from=flathub --force-clean --ccache \
                  build-dir flatpak/com.monroeworld.Linopus.yml > build.log 2>&1; then
             # Annotations are cut at about 4 KB: send the error lines and the
