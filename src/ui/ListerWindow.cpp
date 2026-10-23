@@ -502,11 +502,13 @@ void ListerWindow::buildMenus()
     location->setShortcuts({QKeySequence(QStringLiteral("Ctrl+L")), QKeySequence(QStringLiteral("Alt+D"))});
     connect(location, &QAction::triggered, this, [this]() { sourceDisplay()->breadcrumb()->startEditing(); });
     go->addSeparator();
+    // Windows and Samba shares on the network (KIO's smb worker).
+    go->addAction(commandAction(QStringLiteral("Network (Windows Shares)"), QStringLiteral("Go smb:/"), {}, QStringLiteral("network-workgroup")));
     go->addAction(commandAction(QStringLiteral("Collections"), QStringLiteral("Collection OPEN"), {}, QStringLiteral("folder-favorites")));
     m_aliasMenu = go->addMenu(QIcon::fromTheme(QStringLiteral("bookmarks")), QStringLiteral("Aliases"));
     connect(m_aliasMenu, &QMenu::aboutToShow, this, &ListerWindow::rebuildAliasMenu);
 
-    QMenu *favs = menuBar()->addMenu(QStringLiteral("F&avourites"));
+    QMenu *favs = menuBar()->addMenu(QStringLiteral("F&avorites"));
     connect(favs, &QMenu::aboutToShow, this, [this, favs]() {
         favs->clear();
         fillDynamicMenu(favs, QStringLiteral("favorites"));

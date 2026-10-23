@@ -21,6 +21,7 @@ finish-args:
   - --talk-name=org.freedesktop.Flatpak
   # Server passwords: KIO asks the desktop's password server and wallet.
   - --talk-name=org.kde.kiod6
+  - --talk-name=org.kde.kded6
   - --talk-name=org.kde.kpasswdserver6
   - --talk-name=org.kde.kwalletd6
   - --talk-name=org.kde.kwalletd5
@@ -52,7 +53,73 @@ modules:
         url: https://git.libssh.org/projects/libssh.git
         tag: libssh-0.11.3
 
-  # The KIO workers that are not part of the KDE runtime: sftp, fish,
+  # SMB (Windows and Samba shares): Samba's client library for KIO's smb
+  # worker, and what it takes to build it. Modules as in Flathub's Dolphin.
+  - name: lmdb
+    no-autogen: true
+    make-install-args:
+      - prefix=/app
+    subdir: libraries/liblmdb
+    sources:
+      - type: archive
+        url: https://git.openldap.org/openldap/openldap/-/archive/LMDB_1.0.0/openldap-LMDB_1.0.0.tar.bz2
+        sha256: 9ab73cda2ca2132d10256a63b655981af4860f6dc8315a933175ff9b598ffab2
+
+  - name: perl-modules
+    buildsystem: simple
+    build-commands:
+      - cd Parse-Yapp && perl Makefile.PL && make && make install
+      - cd JSON && perl Makefile.PL && make && make install
+    post-install:
+      - chmod -R u+w /app/lib/perl5
+    sources:
+      - type: archive
+        dest: Parse-Yapp
+        url: https://cpan.metacpan.org/authors/id/W/WB/WBRASWELL/Parse-Yapp-1.21.tar.gz
+        sha256: 3810e998308fba2e0f4f26043035032b027ce51ce5c8a52a8b8e340ca65f13e5
+      - type: archive
+        dest: JSON
+        url: https://cpan.metacpan.org/authors/id/I/IS/ISHIGAKI/JSON-4.11.tar.gz
+        sha256: 713bdbe724dbb915ed50265ffe47e079a511980cb2427aa19076788bb64c3182
+
+  - name: rpcgen
+    sources:
+      - type: archive
+        url: https://github.com/thkukuk/rpcsvc-proto/releases/download/v1.4.4/rpcsvc-proto-1.4.4.tar.xz
+        sha256: 81c3aa27edb5d8a18ef027081ebb984234d5b5860c65bd99d4ac8f03145a558b
+
+  - name: samba
+    config-opts:
+      - --without-json
+      - --without-ad-dc
+      - --without-ldap
+      - --without-ads
+      - --without-pam
+    sources:
+      - type: archive
+        url: https://samba.org/samba/ftp/stable/samba-4.24.4.tar.gz
+        sha256: df2c51ab4361ec626ab9988e5946efcca8465bc7afae834291d5558468265ff8
+
+  # Finds Windows machines on the network (WS-Discovery) for smb:/.
+  - name: kdsoap
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DKDSoap_QT6=ON
+    sources:
+      - type: archive
+        url: https://github.com/KDAB/KDSoap/releases/download/kdsoap-2.3.0/kdsoap-2.3.0.tar.gz
+        sha256: d2184951145cb768cc30376a10701be13869a164c1272d09f831ba2d195f02de
+
+  - name: kdsoap-ws-discovery-client
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DBUILD_WITH_QT6=ON
+    sources:
+      - type: archive
+        url: https://download.kde.org/stable/kdsoap-ws-discovery-client/kdsoap-ws-discovery-client-0.4.0.tar.xz
+        sha256: 2cd247c013e75f410659bac372aff93d22d71c5a54c059e137b9444af8b3427a
+
+  # The KIO workers that are not part of the KDE runtime: sftp, smb, fish,
   # archive (zip, tar, 7z as folders) and more.
   - name: kio-extras
     buildsystem: cmake-ninja
@@ -60,6 +127,9 @@ modules:
     config-opts:
       - -DCMAKE_BUILD_TYPE=Release
       - -DBUILD_TESTING=OFF
+    # Fail here, not on the Deck, if the smb worker was left out.
+    post-install:
+      - find /app/lib -path '*kio*' -name '*smb*.so' | grep -q . || (echo 'kio-extras built without smb' && exit 1)
     sources:
       - type: git
         url: https://invent.kde.org/network/kio-extras.git

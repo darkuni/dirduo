@@ -26,7 +26,7 @@ Targets: SteamOS Desktop Mode on the Steam Deck (x86_64) and Steam Frame (aarch6
 
 Servers and archives (KIO):
 
-- Type a server address in any address bar: `sftp://deck@nas/media`, `ftp://host/pub`, `smb://box/share`, `webdav://...`. Server folders behave like local ones: browse, tabs, Copy/Move between a server and a drive (either direction), Copy As, Delete, Rename, New Folder, drag and drop
+- Type a server address in any address bar: `sftp://deck@nas/media`, `ftp://host/pub`, `smb://box/share`, `webdav://...`. Go > Network (Windows Shares) browses `smb:/` for machines and shares on the network; the Flatpak bundles Samba's client for it. Server folders behave like local ones: browse, tabs, Copy/Move between a server and a drive (either direction), Copy As, Delete, Rename, New Folder, drag and drop
 - Copies to and from servers run in their own progress windows with pause, cancel and speed, and use the same "already exists" dialog as local copies. Jobs to the same server queue behind each other
 - Archives open as folders: double-click (or Enter) on a zip, tar or 7z goes inside it; Up leaves it. Copy files straight out of them. Right-click > Open in Application still hands the archive to an archiver
 - Aliases can point at servers: an alias `nas` = `sftp://deck@nas/media` makes `/nas/Movies` work anywhere
@@ -272,7 +272,6 @@ QT_QPA_PLATFORM=offscreen ./build/linopus_snapshot /tmp/linopus-shots
 ## Known gaps
 
 - **Local copies run on Linopus's own engine, remote ones on KIO.** Local copies have per-file progress and the folder-merge rules described above; remote copies follow KIO's rules (a folder copied onto an existing folder merges into it).
-- **SMB (Windows shares)** needs Samba's client library, which the Flatpak does not bundle yet.
 - **Navigation lock** only mirrors local folders.
 - **Error handling inside a job** skips and reports the item that failed (listed when the job finishes) rather than asking Retry/Skip/Abort per file.
 - **A single display uses the most recently used other lister as its destination**, as in Opus; with only one lister open, Copy asks for a folder.
