@@ -1,4 +1,5 @@
 #include "core/AliasManager.h"
+#include "core/Archive.h"
 #include "core/JobManager.h"
 #include "core/Paths.h"
 #include "ui/AppContext.h"
@@ -34,6 +35,7 @@
 #include "ui/FolderTree.h"
 #include "ui/GroupTreeView.h"
 #include "ui/Style.h"
+#include "ui/ArchiveDialog.h"
 #include "ui/ListerWindow.h"
 
 #include <QAbstractItemView>
@@ -1777,6 +1779,59 @@ private Q_SLOTS:
         m_app->jobs().waitForIdle(5000);
         QTRY_VERIFY(QFile::exists(base + QStringLiteral("/cancel/top.txt")));
         QVERIFY(w->runCommand(QStringLiteral("Set FLATVIEW=off")));
+        t->navigate(root);
+        waitListed(t, QDir(root).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
+    }
+
+    void archives()
+    {
+        if (!Archive::available())
+            QSKIP("Built without libarchive");
+        QTemporaryDir own;
+        const QString base = own.path();
+        touch(base + QStringLiteral("/Game/disk.d64"));
+        touch(base + QStringLiteral("/notes.txt"));
+        FolderTab *t = w->display(0)->currentTab();
+        t->navigate(base);
+        waitListed(t, 2);
+        auto menuTexts = [this]() {
+            QMenu menu;
+            w->fillContextMenu(menu, w->display(0), true);
+            QStringList out;
+            for (QAction *a : menu.actions())
+                out << a->text();
+            return out;
+        };
+        t->selectPaths({base + QStringLiteral("/Game")});
+        QStringList texts = menuTexts();
+        QVERIFY(texts.contains(QStringLiteral("Add to Archive...")));
+        QVERIFY(texts.contains(QStringLiteral("Add to \"Game.zip\"")));
+        QVERIFY(!texts.contains(QStringLiteral("Extract Here")));
+
+        // The dialog: switching the format swaps the extension; Create makes it.
+        QVERIFY(w->runCommand(QStringLiteral("Archive CREATE")));
+        auto *dlg = w->findChild<ArchiveDialog *>();
+        QVERIFY(dlg);
+        QCOMPARE(dlg->nameEdit()->text(), QStringLiteral("Game.") + ArchiveDialog::savedFormat());
+        dlg->formatBox()->setCurrentIndex(dlg->formatBox()->findData(QStringLiteral("tar.gz")));
+        QCOMPARE(dlg->nameEdit()->text(), QStringLiteral("Game.tar.gz"));
+        dlg->nameEdit()->setText(QStringLiteral("Saved Game.tar.gz"));
+        dlg->accept();
+        m_app->jobs().waitForIdle(10000);
+        QTRY_VERIFY(QFile::exists(base + QStringLiteral("/Saved Game.tar.gz")));
+        QCOMPARE(ArchiveDialog::savedFormat(), QStringLiteral("tar.gz"));
+        waitListed(t, 3);
+
+        t->selectPaths({base + QStringLiteral("/Saved Game.tar.gz")});
+        QVERIFY(w->evaluateCondition(QStringLiteral("archives"), true));
+        texts = menuTexts();
+        QVERIFY(texts.contains(QStringLiteral("Extract Here")));
+        QVERIFY(texts.contains(QStringLiteral("Extract to \"Saved Game\"")));
+        QVERIFY(w->runCommand(QStringLiteral("Archive EXTRACT MODE=folder")));
+        m_app->jobs().waitForIdle(10000);
+        QTRY_VERIFY(QFile::exists(base + QStringLiteral("/Saved Game/Game/disk.d64")));
+        t->selectPaths({base + QStringLiteral("/notes.txt")});
+        QVERIFY(!w->evaluateCondition(QStringLiteral("archives"), true));
         t->navigate(root);
         waitListed(t, QDir(root).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
     }

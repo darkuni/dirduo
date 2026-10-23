@@ -45,6 +45,7 @@ Servers and archives (KIO):
 - Folder sizes on hover; Calculate All Folder Sizes (Ctrl+Shift+Z) sizes every folder with a bar
 - Flat view: everything under the folder, grouped by folder or ungrouped (one list, with or without the folders). The Flat button turns on the kind used last. Copying or moving items that came from folders further down asks whether to keep that folder structure at the destination or put everything in the same folder (`Copy STRUCTURE=keep|flat` skips the question)
 - Convert Images is on the right-click menu when every selected file is a picture
+- Archives (libarchive): right-click > Add to Archive... makes zip, 7z or tar (gz, xz, bz2, zstd) archives here or in the destination; Add to "Name.zip" makes one without asking. Extract Here, Extract to Destination and Extract to "Name" unpack zip, 7z, RAR, tar, ISO, LHA/LZH, CAB and more. Extract Here puts an archive holding one folder straight in, and anything else in a folder named after the archive. Nothing is overwritten unless asked, names that are taken get new ones, entries that point outside the folder are left out, and both can be undone
 - Folder formats: save columns, sort, grouping and view for a folder, a folder and its subfolders, or as the default. Folders of pictures open as icons by themselves
 
 ## Phase 3 (in progress)
@@ -95,6 +96,7 @@ Every button, menu item, hotkey, drop and inline rename runs one of these. Butto
 | `Delete` | `NORECYCLE` (permanent, asks first), `QUIET`, `FILE=...` |
 | `Rename` | no arguments: rename in place; `FROM=... TO=...`; `ADVANCED`; `UNDO`; `OLDNAME=... NEWNAME=...` with `MODE=wildcard\|findreplace\|regexp`, `CASE=lower\|upper\|title\|sentence`, `EXTCASE=`, `IGNOREEXT`, `CASESENSITIVE`, `START=`, `STEP=`, `WIDTH=`, `TRIM`, `PRESET=` |
 | `CreateFolder` | `NAME="A, B, C"` makes all three; no name asks; `IN=...` |
+| `Archive` | `CREATE` (asks), `NAME=` (its extension picks the format), `QUICK`, `FORMAT=zip\|7z\|tar\|tar.gz\|tar.xz\|tar.bz2\|tar.zst`; `EXTRACT`, `MODE=smart\|folder\|here`; `DEST`, `TO=<folder>`, `WHENEXISTS=rename\|replace\|skip`, `FILE=...` |
 | `Clipboard` | `COPY`, `CUT`, `PASTE` (a picture or text pastes as a new file), `AS` |
 | `Print` | `FOLDER`, `AS=text\|csv\|html`, `TO=clipboard\|ask\|<file>`, `SELECTED` |
 | `Layout` | `SAVE=<name>\|ask` (`FOLDERS` to keep folders and tabs), `LOAD=<name>`, `DELETE=<name>` |

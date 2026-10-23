@@ -1,6 +1,7 @@
 #include "core/CommandEngine.h"
 
 #include "core/AliasManager.h"
+#include "core/Archive.h"
 #include "core/Collections.h"
 #include "core/FileOps.h"
 #include "core/JobManager.h"
@@ -88,7 +89,7 @@ void CommandEngine::recordNew(const QStringList &paths, const QString &what)
 
 QStringList CommandEngine::commandNames()
 {
-    return {QStringLiteral("Clipboard"), QStringLiteral("Collection"), QStringLiteral("Copy"), QStringLiteral("CreateFolder"),
+    return {QStringLiteral("Archive"), QStringLiteral("Clipboard"), QStringLiteral("Collection"), QStringLiteral("Copy"), QStringLiteral("CreateFolder"),
             QStringLiteral("Delete"), QStringLiteral("Duplicates"), QStringLiteral("Favorite"), QStringLiteral("Find"), QStringLiteral("Go"),
             QStringLiteral("Image"),
             QStringLiteral("Layout"), QStringLiteral("Metadata"), QStringLiteral("Move"), QStringLiteral("Print"),
@@ -211,6 +212,8 @@ bool CommandEngine::execute(const ParsedCommand &cmd, CommandContext &ctx, QStri
         return cmdUndo(cmd, ctx, error);
     if (cmd.is(QStringLiteral("Metadata")))
         return cmdMetadata(cmd, ctx, error);
+    if (cmd.is(QStringLiteral("Archive")))
+        return cmdArchive(cmd, ctx, error);
     if (cmd.is(QStringLiteral("Sync")) || cmd.is(QStringLiteral("Duplicates")) || cmd.is(QStringLiteral("Find"))
         || cmd.is(QStringLiteral("Favorite")) || cmd.is(QStringLiteral("Layout")) || cmd.is(QStringLiteral("Image")))
         return ctx.tool(cmd, error);
@@ -361,6 +364,135 @@ bool CommandEngine::copyFromFlat(const QStringList &sources, const QString &root
         return false;
     }
     return copyItemsFrom(sources, root, destDir, move, answer == 0, whenExists, error);
+}
+
+QString CommandEngine::suggestedArchiveName(const QStringList &sources, const QString &folder, const QString &formatKey)
+{
+    Archive::Format f = Archive::Format::Zip;
+    Archive::formatFromKey(formatKey, f);
+    QString base;
+    if (sources.size() == 1) {
+        const QFileInfo fi(sources.first());
+        base = fi.isDir() ? fi.fileName() : fi.completeBaseName();
+        if (base.isEmpty())
+            base = fi.fileName(); // ".hidden"
+    } else {
+        base = Location::fileName(folder);
+    }
+    if (base.isEmpty())
+        base = QStringLiteral("Archive");
+    return base + QLatin1Char('.') + Archive::extensionFor(f);
+}
+
+bool CommandEngine::cmdArchive(const ParsedCommand &cmd, CommandContext &ctx, QString *error)
+{
+    auto fail = [error](const QString &msg) {
+        if (error)
+            *error = msg;
+        return false;
+    };
+    if (!Archive::available())
+        return fail(QStringLiteral("This build of Linopus was made without archive support."));
+    const QStringList flags = {QStringLiteral("CREATE"), QStringLiteral("EXTRACT"), QStringLiteral("DEST"), QStringLiteral("HERE"), QStringLiteral("ASK"), QStringLiteral("QUICK")};
+    QStringList sources = sourcesFor(cmd, ctx, flags);
+    CollisionAction whenExists = CollisionAction::Rename;
+    if (cmd.hasArg(QStringLiteral("WHENEXISTS")) && !parseWhenExists(cmd.value(QStringLiteral("WHENEXISTS")), whenExists))
+        return fail(QStringLiteral("WHENEXISTS takes replace, skip or rename."));
+    if (whenExists == CollisionAction::Ask || whenExists == CollisionAction::ReplaceIfNewer)
+        whenExists = CollisionAction::Rename;
+
+    // Where to: TO=<folder>, DEST (the other display), else the source folder.
+    QString dest;
+    if (cmd.hasArg(QStringLiteral("TO")) && !cmd.value(QStringLiteral("TO")).isEmpty())
+        dest = resolvePath(cmd.value(QStringLiteral("TO")), ctx.sourcePath());
+    else if (cmd.hasFlag(QStringLiteral("DEST"))) {
+        dest = ctx.destPath();
+        if (dest.isEmpty())
+            return fail(QStringLiteral("There is no destination: turn on the second display or give TO=."));
+    } else
+        dest = ctx.sourcePath();
+    auto checkLocal = [&](const QStringList &paths) {
+        for (const QString &p : paths) {
+            if (!Location::isLocal(p))
+                return false;
+        }
+        return Location::isLocal(dest);
+    };
+
+    if (cmd.hasFlag(QStringLiteral("EXTRACT")) || cmd.hasArg(QStringLiteral("EXTRACT"))) {
+        QStringList archives;
+        for (const QString &p : std::as_const(sources)) {
+            if (Archive::isArchive(p))
+                archives << p;
+        }
+        if (archives.isEmpty())
+            return fail(sources.isEmpty() ? QStringLiteral("Select an archive to extract first.")
+                                          : QStringLiteral("None of the selected files is an archive this can extract."));
+        if (!checkLocal(archives))
+            return fail(QStringLiteral("Archives are extracted from and into folders on this computer and its cards for now."));
+        JobSpec spec;
+        spec.type = JobType::Unpack;
+        spec.sources = archives;
+        spec.destDir = dest;
+        spec.whenExists = whenExists == CollisionAction::Replace ? CollisionAction::Replace : CollisionAction::Rename;
+        const QString mode = cmd.value(QStringLiteral("MODE")).toLower();
+        if (mode.isEmpty() || mode == QLatin1String("smart"))
+            spec.extractMode = JobSpec::ExtractMode::Smart;
+        else if (mode == QLatin1String("folder"))
+            spec.extractMode = JobSpec::ExtractMode::Folder;
+        else if (mode == QLatin1String("here"))
+            spec.extractMode = JobSpec::ExtractMode::Here;
+        else
+            return fail(QStringLiteral("MODE takes smart, folder or here."));
+        m_jobs.enqueue(spec);
+        return true;
+    }
+
+    if (cmd.hasFlag(QStringLiteral("CREATE")) || cmd.hasArg(QStringLiteral("CREATE"))) {
+        if (sources.isEmpty())
+            return fail(QStringLiteral("Select the files and folders to put in the archive first."));
+        QString name = cmd.value(QStringLiteral("NAME"));
+        if (name.isEmpty())
+            name = cmd.value(QStringLiteral("CREATE"));
+        if (name.isEmpty() && cmd.hasFlag(QStringLiteral("QUICK"))) {
+            const QString key = cmd.value(QStringLiteral("FORMAT")).isEmpty() ? QStringLiteral("zip") : cmd.value(QStringLiteral("FORMAT")).toLower();
+            name = suggestedArchiveName(sources, ctx.sourcePath(), key);
+        }
+        // No name: the Add to Archive dialog asks (it runs this again with one).
+        if (name.isEmpty() || cmd.hasFlag(QStringLiteral("ASK")))
+            return ctx.tool(cmd, error);
+        if (!checkLocal(sources))
+            return fail(QStringLiteral("Archives are made from and into folders on this computer and its cards for now."));
+        Archive::Format format;
+        QString key = cmd.value(QStringLiteral("FORMAT")).toLower();
+        if (!key.isEmpty()) {
+            if (!Archive::formatFromKey(key, format)) {
+                QStringList keys;
+                for (Archive::Format f : Archive::formats())
+                    keys << Archive::extensionFor(f);
+                return fail(QStringLiteral("FORMAT takes %1.").arg(keys.join(QStringLiteral(", "))));
+            }
+            Archive::Format named;
+            if (!Archive::formatFromName(name, named) || named != format)
+                name += QLatin1Char('.') + Archive::extensionFor(format);
+        } else if (!Archive::formatFromName(name, format)) {
+            format = Archive::Format::Zip;
+            name += QStringLiteral(".zip");
+        }
+        QString why;
+        if (!FileOps::isValidFileName(name, &why))
+            return fail(why);
+        JobSpec spec;
+        spec.type = JobType::Pack;
+        spec.sources = sources;
+        spec.destDir = dest;
+        spec.archiveName = name;
+        spec.archiveFormat = Archive::extensionFor(format);
+        spec.whenExists = whenExists;
+        m_jobs.enqueue(spec);
+        return true;
+    }
+    return fail(QStringLiteral("Archive takes CREATE or EXTRACT."));
 }
 
 int CommandEngine::trashItems(const QStringList &paths)

@@ -29,6 +29,8 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Right-click a column header: add Created and Extension; Reset Columns puts them back.
 - [ ] Drag column edges with the mouse and with a finger, the Name column too. Double-click the Name column's right edge: it fills the room again.
 - [ ] Flat view > Ungrouped, select files from different subfolders, copy them to the other display: it asks Keep Folder Structure or Same Folder; try both.
+- [ ] Right-click a folder > Add to Archive...: try 7z and tar.zst, Here and Destination. Add to "Name.zip" makes one straight away. Ctrl+Z removes it.
+- [ ] Right-click a zip, a 7z and a RAR > Extract Here, Extract to Destination, Extract to "Name". Extract the same one twice: the second gets "(2)".
 - [ ] Right-click one or several pictures: Convert Image(s)... is there; it is not there when a non-picture is selected.
 - [ ] Ctrl+F filter: type `*.png` and only PNGs stay; Esc clears it.
 - [ ] Sizes button on a big folder (Emulation, for example): sizes and bars fill in without freezing.

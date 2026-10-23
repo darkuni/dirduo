@@ -144,6 +144,9 @@ public:
     // root) and copies. False when canceled or it failed (error set).
     bool copyFromFlat(const QStringList &sources, const QString &root, const QString &destDir, bool move,
                       CollisionAction whenExists, CommandContext &ctx, QString *error);
+    // The archive name Add to Archive suggests: the item's own name for one,
+    // the folder's name for several; with the format's extension.
+    static QString suggestedArchiveName(const QStringList &sources, const QString &folder, const QString &formatKey);
     int trashItems(const QStringList &paths);
     int deleteItems(const QStringList &paths);
 
@@ -181,6 +184,7 @@ private:
     bool pasteAsFile(const QMimeData *mime, bool askName, CommandContext &ctx, QString *error);
     bool cmdUndo(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool cmdMetadata(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
+    bool cmdArchive(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     void recordNew(const QStringList &paths, const QString &what);
 
     QStringList sourcesFor(const ParsedCommand &cmd, CommandContext &ctx, const QStringList &flags) const;

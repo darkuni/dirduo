@@ -841,11 +841,12 @@ void Job::runUnpack()
             if (existsNoFollow(dest + QLatin1Char('/') + folder) && !replace)
                 folder = FileOps::uniqueName(dest, folder);
             into = dest + QLatin1Char('/') + folder;
+            const bool existed = existsNoFollow(into);
             if (!QDir().mkpath(into)) {
                 addError(QStringLiteral("%1: cannot make %2").arg(shown, into));
                 continue;
             }
-            if (!replace || !QFileInfo(dest + QLatin1Char('/') + folder).exists())
+            if (!existed) // merged into a folder that was there: undo leaves it
                 addOutcome(archive, into);
         } else if (!replace) {
             for (const QString &t : tops) {

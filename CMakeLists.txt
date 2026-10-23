@@ -151,6 +151,7 @@ add_library(linopus_ui STATIC
     src/ui/FindDialog.cpp
     src/ui/FavoritesDialog.cpp
     src/ui/ImageConvertDialog.cpp
+    src/ui/ArchiveDialog.cpp
     src/ui/HistoryDialog.cpp
     src/ui/SelectDialog.cpp
     src/ui/Launch.cpp
@@ -185,12 +186,18 @@ endif()
 if(LINOPUS_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS Test)
     enable_testing()
-    foreach(t aliases commandparser fileops trash jobmanager commandengine drives location listing condition rename foldersync find imageconvert metadata thumbnails history selectrules)
+    foreach(t aliases commandparser fileops trash jobmanager commandengine drives location listing condition rename foldersync find imageconvert metadata thumbnails history selectrules archive)
         add_executable(tst_${t} tests/tst_${t}.cpp)
         target_link_libraries(tst_${t} PRIVATE linopus_core Qt6::Test)
         add_test(NAME ${t} COMMAND tst_${t})
         set_tests_properties(${t} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     endforeach()
+
+    # The archive test makes a hostile archive with libarchive itself.
+    if(LIBARCHIVE_FOUND)
+        target_link_libraries(tst_archive PRIVATE PkgConfig::LIBARCHIVE)
+        target_compile_definitions(tst_archive PRIVATE LINOPUS_HAVE_LIBARCHIVE)
+    endif()
 
     # The metadata test writes tags and EXIF with the libraries themselves.
     if(TAGLIB_FOUND)

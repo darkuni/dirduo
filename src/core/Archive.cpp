@@ -337,13 +337,20 @@ bool unpack(const QString &archivePath, const QString &destDir, const QMap<QStri
         return false;
     }
     struct archive *out = archive_write_disk_new();
+    // Entry names are checked here and turned into full paths under the
+    // destination, so absolute paths are expected; libarchive still refuses
+    // ".." and writing through links the archive itself made. The
+    // destination is resolved first: a link on the way to it (an SD card
+    // mount, /home on some systems) would otherwise count as one.
     int flags = ARCHIVE_EXTRACT_TIME | ARCHIVE_EXTRACT_PERM | ARCHIVE_EXTRACT_SECURE_NODOTDOT
-        | ARCHIVE_EXTRACT_SECURE_SYMLINKS | ARCHIVE_EXTRACT_SECURE_NOABSOLUTEPATHS;
+        | ARCHIVE_EXTRACT_SECURE_SYMLINKS;
     flags |= replace ? ARCHIVE_EXTRACT_UNLINK : ARCHIVE_EXTRACT_NO_OVERWRITE;
     archive_write_disk_set_options(out, flags);
     archive_write_disk_set_standard_lookup(out);
 
-    const QString dest = QDir::cleanPath(destDir);
+    const QString canonical = QFileInfo(destDir).canonicalFilePath();
+    const QString dest = canonical.isEmpty() ? QDir::cleanPath(destDir) : canonical;
+    const QString shownDest = QDir::cleanPath(destDir);
     QSet<QString> made;
     bool ok = true;
     bool stopped = false;
@@ -392,10 +399,8 @@ bool unpack(const QString &archivePath, const QString &destDir, const QMap<QStri
                 hooks.problem(QStringLiteral("%1: %2").arg(cleanEntry(name), errorOf(out)));
             archive_read_data_skip(a);
         } else {
-            if (!topExisted && created) {
-                made.insert(top);
-                *created << top;
-            }
+            if (!topExisted && created)
+                *created << shownDest + top.mid(dest.size()); // as the caller named the folder
             made.insert(top);
             const void *buf;
             size_t size;

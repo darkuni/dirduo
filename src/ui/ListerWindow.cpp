@@ -14,8 +14,10 @@
 #include "core/SelectRules.h"
 #include "core/FindEngine.h"
 #include "ui/HistoryDialog.h"
+#include "ui/ArchiveDialog.h"
 #include "ui/ImageConvertDialog.h"
 #include "core/FileKind.h"
+#include "core/Archive.h"
 #include "core/ImageConvert.h"
 #include "core/Collections.h"
 #include "core/Favorites.h"
@@ -514,6 +516,8 @@ void ListerWindow::buildMenus()
     tools->addAction(commandAction(QStringLiteral("Synchronize..."), QStringLiteral("Sync"), {}, QStringLiteral("folder-sync")));
     tools->addAction(commandAction(QStringLiteral("Find Duplicates..."), QStringLiteral("Duplicates"), {}, QStringLiteral("edit-copy")));
     tools->addSeparator();
+    tools->addAction(commandAction(QStringLiteral("Add to Archive..."), QStringLiteral("Archive CREATE"), {}, QStringLiteral("archive-insert")));
+    tools->addAction(commandAction(QStringLiteral("Extract Here"), QStringLiteral("Archive EXTRACT"), {}, QStringLiteral("archive-extract")));
     tools->addAction(commandAction(QStringLiteral("Convert Images..."), QStringLiteral("Image"), {}, QStringLiteral("image-x-generic")));
     tools->addAction(commandAction(QStringLiteral("File Log..."), QStringLiteral("Undo LOG"), {}, QStringLiteral("view-history")));
     tools->addAction(commandAction(QStringLiteral("Advanced Rename..."), QStringLiteral("Rename ADVANCED"), {}, QStringLiteral("edit-rename")));
@@ -722,6 +726,12 @@ std::optional<bool> ListerWindow::conditionAtom(const QString &name, const QStri
         for (const QString &p : sel)
             any = any || (Location::isLocal(p) && FileKind::categoryFor(p, t->isFolder(p)) == FileKind::Category::Image);
         return flag(any);
+    }
+    if (name == QLatin1String("archives")) {
+        bool any = false;
+        for (const QString &p : sel)
+            any = any || (Location::isLocal(p) && !t->isFolder(p) && Archive::isArchive(p));
+        return flag(any && Archive::available());
     }
     if (name == QLatin1String("multiple"))
         return flag(sel.size() > 1);
@@ -1889,6 +1899,30 @@ void ListerWindow::fillContextMenu(QMenu &menu, FileDisplay *d, bool onItem)
                 break;
             pictures = Location::isLocal(p) && !t->isFolder(p) && ImageConvert::canRead(p);
         }
+        // Archives: make one from anything local; extract when all are archives.
+        bool local = true;
+        bool archives = Archive::available();
+        for (const QString &p : sel) {
+            local = local && Location::isLocal(p);
+            archives = archives && Location::isLocal(p) && !t->isFolder(p) && Archive::isArchive(p);
+        }
+        if (Archive::available() && local) {
+            menu.addSeparator();
+            if (archives) {
+                menu.addAction(commandAction(QStringLiteral("Extract Here"), QStringLiteral("Archive EXTRACT"), {},
+                                             QStringLiteral("archive-extract")));
+                if (!destPath().isEmpty() && Location::isLocal(destPath()))
+                    menu.addAction(commandAction(QStringLiteral("Extract to Destination"), QStringLiteral("Archive EXTRACT DEST"), {},
+                                                 QStringLiteral("archive-extract")));
+                menu.addAction(commandAction(sel.size() == 1 ? QStringLiteral("Extract to \"%1\"").arg(Archive::baseName(sel.first()))
+                                                             : QStringLiteral("Extract Each to Its Own Folder"),
+                                             QStringLiteral("Archive EXTRACT MODE=folder"), {}, QStringLiteral("archive-extract")));
+            }
+            menu.addAction(commandAction(QStringLiteral("Add to Archive..."), QStringLiteral("Archive CREATE"), {},
+                                         QStringLiteral("archive-insert")));
+            menu.addAction(commandAction(QStringLiteral("Add to \"%1\"").arg(CommandEngine::suggestedArchiveName(sel, t->path(), QStringLiteral("zip"))),
+                                         QStringLiteral("Archive CREATE QUICK FORMAT=zip"), {}, QStringLiteral("archive-insert")));
+        }
         if (pictures) {
             menu.addSeparator();
             menu.addAction(commandAction(sel.size() == 1 ? QStringLiteral("Convert Image...") : QStringLiteral("Convert Images..."),
@@ -2349,6 +2383,17 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
     }
     if (cmd.is(QStringLiteral("Image")))
         return imageCommand(cmd, error);
+    if (cmd.is(QStringLiteral("Archive"))) {
+        // Add to Archive without a name: ask. Runs the command again with one.
+        const QStringList sel = selectedPaths();
+        if (sel.isEmpty())
+            return fail(QStringLiteral("Select the files and folders to put in the archive first."));
+        auto *dlg = new ArchiveDialog(sel, sourcePath(), destPath(), this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        connect(dlg, &QDialog::accepted, this, [this, dlg]() { runCommand(dlg->command()); });
+        dlg->open();
+        return true;
+    }
     if (cmd.is(QStringLiteral("Metadata"))) {
         const QString v = cmd.value(QStringLiteral("PANE")).toLower();
         bool on = m_metaPane->isHidden();
