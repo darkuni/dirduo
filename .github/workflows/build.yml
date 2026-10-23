@@ -100,34 +100,9 @@ jobs:
           ARCH: ${{ matrix.variant.arch }}
         run: |
           flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          # Build as an ordinary user, as Flathub does: Samba's configure
-          # tests switching user ids, which fails for root in the sandbox.
-          # The image may lack useradd/runuser: add the user by hand and drop
-          # privileges with whatever tool is there.
-          tools=""; for c in useradd runuser setpriv su python3 perl; do command -v "$c" >/dev/null && tools="$tools $c"; done
-          echo "::notice title=Tools in the build image::$tools"
-          if ! id builder >/dev/null 2>&1; then
-            if command -v useradd >/dev/null; then useradd -m -u 1000 builder || useradd -m builder
-            else
-              echo "builder:x:1000:1000:builder:/home/builder:/bin/sh" >> /etc/passwd
-              echo "builder:x:1000:" >> /etc/group
-              mkdir -p /home/builder
-            fi
-          fi
-          chown -R builder: "$PWD" /home/builder
-          asuser() {
-            if command -v runuser >/dev/null; then runuser -u builder -- env HOME=/home/builder "$@"
-            elif command -v setpriv >/dev/null; then setpriv --reuid=builder --regid=builder --init-groups env HOME=/home/builder "$@"
-            elif command -v python3 >/dev/null; then
-              python3 -c 'import os,pwd,sys; p=pwd.getpwnam("builder"); os.setgroups([]); os.setgid(p.pw_gid); os.setuid(p.pw_uid); os.environ["HOME"]=p.pw_dir; os.execvp(sys.argv[1], sys.argv[1:])' "$@"
-            else su builder -s /bin/sh -c "$(printf '%q ' "$@")"
-            fi
-          }
-          asuser flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || {
-            echo "::error title=Could not run as the build user::tools:$tools"; exit 1; }
           # The log goes to a file; on failure its tail becomes an annotation,
           # readable without access to the raw job log.
-          if ! asuser flatpak-builder --user --arch="$ARCH" --repo=repo --disable-rofiles-fuse \
+          if ! flatpak-builder --arch="$ARCH" --repo=repo --disable-rofiles-fuse \
                  --install-deps-from=flathub --force-clean --ccache \
                  build-dir flatpak/com.monroeworld.Linopus.yml > build.log 2>&1; then
             # Annotations are cut at about 4 KB: send the error lines and the
