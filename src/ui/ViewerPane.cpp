@@ -1,6 +1,7 @@
 #include "ui/ViewerPane.h"
 #ifdef LINOPUS_HAVE_MULTIMEDIA
 #include <QAudioOutput>
+#include <QMediaFormat>
 #include <QMediaPlayer>
 #include <QSlider>
 #include <QVideoWidget>
@@ -417,7 +418,10 @@ public:
 bool ViewerPane::canPlay()
 {
 #ifdef LINOPUS_HAVE_MULTIMEDIA
-    return true;
+    // A media backend with no decoders (GStreamer without its plugins) can
+    // crash when a player is made: check that it can decode something first.
+    static const bool usable = !QMediaFormat().supportedFileFormats(QMediaFormat::Decode).isEmpty();
+    return usable;
 #else
     return false;
 #endif
