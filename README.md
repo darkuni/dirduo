@@ -47,6 +47,7 @@ Servers and archives (KIO):
 - Properties (Alt+Enter, or right-click > Properties...): location, type, size (folders are counted in the background), where a link points, owner, dates and permissions. Change the modified and accessed dates and the permissions for one item or many, optionally for everything inside folders
 - Links: right-click > Make Link Here ("Name (link)") or Make Link in Destination. `MakeLink RELATIVE` makes links that keep working when both move together (an SD card in another machine). Undo removes them
 - Location bar laid out as in Opus: Back, Forward, Up, Refresh, Home, a Favorites star (pick one, add this folder, organize), the folder's icon (drag it to copy, move or link the folder), the path, a list of recent folders, and (with two displays) Open This Folder in the Other Display and Swap Folders. The bar takes the display's role color (source, destination, locked destination)
+- Right-click empty space > Open Konsole in This Folder (also Tools > Open Konsole Here, Shift+F4, and the `Terminal` command). Uses Konsole, or the first other terminal installed; from the Flatpak it opens on the real system
 - Free space: the status line shows how much room is left on the drive or card (in red when it is nearly full), and a copy that will not fit stops before writing anything
 - Convert Images is on the right-click menu when every selected file is a picture
 - Archives (libarchive): right-click > Add to Archive... makes zip, 7z or tar (gz, xz, bz2, zstd) archives here or in the destination; Add to "Name.zip" makes one without asking. Extract Here, Extract Here and Trash Archive, Extract to Destination and Extract to "Name" unpack zip, 7z, RAR, tar, ISO, LHA/LZH, CAB and more. Extract Here puts an archive holding one folder straight in, and anything else in a folder named after the archive. Password-protected zip and 7z archives ask for the password (and Add to Archive can encrypt a zip with AES-256). Nothing is overwritten unless asked, names that are taken get new ones, entries that point outside the folder are left out, and both can be undone
@@ -110,6 +111,7 @@ Every button, menu item, hotkey, drop and inline rename runs one of these. Butto
 | `Metadata` | `TITLE=`, `ARTIST=`, `ALBUMARTIST=`, `ALBUM=`, `GENRE=`, `COMMENT=`, `YEAR=`, `TRACK=<n>\|auto` (`START=`), `DISC=`, `TAKEN=`, `SHIFT=+1h\|-30m\|+2d`, `DESCRIPTION=`, `COPYRIGHT=` (empty clears), `COPY`, `PASTE` (`ALL`), `FILE=`, `PANE=toggle\|on\|off` |
 | `Undo` | no arguments: the latest; `ID=`, `LIST`, `LOG` (`FIND=`) |
 | `Sync` | `LEFT=`, `RIGHT=`, `MODE=update\|mirror\|twoway`, `COMPARE=datesize\|date\|size\|contents`, `EXCLUDE=*.tmp;...`, `RUN` |
+| `Terminal` | `PATH=<folder>` (else the source folder), `PROGRAM=konsole\|gnome-terminal\|...` |
 | `Duplicates` | `IN=...` (several allowed), `BY=contents\|namesize\|name`, `MINSIZE=<bytes>`, `HIDDEN` |
 | `MakeLink` | `DEST`, `TO=<folder>`, `NAME=`, `RELATIVE`, `FILE=...` |
 | `Properties` | `FILE=...` |

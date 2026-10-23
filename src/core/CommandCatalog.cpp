@@ -33,6 +33,11 @@ QList<CommandInfo> buildCommands()
                       arg("PASSWORD=", {}, "Extract: for encrypted archives (asked for otherwise). Create: encrypt a zip with AES-256"),
                       arg("FILE=", {}, "What to use instead of the selection")},
                      QStringLiteral("Archive EXTRACT DEST")};
+    c << CommandInfo{QStringLiteral("Terminal"), QStringLiteral("Open a terminal window in the folder (Konsole, or another one installed)"),
+                     {arg("PATH=", {}, "Folder to open in (otherwise the source folder)"),
+                      arg("PROGRAM=", {QStringLiteral("konsole"), QStringLiteral("gnome-terminal"), QStringLiteral("alacritty"), QStringLiteral("kitty")},
+                          "Terminal to use first")},
+                     QStringLiteral("Terminal")};
     c << CommandInfo{QStringLiteral("MakeLink"), QStringLiteral("Make symbolic links to the selected items"),
                      {arg("DEST", {}, "In the destination folder (otherwise beside each item, as \"Name (link)\")"),
                       arg("TO=", {}, "In this folder"),
@@ -308,6 +313,7 @@ QList<CatalogButton> buildButtons()
           "Archive CREATE QUICK FORMAT=zip"),
         b("File operations", "Extract", "archive-extract", "Extract the selected archives here", "Archive EXTRACT",
           "Archive EXTRACT DEST"),
+        b("Navigation", "Terminal", "utilities-terminal", "Open Konsole in the source folder", "Terminal", "Terminal PATH={destpath}"),
         b("File operations", "Properties", "document-properties", "Size, dates and permissions of the selection", "Properties"),
         b("File operations", "Make Link", "insert-link", "Make links to the selection in the destination", "MakeLink DEST",
           "MakeLink"),

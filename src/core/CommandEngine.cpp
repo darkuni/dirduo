@@ -3,6 +3,7 @@
 #include "core/AliasManager.h"
 #include "core/Archive.h"
 #include "core/Attributes.h"
+#include "core/HostRun.h"
 #include "core/Collections.h"
 #include "core/FileOps.h"
 #include "core/JobManager.h"
@@ -95,7 +96,7 @@ QStringList CommandEngine::commandNames()
             QStringLiteral("Image"),
             QStringLiteral("Layout"), QStringLiteral("MakeLink"), QStringLiteral("Metadata"), QStringLiteral("Move"), QStringLiteral("Print"),
             QStringLiteral("Properties"), QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Set"), QStringLiteral("SetAttr"), QStringLiteral("Settings"),
-            QStringLiteral("Sync"), QStringLiteral("Toolbar"), QStringLiteral("Undo")};
+            QStringLiteral("Sync"), QStringLiteral("Terminal"), QStringLiteral("Toolbar"), QStringLiteral("Undo")};
 }
 
 QString CommandEngine::resolvePath(const QString &input, const QString &base) const
@@ -221,6 +222,8 @@ bool CommandEngine::execute(const ParsedCommand &cmd, CommandContext &ctx, QStri
         return ctx.tool(cmd, error);
     if (cmd.is(QStringLiteral("MakeLink")))
         return cmdMakeLink(cmd, ctx, error);
+    if (cmd.is(QStringLiteral("Terminal")))
+        return cmdTerminal(cmd, ctx, error);
     if (cmd.is(QStringLiteral("Sync")) || cmd.is(QStringLiteral("Duplicates")) || cmd.is(QStringLiteral("Find"))
         || cmd.is(QStringLiteral("Favorite")) || cmd.is(QStringLiteral("Layout")) || cmd.is(QStringLiteral("Image")))
         return ctx.tool(cmd, error);
@@ -625,6 +628,21 @@ bool CommandEngine::cmdMakeLink(const ParsedCommand &cmd, CommandContext &ctx, Q
     recordNew(made, QStringLiteral("link"));
     ctx.afterLocalChange(folder.isEmpty() ? made : QStringList());
     return true;
+}
+
+bool CommandEngine::cmdTerminal(const ParsedCommand &cmd, CommandContext &ctx, QString *error)
+{
+    // In the folder given, else the source folder.
+    QString dir = cmd.value(QStringLiteral("PATH"));
+    if (dir.isEmpty())
+        dir = cmd.positionalExcept({}).value(0);
+    dir = dir.isEmpty() ? ctx.sourcePath() : resolvePath(dir, ctx.sourcePath());
+    if (!Location::isLocal(dir) || !QFileInfo(dir).isDir()) {
+        if (error)
+            *error = QStringLiteral("A terminal opens in folders on this computer and its cards.");
+        return false;
+    }
+    return HostRun::openTerminal(dir, cmd.value(QStringLiteral("PROGRAM")), error);
 }
 
 int CommandEngine::trashItems(const QStringList &paths)

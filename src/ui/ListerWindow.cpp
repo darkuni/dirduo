@@ -528,6 +528,8 @@ void ListerWindow::buildMenus()
     tools->addAction(commandAction(QStringLiteral("Synchronize..."), QStringLiteral("Sync"), {}, QStringLiteral("folder-sync")));
     tools->addAction(commandAction(QStringLiteral("Find Duplicates..."), QStringLiteral("Duplicates"), {}, QStringLiteral("edit-copy")));
     tools->addSeparator();
+    tools->addAction(commandAction(QStringLiteral("Open Konsole Here"), QStringLiteral("Terminal"), QKeySequence(QStringLiteral("Shift+F4")),
+                                   QStringLiteral("utilities-terminal")));
     tools->addAction(commandAction(QStringLiteral("Add to Archive..."), QStringLiteral("Archive CREATE"), {}, QStringLiteral("archive-insert")));
     tools->addAction(commandAction(QStringLiteral("Extract Here"), QStringLiteral("Archive EXTRACT"), {}, QStringLiteral("archive-extract")));
     tools->addAction(commandAction(QStringLiteral("Convert Images..."), QStringLiteral("Image"), {}, QStringLiteral("image-x-generic")));
@@ -1962,6 +1964,9 @@ void ListerWindow::fillContextMenu(QMenu &menu, FileDisplay *d, bool onItem)
     menu.addSeparator();
     menu.addAction(commandAction(QStringLiteral("New Folder..."), QStringLiteral("CreateFolder"), {}, QStringLiteral("folder-new")));
     menu.addAction(m_actHidden);
+    if (!onItem && t && Location::isLocal(t->path()))
+        menu.addAction(commandAction(QStringLiteral("Open Konsole in This Folder"), QStringLiteral("Terminal"), {},
+                                     QStringLiteral("utilities-terminal")));
     // Links and properties, for items on this computer.
     bool localSel = !sel.isEmpty();
     for (const QString &p : sel)

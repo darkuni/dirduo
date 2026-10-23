@@ -60,6 +60,7 @@ add_library(linopus_core STATIC
     src/core/CommandCatalog.cpp
     src/core/ImageConvert.cpp
     src/core/Attributes.cpp
+    src/core/HostRun.cpp
     src/core/Metadata.cpp
     src/core/Thumbnails.cpp
     src/core/History.cpp

@@ -1,5 +1,6 @@
 #include "core/AliasManager.h"
 #include "core/CommandEngine.h"
+#include "core/HostRun.h"
 #include "core/JobManager.h"
 #include "core/Paths.h"
 
@@ -159,6 +160,30 @@ private Q_SLOTS:
         QVERIFY(m_jobs->waitForIdle(5000));
         QTRY_VERIFY(!QFileInfo(ctx.dest + QStringLiteral("/Game (2)")).isSymLink());
         QVERIFY(QFile::exists(ctx.source + QStringLiteral("/Game/x.d64")));
+    }
+
+    void terminalOpensInTheFolder()
+    {
+        QStringList ran;
+        QString ranIn;
+        HostRun::setStarter([&](const QStringList &cmd, const QString &dir) {
+            ran = cmd;
+            ranIn = dir;
+            return true;
+        });
+        QVERIFY(m_engine->run(QStringLiteral("Terminal"), ctx));
+        QCOMPARE(ranIn, ctx.source);
+        QVERIFY(ran.join(QLatin1Char(' ')).contains(QStringLiteral("konsole --workdir '%1'").arg(ctx.source)));
+        QVERIFY(m_engine->run(QStringLiteral("Terminal PATH=\"%1\" PROGRAM=kitty").arg(ctx.dest), ctx));
+        QCOMPARE(ranIn, ctx.dest);
+        // The program asked for comes first; the others are fallbacks.
+        const QString script = ran.last();
+        QVERIFY(script.indexOf(QStringLiteral("'kitty'")) < script.indexOf(QStringLiteral("'konsole'")));
+        QVERIFY(!m_engine->run(QStringLiteral("Terminal PATH=/nonexistent-xyz"), ctx));
+        HostRun::setStarter({});
+        // A folder with a quote in its name stays one argument.
+        const QStringList cmd = HostRun::terminalCommand(QStringLiteral("/tmp/it's here"), {});
+        QVERIFY(cmd.last().contains(QStringLiteral("'/tmp/it'\\''s here'")));
     }
 
     void copySelectionToDest()

@@ -1982,6 +1982,21 @@ private Q_SLOTS:
         QTRY_COMPARE(t->path(), start);
     }
 
+    void konsoleOnEmptyArea()
+    {
+        QMenu menu;
+        w->fillContextMenu(menu, w->display(0), false);
+        QStringList texts;
+        for (QAction *a : menu.actions())
+            texts << a->text();
+        QVERIFY(texts.contains(QStringLiteral("Open Konsole in This Folder")));
+        QMenu onItem;
+        w->display(0)->currentTab()->selectPaths({});
+        w->fillContextMenu(onItem, w->display(0), true);
+        for (QAction *a : onItem.actions())
+            QVERIFY(a->text() != QStringLiteral("Open Konsole in This Folder"));
+    }
+
     void freeSpaceShown()
     {
         FileDisplay *d = w->display(0);
