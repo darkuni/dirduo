@@ -120,6 +120,19 @@ QPixmap pixmap(Glyph g, const QColor &color, int size, qreal dpr)
         p.drawLine(QPointF(5, 12), QPointF(19, 12));
         p.drawLine(QPointF(5, 17), QPointF(19, 17));
         break;
+    case Glyph::CopyPath: {
+        // Two bars and an arrow pointing down: this folder, over there.
+        p.drawLine(QPointF(5, 5.5), QPointF(19, 5.5));
+        p.drawLine(QPointF(5, 10), QPointF(19, 10));
+        QPainterPath tri;
+        tri.moveTo(6.5, 14);
+        tri.lineTo(17.5, 14);
+        tri.lineTo(12, 20);
+        tri.closeSubpath();
+        p.setBrush(color);
+        p.drawPath(tri);
+        break;
+    }
     case Glyph::Swap: {
         QPainterPath up;
         up.moveTo(7, 10);

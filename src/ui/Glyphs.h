@@ -8,7 +8,7 @@
 // icon theme having them.
 namespace Glyphs {
 
-enum class Glyph { Back, Forward, Up, Refresh, Home, Star, Folder, ChevronDown, Menu, Swap, Close };
+enum class Glyph { Back, Forward, Up, Refresh, Home, Star, Folder, ChevronDown, Menu, CopyPath, Swap, Close };
 
 QIcon icon(Glyph g, const QColor &color);
 QPixmap pixmap(Glyph g, const QColor &color, int size, qreal dpr = 1.0);

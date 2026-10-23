@@ -1963,6 +1963,19 @@ private Q_SLOTS:
         for (QAction *a : fav->actions())
             hasAdd = hasAdd || a->text().startsWith(QStringLiteral("Add This Folder"));
         QVERIFY(hasAdd);
+        // Copy this folder to the other display; swap the two.
+        FolderTab *o = w->display(1)->currentTab();
+        const QString otherStart = o->path();
+        QVERIFY(d->copyPathButton()->isVisibleTo(d));
+        d->copyPathButton()->click();
+        QTRY_COMPARE(o->path(), root + QStringLiteral("/a"));
+        o->navigate(root + QStringLiteral("/b"));
+        QTRY_COMPARE(o->path(), root + QStringLiteral("/b"));
+        d->swapPathsButton()->click();
+        QTRY_COMPARE(t->path(), root + QStringLiteral("/b"));
+        QTRY_COMPARE(o->path(), root + QStringLiteral("/a"));
+        o->navigate(otherStart);
+        QTRY_COMPARE(o->path(), otherStart);
         d->homeButton()->click();
         QTRY_COMPARE(t->path(), QDir::homePath());
         t->navigate(start);

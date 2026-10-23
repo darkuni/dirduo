@@ -157,6 +157,14 @@ FileDisplay::FileDisplay(AliasManager &aliases, QWidget *parent)
     hl->addWidget(m_folderIcon);
     hl->addWidget(m_crumbs, 1);
     hl->addWidget(m_recent);
+    // With two displays: this folder in the other one, and swap the two.
+    m_copyPath = glyphButton(QStringLiteral("Open this folder in the other display"), header);
+    m_swapPaths = glyphButton(QStringLiteral("Swap the folders of the two displays"), header);
+    connect(m_copyPath, &QToolButton::clicked, this, [this]() { Q_EMIT copyPathRequested(this); });
+    connect(m_swapPaths, &QToolButton::clicked, this, [this]() { Q_EMIT commandRequested(this, QStringLiteral("Go SWAP")); });
+    hl->addSpacing(4);
+    hl->addWidget(m_copyPath);
+    hl->addWidget(m_swapPaths);
     layout->addWidget(header);
 
     m_tabs->setDocumentMode(true);
@@ -518,7 +526,11 @@ void FileDisplay::applyStyle()
     m_star->setIcon(Glyphs::icon(Glyph::Star, ink));
     m_recent->setIcon(Glyphs::icon(Glyph::ChevronDown, ink));
     const int px = qMax(16, fontMetrics().height());
-    for (QToolButton *b : {m_back, m_forward, m_up, m_refresh, m_home, m_star, m_recent})
+    m_copyPath->setIcon(Glyphs::icon(Glyph::CopyPath, ink));
+    m_swapPaths->setIcon(Glyphs::icon(Glyph::Swap, ink));
+    m_copyPath->setVisible(m_showBadge); // two displays showing
+    m_swapPaths->setVisible(m_showBadge);
+    for (QToolButton *b : {m_back, m_forward, m_up, m_refresh, m_home, m_star, m_recent, m_copyPath, m_swapPaths})
         b->setIconSize(QSize(px, px));
     m_folderIcon->setPixmap(Glyphs::pixmap(Glyph::Folder, ink, px, devicePixelRatioF()));
     m_header->setToolTip(m_role == Role::Source ? QStringLiteral("Source")

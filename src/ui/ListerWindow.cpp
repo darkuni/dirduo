@@ -100,6 +100,11 @@ ListerWindow::ListerWindow(AppContext &app, QWidget *parent)
         m_split->addWidget(d);
         connect(d, &FileDisplay::activated, this, &ListerWindow::makeSource);
         d->setMenuProvider([this](QMenu *menu, const QString &kind) { fillDynamicMenu(menu, kind); });
+        connect(d, &FileDisplay::copyPathRequested, this, [this](FileDisplay *from) {
+            FileDisplay *other = from == m_displays[0] ? m_displays[1] : m_displays[0];
+            if (m_dual && from->currentTab() && other->currentTab())
+                other->currentTab()->navigate(from->currentTab()->path());
+        });
         connect(d, &FileDisplay::currentPathChanged, this, [this, i](FileDisplay *from) {
             const QString now = from->currentTab() ? from->currentTab()->path() : QString();
             const QString before = m_lastPath[i];

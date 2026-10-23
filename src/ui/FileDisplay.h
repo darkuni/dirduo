@@ -50,6 +50,8 @@ public:
     QToolButton *homeButton() const { return m_home; }
     QToolButton *favoritesButton() const { return m_star; }
     QToolButton *recentButton() const { return m_recent; }
+    QToolButton *copyPathButton() const { return m_copyPath; }
+    QToolButton *swapPathsButton() const { return m_swapPaths; }
     void fillRecentMenu(QMenu *menu);
 
     // This display's own folder tree (Set TREE=separate).
@@ -78,6 +80,8 @@ Q_SIGNALS:
     void tabKeyPressed(FileDisplay *display);
     void zoomRequested(FileDisplay *display, int steps);
     void commandRequested(FileDisplay *display, const QString &command);
+    // This display's folder, opened in the other display.
+    void copyPathRequested(FileDisplay *display);
     // Selection, view or folder changed: buttons may need to update.
     void stateChanged(FileDisplay *display);
 
@@ -105,6 +109,8 @@ private:
     QToolButton *m_home = nullptr;
     QToolButton *m_star = nullptr;
     QToolButton *m_recent = nullptr;
+    QToolButton *m_copyPath = nullptr;
+    QToolButton *m_swapPaths = nullptr;
     QLabel *m_folderIcon = nullptr;
     QWidget *m_header = nullptr;
     std::function<void(QMenu *, const QString &)> m_menuProvider;
