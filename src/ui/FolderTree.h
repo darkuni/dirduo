@@ -83,6 +83,12 @@ public:
     void setShowHidden(bool show);
     void setZoom(int percent); // follows the lister's zoom
     FolderTreeModel *treeModel() const { return m_model; }
+    // The line from the top of the tree to the current folder, as Opus draws
+    // it: in this color (the display's SOURCE or DEST accent).
+    void setPathColor(const QColor &c);
+    QColor pathColor() const { return m_pathColor; }
+    // The folders on that line, top first (for tests).
+    QList<QModelIndex> pathIndexes() const;
 
     // Rebuilds the top level from the drives now (mounts are also polled).
     void rescan();
@@ -90,6 +96,9 @@ public:
 
 Q_SIGNALS:
     void folderActivated(const QString &path);
+
+protected:
+    void drawBranches(QPainter *painter, const QRect &rect, const QModelIndex &index) const override;
 
 private:
     void rebuild(const QList<DriveEntry> &drives);
@@ -102,4 +111,6 @@ private:
     QString m_path;
     bool m_syncing = false;
     int m_zoom = 100;
+    QColor m_pathColor;
+    bool m_autoColor = true; // until a display gives it its color
 };

@@ -18,6 +18,8 @@ public:
         bool statusFree = true;      // "12 GB free of 64 GB"
         bool askOnError = true;      // Retry / Skip / Abort when a copy fails
         bool junkHidden = true;      // .DS_Store, Thumbs.db... count as hidden files
+        bool treeLines = true;       // folder trees: dotted branch lines and + / - boxes
+        bool treePath = true;        // folder trees: the way to the current folder in the display's color
         // The status bar's definition (StatusFormat); empty: made from the
         // three switches above.
         QString statusDefinition;

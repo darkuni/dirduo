@@ -615,6 +615,29 @@ int main(int argc, char *argv[])
             v.statusDefinition.clear();
             Prefs::instance()->setValues(v);
         }
+        // Opus-style tree: branch lines and the path to the current folder.
+        w->runCommand(QStringLiteral("Set DUAL=vertical\nSet TREE=separate"));
+        w->display(0)->currentTab()->navigate(root + QStringLiteral("/Music/C64"));
+        w->display(1)->currentTab()->navigate(root + QStringLiteral("/Emulation/roms/c64"));
+        QTest::qWait(800);
+        shot(w, out, QStringLiteral("46-tree-path-lines"));
+        {
+            FolderTree tree;
+            DriveEntry deck;
+            deck.kind = DriveEntry::Kind::SdCard;
+            deck.name = QStringLiteral("Deck");
+            deck.path = root;
+            tree.setDrivesForTesting({deck});
+            tree.resize(380, 520);
+            tree.setPathColor(Style::instance()->theme().destAccent);
+            tree.show();
+            for (int i = 0; i < 4; ++i) {
+                tree.setPath(root + QStringLiteral("/Emulation/roms/c64"));
+                QTest::qWait(400);
+            }
+            tree.grab().save(out + QStringLiteral("/47-tree-closeup.png"));
+        }
+        w->runCommand(QStringLiteral("Set TREE=off"));
     }
 
     w->close();

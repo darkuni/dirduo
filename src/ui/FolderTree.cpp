@@ -1,4 +1,6 @@
 #include "ui/FolderTree.h"
+#include <QPainter>
+#include "core/Prefs.h"
 #include "core/Servers.h"
 #include "ui/Style.h"
 
@@ -345,18 +347,26 @@ FolderTree::FolderTree(AliasManager *aliases, QWidget *parent)
 {
     connect(Style::instance(), &Style::changed, this, [this]() {
         setZoom(m_zoom); // a new text size under the zoom
+        if (m_autoColor) {
+            m_pathColor = Style::instance()->theme().sourceAccent; // the shared tree: the source's color
+            viewport()->update();
+        }
     });
     setModel(m_model);
     header()->hide();
     setUniformRowHeights(true);
     setAnimated(false);
-    setIndentation(14);
+    setIndentation(Style::instance()->scaled(18));
     setExpandsOnDoubleClick(true);
     setSelectionMode(QAbstractItemView::SingleSelection);
     setEditTriggers(QAbstractItemView::NoEditTriggers);
     setMinimumWidth(120);
     setFrameShape(QFrame::NoFrame);
 
+    // The path line runs through many rows: repaint them all when it moves.
+    connect(selectionModel(), &QItemSelectionModel::currentChanged, viewport(), qOverload<>(&QWidget::update));
+    connect(Prefs::instance(), &Prefs::changed, viewport(), qOverload<>(&QWidget::update));
+    m_pathColor = Style::instance()->theme().sourceAccent;
     // Click, Enter or arrow keys: the display follows.
     connect(selectionModel(), &QItemSelectionModel::currentChanged, this, [this](const QModelIndex &cur) {
         if (m_syncing || !cur.isValid())
@@ -480,4 +490,109 @@ void FolderTree::setZoom(int percent)
     setFont(f);
     const int px = qMax(8, int(Style::instance()->scaled(16) * percent / 100.0 + 0.5));
     setIconSize(QSize(px, px));
+    setIndentation(qMax(12, int(Style::instance()->scaled(18) * percent / 100.0 + 0.5)));
+}
+
+void FolderTree::setPathColor(const QColor &c)
+{
+    m_autoColor = false;
+    if (c == m_pathColor)
+        return;
+    m_pathColor = c;
+    viewport()->update();
+}
+
+QList<QModelIndex> FolderTree::pathIndexes() const
+{
+    QList<QModelIndex> out;
+    for (QModelIndex i = currentIndex(); i.isValid(); i = i.parent())
+        out.prepend(i);
+    return out;
+}
+
+// Opus-style branches: dotted lines joining each folder to its parent, a box
+// with + or - where a folder can open, and the way down from the top to the
+// current folder drawn solid in the display's color.
+void FolderTree::drawBranches(QPainter *painter, const QRect &rect, const QModelIndex &index) const
+{
+    const Prefs::Values &prefs = Prefs::instance()->values();
+    if (!prefs.treeLines && !prefs.treePath) {
+        QTreeView::drawBranches(painter, rect, index);
+        return;
+    }
+    const QList<QModelIndex> path = prefs.treePath ? pathIndexes() : QList<QModelIndex>();
+    // The folder on the path at a depth, if the path goes that deep.
+    auto onPath = [&path](int depth) -> QModelIndex { return depth < path.size() ? path.at(depth) : QModelIndex(); };
+    // Ancestors of this row, top first, ending with the row itself.
+    QList<QModelIndex> chain;
+    for (QModelIndex i = index; i.isValid(); i = i.parent())
+        chain.prepend(i);
+    const int depth = int(chain.size()) - 1;
+    const int indent = indentation();
+    const int cy = rect.center().y();
+
+    QColor lineColor = palette().color(QPalette::Text);
+    lineColor.setAlphaF(0.45);
+    QPen dotted(lineColor, 1, Qt::DotLine);
+    const int pathWidth = qMax(2, (indent + 2) / 6);
+    QPen solid(m_pathColor.isValid() ? m_pathColor : palette().color(QPalette::Highlight), pathWidth);
+    solid.setCapStyle(Qt::FlatCap);
+    painter->save();
+
+    // Whether the path line passes this row in column c, and how.
+    // Column c holds the line joining the children of the folder at depth c-1.
+    for (int c = 0; c <= depth; ++c) {
+        const QModelIndex here = chain.at(c); // this row's folder at depth c
+        const int x = rect.right() - (depth - c) * indent - indent / 2;
+        const QAbstractItemModel *m = model();
+        const bool hasNext = here.row() + 1 < m->rowCount(here.parent());
+        const bool first = c == 0 && here.row() == 0;
+        // The path at this column: the parent must be on it (the top level always is).
+        const bool parentOnPath = c == 0 || (c - 1 < path.size() && path.at(c - 1) == chain.at(c - 1));
+        const QModelIndex next = parentOnPath ? onPath(c) : QModelIndex();
+        if (c < depth) {
+            // A line passing by, for a folder further down at this level.
+            if (prefs.treeLines && hasNext) {
+                painter->setPen(dotted);
+                painter->drawLine(x, rect.top(), x, rect.bottom());
+            }
+            if (next.isValid() && here.row() < next.row()) {
+                painter->setPen(solid);
+                painter->drawLine(x, rect.top(), x, rect.bottom() + 1);
+            }
+            continue;
+        }
+        // This row's own column: the elbow into it, and its box.
+        if (prefs.treeLines) {
+            painter->setPen(dotted);
+            if (!first)
+                painter->drawLine(x, rect.top(), x, cy);
+            if (hasNext)
+                painter->drawLine(x, cy, x, rect.bottom());
+            painter->drawLine(x, cy, rect.right(), cy);
+        }
+        if (next.isValid()) {
+            painter->setPen(solid);
+            if (here == next) {
+                if (!first)
+                    painter->drawLine(x, rect.top(), x, cy);
+                painter->drawLine(x - pathWidth / 2, cy, rect.right() + 1, cy);
+            } else if (here.row() < next.row()) {
+                painter->drawLine(x, first ? cy : rect.top(), x, rect.bottom() + 1);
+            }
+        }
+        if (m->hasChildren(here)) {
+            const int b = qMin(qMax(7, Style::instance()->scaled(9) | 1), qMax(7, (rect.height() / 2) | 1));
+            const QRect box(x - b / 2, cy - b / 2, b, b);
+            QColor frame = palette().color(QPalette::Text);
+            frame.setAlphaF(0.6);
+            painter->setPen(QPen(frame, 1));
+            painter->setBrush(palette().color(QPalette::Base));
+            painter->drawRect(box);
+            painter->drawLine(box.left() + 2, cy, box.right() - 2, cy);
+            if (!isExpanded(here))
+                painter->drawLine(x, box.top() + 2, x, box.bottom() - 2);
+        }
+    }
+    painter->restore();
 }

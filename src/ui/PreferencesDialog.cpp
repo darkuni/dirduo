@@ -237,6 +237,8 @@ QWidget *PreferencesDialog::buildGeneral()
     auto *files = new QGroupBox(QStringLiteral("Files"), page);
     auto *fl = new QVBoxLayout(files);
     box(QStringLiteral("junk"), QStringLiteral("Treat .DS_Store, ._ files, Thumbs.db, desktop.ini and __MACOSX as hidden files"), v.junkHidden, fl, files);
+    box(QStringLiteral("treelines"), QStringLiteral("Folder trees: dotted branch lines and + / - boxes"), v.treeLines, fl, files);
+    box(QStringLiteral("treepath"), QStringLiteral("Folder trees: draw the way to the current folder in the display's color"), v.treePath, fl, files);
     layout->addWidget(files);
     auto *term = new QGroupBox(QStringLiteral("Terminal"), page);
     auto *tl = new QFormLayout(term);
@@ -1068,6 +1070,8 @@ bool PreferencesDialog::apply(QString *error)
         v.statusDefinition.clear();
     }
     v.junkHidden = m_general.value(QStringLiteral("junk"))->isChecked();
+    v.treeLines = m_general.value(QStringLiteral("treelines"))->isChecked();
+    v.treePath = m_general.value(QStringLiteral("treepath"))->isChecked();
     const QString typed = m_terminal->currentText().trimmed();
     const int at = m_terminal->findText(typed);
     v.terminal = at >= 0 ? m_terminal->itemData(at).toString() : typed;

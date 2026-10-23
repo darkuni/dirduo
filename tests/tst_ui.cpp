@@ -1617,6 +1617,45 @@ private Q_SLOTS:
         waitListed(t, QDir(back).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
     }
 
+    void treePathLine()
+    {
+        FolderTree tree;
+        DriveEntry card;
+        card.kind = DriveEntry::Kind::SdCard;
+        card.name = QStringLiteral("Card");
+        card.path = root;
+        tree.setDrivesForTesting({card});
+        tree.resize(300, 400);
+        tree.show();
+        QDir().mkpath(root + QStringLiteral("/a/deep/er"));
+        QTRY_VERIFY([&] {
+            tree.setPath(root + QStringLiteral("/a/deep/er"));
+            return tree.pathIndexes().size() >= 4;
+        }());
+        const QList<QModelIndex> path = tree.pathIndexes();
+        QCOMPARE(tree.treeModel()->pathOf(path.last()), root + QStringLiteral("/a/deep/er"));
+        tree.setPathColor(QColor(Qt::red));
+        // The line is drawn: some red in the branch area.
+        const QImage img = tree.grab().toImage();
+        bool red = false;
+        for (int y = 0; y < img.height() && !red; ++y)
+            for (int x = 0; x < 80 && !red; ++x)
+                red = img.pixelColor(x, y) == QColor(Qt::red);
+        QVERIFY(red);
+        // Off in Preferences: plain branches, nothing red.
+        Prefs::Values v = Prefs::instance()->values();
+        v.treePath = v.treeLines = false;
+        Prefs::instance()->setValues(v);
+        const QImage plain = tree.grab().toImage();
+        bool anyRed = false;
+        for (int y = 0; y < plain.height() && !anyRed; ++y)
+            for (int x = 0; x < 80 && !anyRed; ++x)
+                anyRed = plain.pixelColor(x, y) == QColor(Qt::red);
+        QVERIFY(!anyRed);
+        v.treePath = v.treeLines = true;
+        Prefs::instance()->setValues(v);
+    }
+
     void statusBarDefinitions()
     {
         FolderTab *t = w->display(0)->currentTab();

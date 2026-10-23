@@ -108,6 +108,7 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] In customize mode, right-click a toolbar > Button Style > Icons Only, and Large Icons. Right-click a toolbar (outside customize mode) > In the Menu Bar.
 - [ ] Window > Customize Toolbars > Default Toolbars: Add This Toolbar on Tools; drag "Turn Left" from Images onto it. Then Use the Opus Arrangement.
 - [ ] Preferences > Status Bar: tick "Use my own definition", Samples > Opus style, OK. The status bars show counts with icons, SOURCE/DEST and a disk bar. Codes menu > Disk space > Percent used adds {dp}.
+- [ ] Turn on the trees (Set TREE=separate): dotted lines, + / - boxes, and a blue line (green in the destination) from the top down to the folder you are in.
 
 ## Report back
 

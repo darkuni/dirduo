@@ -276,6 +276,7 @@ void FileDisplay::setTreeVisible(bool visible)
         m_tree = new FolderTree(&m_aliases, m_body);
         m_tree->setShowHidden(m_showHidden);
         m_tree->setZoom(m_zoom);
+        applyStyle(); // its path line takes this display's color
         m_body->insertWidget(0, m_tree);
         m_body->setStretchFactor(0, 0);
         m_body->setStretchFactor(1, 1);
@@ -516,6 +517,8 @@ void FileDisplay::applyStyle()
     }
     QPalette ap = m_accent->palette();
     ap.setColor(QPalette::Window, accent.isValid() ? accent : pal.color(QPalette::Window));
+    if (m_tree)
+        m_tree->setPathColor(accent.isValid() ? accent : theme.sourceAccent);
     m_accent->setPalette(ap);
     // In single mode there is nothing to tell apart: no edge.
     m_accent->setVisible(false); // the whole location bar carries the color now

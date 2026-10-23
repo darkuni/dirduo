@@ -26,6 +26,8 @@ void Prefs::reload()
     v.statusFree = s.value(QStringLiteral("statusFree"), true).toBool();
     v.askOnError = s.value(QStringLiteral("askOnError"), true).toBool();
     v.junkHidden = s.value(QStringLiteral("junkHidden"), true).toBool();
+    v.treeLines = s.value(QStringLiteral("treeLines"), true).toBool();
+    v.treePath = s.value(QStringLiteral("treePath"), true).toBool();
     v.statusDefinition = s.value(QStringLiteral("statusDefinition")).toString();
     v.terminal = s.value(QStringLiteral("terminal")).toString();
     m_values = v;
@@ -41,6 +43,8 @@ void Prefs::setValues(const Values &v)
     s.setValue(QStringLiteral("statusFree"), v.statusFree);
     s.setValue(QStringLiteral("askOnError"), v.askOnError);
     s.setValue(QStringLiteral("junkHidden"), v.junkHidden);
+    s.setValue(QStringLiteral("treeLines"), v.treeLines);
+    s.setValue(QStringLiteral("treePath"), v.treePath);
     s.setValue(QStringLiteral("statusDefinition"), v.statusDefinition);
     s.setValue(QStringLiteral("terminal"), v.terminal);
     Q_EMIT changed();
