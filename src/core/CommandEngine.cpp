@@ -400,7 +400,7 @@ bool CommandEngine::cmdArchive(const ParsedCommand &cmd, CommandContext &ctx, QS
     };
     if (!Archive::available())
         return fail(QStringLiteral("This build of Linopus was made without archive support."));
-    const QStringList flags = {QStringLiteral("CREATE"), QStringLiteral("EXTRACT"), QStringLiteral("DEST"), QStringLiteral("HERE"), QStringLiteral("ASK"), QStringLiteral("QUICK")};
+    const QStringList flags = {QStringLiteral("CREATE"), QStringLiteral("EXTRACT"), QStringLiteral("DEST"), QStringLiteral("HERE"), QStringLiteral("ASK"), QStringLiteral("QUICK"), QStringLiteral("TRASH")};
     QStringList sources = sourcesFor(cmd, ctx, flags);
     CollisionAction whenExists = CollisionAction::Rename;
     if (cmd.hasArg(QStringLiteral("WHENEXISTS")) && !parseWhenExists(cmd.value(QStringLiteral("WHENEXISTS")), whenExists))
@@ -451,6 +451,7 @@ bool CommandEngine::cmdArchive(const ParsedCommand &cmd, CommandContext &ctx, QS
             spec.extractMode = JobSpec::ExtractMode::Here;
         else
             return fail(QStringLiteral("MODE takes smart, folder or here."));
+        spec.trashAfter = cmd.hasFlag(QStringLiteral("TRASH"));
         // Encrypted: ask once for them all (PASSWORD= answers in advance).
         spec.password = cmd.value(QStringLiteral("PASSWORD"));
         if (spec.password.isEmpty()) {

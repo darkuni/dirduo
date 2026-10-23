@@ -123,6 +123,7 @@ private:
     ButtonBar *m_bar;
     Qt::MouseButton m_pressed = Qt::NoButton;
     QPoint m_pressPos;
+    bool m_holdMenuShown = false; // a long press opened the choices: the release runs nothing
 };
 
 // A toolbar of ButtonDefs from the store. In customize mode its buttons stop

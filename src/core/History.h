@@ -53,6 +53,7 @@ struct UndoEntry
     QStringList replacedTargets;           // which ones
     bool isUndo = false;                   // made by undoing something
     QList<QVariantMap> before;             // Tags: each item's fields as they were (MediaEdit::toMap)
+    QList<QPair<QString, QString>> trashedSources; // Extract and trash: (archive, in the trash), put back on undo
 };
 
 class UndoHistory : public QObject

@@ -886,6 +886,11 @@ void Job::runUnpack()
         hooks.problem = [this](const QString &m) { addError(m); };
         hooks.password = m_spec.password;
         QStringList created;
+        int errorsBefore;
+        {
+            QMutexLocker lock(&m_mutex);
+            errorsBefore = int(m_errors.size());
+        }
         const bool ok = Archive::unpack(archive, into, rename, replace, hooks, &created, &error);
         if (!own) {
             for (const QString &c : std::as_const(created))
@@ -901,5 +906,23 @@ void Job::runUnpack()
             return;
         if (!ok)
             addError(QStringLiteral("%1: %2").arg(shown, error));
+        // Extract and trash: only when every entry came out.
+        bool clean;
+        {
+            QMutexLocker lock(&m_mutex);
+            clean = ok && m_errors.size() == errorsBefore;
+        }
+        if (m_spec.trashAfter && clean) {
+            QString trashed;
+            QString why;
+            if (Trash::moveToTrash(archive, &trashed, &why)) {
+                QMutexLocker lock(&m_mutex);
+                m_outcomes.append(JobOutcome{archive, trashed, false, true});
+            } else {
+                addError(QStringLiteral("%1 was extracted but not moved to the trash: %2").arg(shown, why));
+            }
+        } else if (m_spec.trashAfter) {
+            addError(QStringLiteral("%1 was kept, because not everything came out of it.").arg(shown));
+        }
     }
 }

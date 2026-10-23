@@ -235,7 +235,14 @@ void UndoHistory::onJobFinished(int id)
         : spec->type == JobType::Move                                                                      ? UndoEntry::Kind::Move
                                                                                                            : UndoEntry::Kind::Trash;
     e.isUndo = byUndo;
+    QList<FileLog::Entry> trashLog;
     for (const JobOutcome &o : outcomes) {
+        if (o.trashed) {
+            e.trashedSources << qMakePair(o.source, o.target);
+            trashLog << FileLog::Entry{QDateTime::currentDateTime(), prefix + QStringLiteral("Trash"), o.source, o.target,
+                                       QStringLiteral("after extracting")};
+            continue;
+        }
         e.items << qMakePair(o.source, o.target);
         if (o.replaced) {
             ++e.replaced;
@@ -261,8 +268,11 @@ void UndoHistory::onJobFinished(int id)
         e.title = QStringLiteral("Move %1 to the trash").arg(what);
         break;
     }
+    if (!e.trashedSources.isEmpty())
+        e.title += QStringLiteral(" and trash it");
     if (byUndo)
         e.title = QStringLiteral("Undo: ") + e.title;
+    FileLog::append(trashLog);
     add(e);
 }
 
@@ -300,6 +310,34 @@ bool UndoHistory::trashTargets(const UndoEntry &e, QStringList *touched, QString
     return kept > 0 || e.items.isEmpty();
 }
 
+static void putBack(const QList<QPair<QString, QString>> &items, UndoEntry &inverse, QStringList &problems, QStringList *touched)
+{
+    for (const auto &it : items) {
+        const QString &original = it.first;
+        const QString &trashed = it.second;
+        if (QFileInfo::exists(original)) {
+            problems << QStringLiteral("Something is already called %1").arg(Location::fileName(original));
+            continue;
+        }
+        if (!QFileInfo::exists(trashed) && !QFileInfo(trashed).isSymLink()) {
+            problems << QStringLiteral("%1 is no longer in the trash").arg(Location::fileName(original));
+            continue;
+        }
+        QDir().mkpath(QFileInfo(original).absolutePath());
+        if (std::rename(QFile::encodeName(trashed).constData(), QFile::encodeName(original).constData()) != 0) {
+            problems << QStringLiteral("%1 could not be put back").arg(Location::fileName(original));
+            continue;
+        }
+        // Its note in the trash's info folder goes too.
+        const QString filesDir = QFileInfo(trashed).absolutePath();
+        QFile::remove(QFileInfo(filesDir).absolutePath() + QStringLiteral("/info/") + QFileInfo(trashed).fileName()
+                      + QStringLiteral(".trashinfo"));
+        inverse.items << qMakePair(trashed, original);
+        if (touched)
+            *touched << original;
+    }
+}
+
 bool UndoHistory::undo(int id, QStringList *touched, QString *error)
 {
     int index = -1;
@@ -329,6 +367,12 @@ bool UndoHistory::undo(int id, QStringList *touched, QString *error)
         ok = trashTargets(e, touched, &why);
         if (!why.isEmpty())
             problems << why;
+        if (!e.trashedSources.isEmpty()) {
+            // Extract and trash: the archive comes back too.
+            UndoEntry restored;
+            putBack(e.trashedSources, restored, problems, touched);
+            ok = ok || !restored.items.isEmpty();
+        }
         break;
     }
     case UndoEntry::Kind::Trash: {
@@ -336,30 +380,7 @@ bool UndoHistory::undo(int id, QStringList *touched, QString *error)
         UndoEntry inverse;
         inverse.kind = UndoEntry::Kind::Restore;
         inverse.isUndo = true;
-        for (const auto &it : e.items) {
-            const QString &original = it.first;
-            const QString &trashed = it.second;
-            if (QFileInfo::exists(original)) {
-                problems << QStringLiteral("Something is already called %1").arg(Location::fileName(original));
-                continue;
-            }
-            if (!QFileInfo::exists(trashed) && !QFileInfo(trashed).isSymLink()) {
-                problems << QStringLiteral("%1 is no longer in the trash").arg(Location::fileName(original));
-                continue;
-            }
-            QDir().mkpath(QFileInfo(original).absolutePath());
-            if (std::rename(QFile::encodeName(trashed).constData(), QFile::encodeName(original).constData()) != 0) {
-                problems << QStringLiteral("%1 could not be put back").arg(Location::fileName(original));
-                continue;
-            }
-            // Its note in the trash's info folder goes too.
-            const QString filesDir = QFileInfo(trashed).absolutePath();
-            QFile::remove(QFileInfo(filesDir).absolutePath() + QStringLiteral("/info/") + QFileInfo(trashed).fileName()
-                          + QStringLiteral(".trashinfo"));
-            inverse.items << qMakePair(trashed, original);
-            if (touched)
-                *touched << original;
-        }
+        putBack(e.items, inverse, problems, touched);
         if (!inverse.items.isEmpty()) {
             inverse.title = QStringLiteral("Undo: %1").arg(e.title);
             add(inverse);

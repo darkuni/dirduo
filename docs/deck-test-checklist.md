@@ -31,6 +31,8 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Flat view > Ungrouped, select files from different subfolders, copy them to the other display: it asks Keep Folder Structure or Same Folder; try both.
 - [ ] Right-click a folder > Add to Archive...: try 7z and tar.zst, Here and Destination. Add to "Name.zip" makes one straight away. Ctrl+Z removes it.
 - [ ] Right-click a zip, a 7z and a RAR > Extract Here, Extract to Destination, Extract to "Name". Extract the same one twice: the second gets "(2)".
+- [ ] Right-click an archive > Extract Here and Trash Archive: the contents appear and the archive is in the trash. Ctrl+Z brings the archive back.
+- [ ] Press and hold the Flat button (and a long touch): Off, Grouped by Folder, Ungrouped, Ungrouped, Files Only.
 - [ ] Make a zip with a password, then Extract it: it asks; a wrong password says so and leaves nothing behind.
 - [ ] The status line shows free space for the internal drive and the SD card. Copy something bigger than the card's free space: it stops at once with "not enough room".
 - [ ] Copy files from an ungrouped flat view with Ctrl+C, paste with Ctrl+V: it asks Keep Folder Structure or Same Folder.

@@ -771,6 +771,12 @@ std::optional<bool> ListerWindow::conditionAtom(const QString &name, const QStri
         return flag(m_treeMode != TreeMode::Off);
     if (name == QLatin1String("flat"))
         return flag(t && t->flatMode() != DirLister::FlatMode::Off);
+    if (name == QLatin1String("flatgrouped"))
+        return flag(t && t->flatMode() == DirLister::FlatMode::Grouped);
+    if (name == QLatin1String("flatungrouped"))
+        return flag(t && t->flatMode() == DirLister::FlatMode::Mixed);
+    if (name == QLatin1String("flatfiles"))
+        return flag(t && t->flatMode() == DirLister::FlatMode::MixedNoFolders);
     if (name == QLatin1String("grouped"))
         return flag(t && t->groupBy() != FileListModel::GroupBy::None);
     if (name == QLatin1String("filter"))
@@ -1926,6 +1932,8 @@ void ListerWindow::fillContextMenu(QMenu &menu, FileDisplay *d, bool onItem)
             menu.addSeparator();
             if (archives) {
                 menu.addAction(commandAction(QStringLiteral("Extract Here"), QStringLiteral("Archive EXTRACT"), {},
+                                             QStringLiteral("archive-extract")));
+                menu.addAction(commandAction(QStringLiteral("Extract Here and Trash Archive"), QStringLiteral("Archive EXTRACT TRASH"), {},
                                              QStringLiteral("archive-extract")));
                 if (!destPath().isEmpty() && Location::isLocal(destPath()))
                     menu.addAction(commandAction(QStringLiteral("Extract to Destination"), QStringLiteral("Archive EXTRACT DEST"), {},

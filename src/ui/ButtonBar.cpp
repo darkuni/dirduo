@@ -473,6 +473,26 @@ QList<ButtonDef> ToolbarStore::defaultButtons()
 
 // ---------------------------------------------------------------- ThreeButton
 
+// Buttons for some commands offer their choices on a long press (the click
+// still runs the button's own function): Flat view's kinds.
+static QList<ButtonDef> holdMenuFor(const ButtonDef &def)
+{
+    QList<ButtonDef> out;
+    if (def.isMenu() || !def.left.trimmed().startsWith(QLatin1String("Set FLATVIEW"), Qt::CaseInsensitive))
+        return out;
+    auto item = [](const char *label, const char *cmd, const char *check) {
+        ButtonDef d;
+        d.label = QString::fromLatin1(label);
+        d.left = QString::fromLatin1(cmd);
+        d.checkWhen = QString::fromLatin1(check);
+        return d;
+    };
+    out << item("Off", "Set FLATVIEW=off", "!flat") << item("Grouped by Folder", "Set FLATVIEW=grouped", "flatgrouped")
+        << item("Ungrouped", "Set FLATVIEW=ungrouped", "flatungrouped")
+        << item("Ungrouped, Files Only", "Set FLATVIEW=nofolders", "flatfiles");
+    return out;
+}
+
 ThreeButton::ThreeButton(const ButtonDef &def, QWidget *parent, ButtonBar *bar)
     : QToolButton(parent)
     , m_def(def)
@@ -504,6 +524,12 @@ ThreeButton::ThreeButton(const ButtonDef &def, QWidget *parent, ButtonBar *bar)
     } else if (def.isMenu()) {
         setMenu(buildMenu(def.children, this));
         setPopupMode(QToolButton::InstantPopup);
+    } else if (const QList<ButtonDef> hold = holdMenuFor(def); !hold.isEmpty()) {
+        // Press and hold (or a long touch) for the choices; a click still runs it.
+        QMenu *menu = buildMenu(hold, this);
+        connect(menu, &QMenu::aboutToShow, this, [this]() { m_holdMenuShown = true; });
+        setMenu(menu);
+        setPopupMode(QToolButton::DelayedPopup);
     }
     // Files dropped on a button are handled by the bar (a grayed-out button
     // takes no events, but Copy should still take dropped files).
@@ -570,6 +596,7 @@ void ThreeButton::mousePressEvent(QMouseEvent *event)
         return;
     }
     m_pressed = Qt::LeftButton;
+    m_holdMenuShown = false;
     QToolButton::mousePressEvent(event);
 }
 
@@ -606,8 +633,10 @@ void ThreeButton::mouseReleaseEvent(QMouseEvent *event)
     QToolButton::mouseReleaseEvent(event);
     if (isCheckable())
         setChecked(wasChecked); // the condition decides, not the click
-    if (inside && button == Qt::LeftButton && m_pressed == Qt::LeftButton && !m_def.left.isEmpty() && !m_def.isMenu())
+    if (inside && button == Qt::LeftButton && m_pressed == Qt::LeftButton && !m_def.left.isEmpty() && !m_def.isMenu()
+        && !m_holdMenuShown)
         Q_EMIT commandTriggered(m_def.left);
+    m_holdMenuShown = false;
     m_pressed = Qt::NoButton;
 }
 

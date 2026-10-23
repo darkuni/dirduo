@@ -1909,6 +1909,25 @@ private Q_SLOTS:
         waitListed(t, QDir(back).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
     }
 
+    void flatButtonLongPress()
+    {
+        ButtonDef def;
+        def.label = QStringLiteral("Flat");
+        def.left = QStringLiteral("Set FLATVIEW=toggle");
+        ThreeButton b(def, nullptr);
+        QVERIFY(b.menu());
+        QCOMPARE(b.popupMode(), QToolButton::DelayedPopup);
+        QStringList texts;
+        for (QAction *a : b.menu()->actions())
+            texts << a->text();
+        QCOMPARE(texts, (QStringList{QStringLiteral("Off"), QStringLiteral("Grouped by Folder"), QStringLiteral("Ungrouped"),
+                                     QStringLiteral("Ungrouped, Files Only")}));
+        // Other buttons are unchanged.
+        def.left = QStringLiteral("Copy");
+        ThreeButton plain(def, nullptr);
+        QVERIFY(!plain.menu());
+    }
+
     void freeSpaceShown()
     {
         FileDisplay *d = w->display(0);

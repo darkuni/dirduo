@@ -1,6 +1,7 @@
 #include "core/AliasManager.h"
 #include "core/Archive.h"
 #include "core/CommandEngine.h"
+#include "core/History.h"
 #include "core/JobManager.h"
 #include "core/Paths.h"
 
@@ -387,6 +388,41 @@ private Q_SLOTS:
                 QVERIFY(QFile::exists(src + QStringLiteral("/p (2)/notes.txt")));
             }
         }
+    }
+
+    void extractAndTrash()
+    {
+        QString error;
+        const QString path = src + QStringLiteral("/Pack.zip");
+        QVERIFY(Archive::pack({src + QStringLiteral("/Game"), src + QStringLiteral("/notes.txt")}, path, Archive::Format::Zip, {}, &error));
+        JobManager jm;
+        UndoHistory history(jm);
+        JobSpec s;
+        s.type = JobType::Unpack;
+        s.destDir = src;
+        s.sources = {path};
+        s.trashAfter = true;
+        const int id = jm.enqueue(s);
+        QVERIFY(jm.waitForIdle(10000));
+        QCOMPARE(jm.snapshot(id).errors, QStringList());
+        QVERIFY(!QFile::exists(path));
+        QVERIFY(QFile::exists(src + QStringLiteral("/Pack/notes.txt")));
+        QTRY_VERIFY(history.latest());
+        QVERIFY(history.latest()->title.endsWith(QStringLiteral("and trash it")));
+        // Undo: what came out goes, the archive comes back.
+        QStringList touched;
+        QVERIFY(history.undo(history.latest()->id, &touched, &error));
+        QVERIFY(jm.waitForIdle(10000));
+        QTRY_VERIFY(QFile::exists(path));
+        QTRY_VERIFY(!QFile::exists(src + QStringLiteral("/Pack")));
+
+        // Something failed: the archive stays.
+        writeFile(m_dir->filePath(QStringLiteral("broken.zip")), "PK\x03\x04 not really a zip");
+        s.sources = {m_dir->filePath(QStringLiteral("broken.zip"))};
+        const int bad = jm.enqueue(s);
+        QVERIFY(jm.waitForIdle(10000));
+        QVERIFY(!jm.snapshot(bad).errors.isEmpty());
+        QVERIFY(QFile::exists(m_dir->filePath(QStringLiteral("broken.zip"))));
     }
 
     void notAnArchive()

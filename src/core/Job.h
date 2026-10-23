@@ -62,6 +62,7 @@ struct JobSpec
     enum class ExtractMode { Smart, Folder, Here };
     ExtractMode extractMode = ExtractMode::Smart;
     QString password; // Pack: encrypt (zip); Unpack: for encrypted archives
+    bool trashAfter = false; // Unpack: each archive that extracted cleanly goes to the trash
 };
 
 // What a finished job did with one item, for undo and the file log. For
@@ -74,6 +75,7 @@ struct JobOutcome
     QString source;
     QString target;
     bool replaced = false; // it overwrote a file that was there
+    bool trashed = false;  // Unpack with trashAfter: the archive itself, now in the trash (target)
 };
 
 struct JobSnapshot
