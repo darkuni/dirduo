@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/CommandParser.h"
+
 #include <QDialog>
 #include <QStringList>
 
@@ -18,11 +20,13 @@ public:
     ArchiveDialog(const QStringList &sources, const QString &sourceFolder, const QString &destFolder,
                   QWidget *parent = nullptr);
 
-    QString command() const;
+    QString command() const;          // as typed, without the password
+    ParsedCommand parsedCommand() const; // what to run, with it
     QLineEdit *nameEdit() const { return m_name; }
     QComboBox *formatBox() const { return m_format; }
     QComboBox *whereBox() const { return m_where; }
     QComboBox *existsBox() const { return m_exists; }
+    QLineEdit *passwordEdit() const { return m_password; }
 
     static QString savedFormat(); // "zip" unless another was used last
 
@@ -38,6 +42,7 @@ private:
     QComboBox *m_format = nullptr;
     QComboBox *m_where = nullptr;
     QComboBox *m_exists = nullptr;
+    QLineEdit *m_password = nullptr;
     QLabel *m_what = nullptr;
     QString m_lastExt;
 };

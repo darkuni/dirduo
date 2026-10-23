@@ -108,6 +108,29 @@ private Q_SLOTS:
         QVERIFY(!ctx.errors.isEmpty());
     }
 
+    void pasteFromFlatViewKeepsFolders()
+    {
+        writeFile(ctx.source + QStringLiteral("/top.txt"), "t");
+        writeFile(ctx.source + QStringLiteral("/sub/x.txt"), "x");
+        ctx.selection = {ctx.source + QStringLiteral("/top.txt"), ctx.source + QStringLiteral("/sub/x.txt")};
+        QVERIFY(m_engine->run(QStringLiteral("Clipboard COPY"), ctx));
+        const QString from = ctx.source;
+        ctx.source = ctx.dest; // paste into the other folder
+        QVERIFY(m_engine->run(QStringLiteral("Clipboard PASTE STRUCTURE=keep"), ctx));
+        QVERIFY(m_jobs->waitForIdle(5000));
+        QVERIFY(QFile::exists(ctx.dest + QStringLiteral("/sub/x.txt")));
+        QVERIFY(QFile::exists(ctx.dest + QStringLiteral("/top.txt")));
+        // Asked, and canceled (the fake context has no answer): nothing pasted.
+        const QString other = m_dir->filePath(QStringLiteral("other"));
+        QDir().mkpath(other);
+        ctx.source = other;
+        QVERIFY(!m_engine->run(QStringLiteral("Clipboard PASTE"), ctx));
+        QVERIFY(m_jobs->waitForIdle(5000));
+        QVERIFY(QDir(other).isEmpty());
+        QVERIFY(ctx.errors.isEmpty()); // canceling is not an error
+        ctx.source = from;
+    }
+
     void copySelectionToDest()
     {
         writeFile(ctx.source + QStringLiteral("/a.txt"), "a");

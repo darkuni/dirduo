@@ -29,7 +29,13 @@ QString baseName(const QString &path);
 
 // The first path component of every entry, in order, without repeats:
 // one name means the archive holds a single folder (or file).
-QStringList topLevelNames(const QString &archive, QString *error);
+QStringList topLevelNames(const QString &archive, QString *error, const QString &password = {});
+
+// Does extracting it need a password? (Some entries are encrypted, or the
+// list of entries itself is.)
+bool isEncrypted(const QString &archive);
+// Formats that can be given a password when made (zip, with AES-256).
+bool canEncrypt(Format f);
 
 struct Hooks
 {
@@ -37,6 +43,7 @@ struct Hooks
     std::function<void(const QString &item, qint64 size)> current; // starting this entry
     std::function<void(qint64 bytes)> advanced;                    // progress since the last call
     std::function<void(const QString &message)> problem;           // one entry failed; carries on
+    QString password; // to read encrypted archives, or to encrypt a zip being made
 };
 
 // Writes sources (files and folders, recursively; symlinks as symlinks) into

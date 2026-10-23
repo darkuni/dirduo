@@ -44,6 +44,16 @@ public:
     QStringList selectedPaths() const override { return selection; }
     QString focusedPath() const override { return selection.value(0); }
     bool promptText(const QString &, const QString &, QString &) override { return false; }
+    QStringList passwords;
+    int asked = 0;
+    bool promptPassword(const QString &, const QString &, QString &value) override
+    {
+        ++asked;
+        if (passwords.isEmpty())
+            return false;
+        value = passwords.takeFirst();
+        return true;
+    }
     bool confirm(const QString &, const QString &) override { return true; }
     QString lastError;
     void showError(const QString &, const QString &text) override { lastError = text; }
@@ -181,6 +191,54 @@ private Q_SLOTS:
     }
 #endif
 
+    void passwords()
+    {
+        const QString path = m_dir->filePath(QStringLiteral("locked.zip"));
+        QString error;
+        Archive::Hooks lock;
+        lock.password = QStringLiteral("se\"cr{et}");
+        if (!Archive::pack({src + QStringLiteral("/Game"), src + QStringLiteral("/notes.txt")}, path, Archive::Format::Zip, lock, &error)) {
+            if (error.contains(QStringLiteral("cannot encrypt")))
+                QSKIP("This libarchive was built without encryption");
+            QFAIL(qPrintable(error));
+        }
+        QVERIFY(Archive::isEncrypted(path));
+        QVERIFY(!Archive::isEncrypted(m_dir->filePath(QStringLiteral("nope.zip"))));
+        // Other formats cannot take one.
+        QVERIFY(!Archive::pack({src + QStringLiteral("/notes.txt")}, m_dir->filePath(QStringLiteral("x.7z")), Archive::Format::SevenZip, lock, &error));
+        QVERIFY(error.contains(QStringLiteral("Only zip")));
+
+        const QString none = dst + QStringLiteral("/none");
+        QDir().mkpath(none);
+        QVERIFY(!Archive::unpack(path, none, {}, false, {}, nullptr, &error));
+        QCOMPARE(error, QStringLiteral("It is protected by a password."));
+        Archive::Hooks wrong;
+        wrong.password = QStringLiteral("nope");
+        QVERIFY(!Archive::unpack(path, none, {}, true, wrong, nullptr, &error));
+        QCOMPARE(error, QStringLiteral("The password is wrong."));
+        QVERIFY2(Archive::unpack(path, dst, {}, true, lock, nullptr, &error), qPrintable(error));
+        QCOMPARE(readFile(dst + QStringLiteral("/notes.txt")), QByteArray("notes"));
+        QCOMPARE(readFile(dst + QStringLiteral("/Game/disk1.d64")).size(), 200000);
+
+        // As a job: a wrong password leaves no empty folder behind.
+        JobManager jm;
+        JobSpec s;
+        s.type = JobType::Unpack;
+        s.destDir = dst;
+        s.sources = {path};
+        s.extractMode = JobSpec::ExtractMode::Folder;
+        s.password = QStringLiteral("nope");
+        int id = jm.enqueue(s);
+        QVERIFY(jm.waitForIdle(10000));
+        QVERIFY(!jm.snapshot(id).errors.isEmpty());
+        QVERIFY(!QFile::exists(dst + QStringLiteral("/locked")));
+        s.password = lock.password;
+        id = jm.enqueue(s);
+        QVERIFY(jm.waitForIdle(10000));
+        QCOMPARE(jm.snapshot(id).errors, QStringList());
+        QVERIFY(QFile::exists(dst + QStringLiteral("/locked/notes.txt")));
+    }
+
     void packJob()
     {
         JobManager jm;
@@ -307,6 +365,28 @@ private Q_SLOTS:
         QVERIFY(!run(QStringLiteral("Archive EXTRACT")));
         QVERIFY(error.contains(QStringLiteral("archive")));
         QVERIFY(!run(QStringLiteral("Archive")));
+
+        // Passwords: zip only when making; asked for when extracting.
+        ctx.source = src;
+        ctx.selection = {src + QStringLiteral("/notes.txt")};
+        QVERIFY(!run(QStringLiteral("Archive CREATE NAME=p.7z PASSWORD=x")));
+        QVERIFY(error.contains(QStringLiteral("Only zip")));
+        if (run(QStringLiteral("Archive CREATE NAME=p.zip PASSWORD=pw"))) {
+            ctx.selection = {src + QStringLiteral("/p.zip")};
+            if (Archive::isEncrypted(src + QStringLiteral("/p.zip"))) {
+                ctx.passwords = {};
+                QVERIFY(!run(QStringLiteral("Archive EXTRACT MODE=folder"))); // asked, canceled
+                QCOMPARE(ctx.asked, 1);
+                QVERIFY(error.isEmpty());
+                QVERIFY(!QFile::exists(src + QStringLiteral("/p")));
+                ctx.passwords = {QStringLiteral("pw")};
+                QVERIFY(run(QStringLiteral("Archive EXTRACT MODE=folder")));
+                QVERIFY(QFile::exists(src + QStringLiteral("/p/notes.txt")));
+                QVERIFY(run(QStringLiteral("Archive EXTRACT MODE=folder PASSWORD=pw")));
+                QCOMPARE(ctx.asked, 2);
+                QVERIFY(QFile::exists(src + QStringLiteral("/p (2)/notes.txt")));
+            }
+        }
     }
 
     void notAnArchive()

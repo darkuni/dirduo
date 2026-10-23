@@ -1815,6 +1815,14 @@ private Q_SLOTS:
         QCOMPARE(dlg->nameEdit()->text(), QStringLiteral("Game.") + ArchiveDialog::savedFormat());
         dlg->formatBox()->setCurrentIndex(dlg->formatBox()->findData(QStringLiteral("tar.gz")));
         QCOMPARE(dlg->nameEdit()->text(), QStringLiteral("Game.tar.gz"));
+        QVERIFY(!dlg->passwordEdit()->isEnabled()); // zip only
+        dlg->formatBox()->setCurrentIndex(dlg->formatBox()->findData(QStringLiteral("zip")));
+        QVERIFY(dlg->passwordEdit()->isEnabled());
+        dlg->passwordEdit()->setText(QStringLiteral("a \"b\" {c}"));
+        QCOMPARE(dlg->parsedCommand().value(QStringLiteral("PASSWORD")), QStringLiteral("a \"b\" {c}"));
+        QVERIFY(!dlg->command().contains(QStringLiteral("PASSWORD")));
+        dlg->passwordEdit()->clear();
+        dlg->formatBox()->setCurrentIndex(dlg->formatBox()->findData(QStringLiteral("tar.gz")));
         dlg->nameEdit()->setText(QStringLiteral("Saved Game.tar.gz"));
         dlg->accept();
         m_app->jobs().waitForIdle(10000);

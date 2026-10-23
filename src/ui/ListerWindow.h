@@ -103,6 +103,7 @@ public:
     void showError(const QString &title, const QString &text) override;
     QString chooseDestination(const QString &title) override;
     int choose(const QString &title, const QString &text, const QStringList &choices) override;
+    bool promptPassword(const QString &title, const QString &label, QString &value) override;
     bool go(const ParsedCommand &cmd, QString *error) override;
     bool set(const ParsedCommand &cmd, QString *error) override;
     bool select(const ParsedCommand &cmd, QString *error) override;

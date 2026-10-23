@@ -1275,6 +1275,16 @@ bool ListerWindow::promptText(const QString &title, const QString &label, QStrin
     return true;
 }
 
+bool ListerWindow::promptPassword(const QString &title, const QString &label, QString &value)
+{
+    bool ok = false;
+    const QString result = QInputDialog::getText(this, title, label, QLineEdit::Password, QString(), &ok);
+    if (!ok)
+        return false;
+    value = result;
+    return true;
+}
+
 int ListerWindow::choose(const QString &title, const QString &text, const QStringList &choices)
 {
     QMessageBox box(QMessageBox::Question, title, text, QMessageBox::NoButton, this);
@@ -2390,7 +2400,11 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
             return fail(QStringLiteral("Select the files and folders to put in the archive first."));
         auto *dlg = new ArchiveDialog(sel, sourcePath(), destPath(), this);
         dlg->setAttribute(Qt::WA_DeleteOnClose);
-        connect(dlg, &QDialog::accepted, this, [this, dlg]() { runCommand(dlg->command()); });
+        connect(dlg, &QDialog::accepted, this, [this, dlg]() {
+            QString err;
+            if (!m_app.engine().execute(dlg->parsedCommand(), *this, &err) && !err.isEmpty() && err != CommandEngine::kCanceled)
+                showError(QStringLiteral("Add to Archive"), err);
+        });
         dlg->open();
         return true;
     }

@@ -783,6 +783,7 @@ void Job::runPack()
     };
     hooks.advanced = [this](qint64 bytes) { addDone(bytes, 0); };
     hooks.problem = [this](const QString &m) { addError(m); };
+    hooks.password = m_spec.password;
     QString error;
     const bool ok = Archive::pack(m_spec.sources, part, format, hooks, &error);
     if (!ok || m_canceled) {
@@ -824,7 +825,7 @@ void Job::runUnpack()
         const QString archive = QDir::cleanPath(raw);
         const QString shown = QFileInfo(archive).fileName();
         QString error;
-        const QStringList tops = Archive::topLevelNames(archive, &error);
+        const QStringList tops = Archive::topLevelNames(archive, &error, m_spec.password);
         if (tops.isEmpty()) {
             addError(QStringLiteral("%1: %2").arg(shown, error.isEmpty() ? QStringLiteral("empty, or not an archive") : error));
             addDone(QFileInfo(archive).size(), 0);
@@ -833,6 +834,7 @@ void Job::runUnpack()
         // Where it goes: one folder (or file) inside goes straight in;
         // anything else gets a folder named after the archive.
         QString into = dest;
+        bool madeFolder = false;
         QMap<QString, QString> rename;
         const bool own = m_spec.extractMode == JobSpec::ExtractMode::Folder
             || (m_spec.extractMode == JobSpec::ExtractMode::Smart && tops.size() > 1);
@@ -846,8 +848,7 @@ void Job::runUnpack()
                 addError(QStringLiteral("%1: cannot make %2").arg(shown, into));
                 continue;
             }
-            if (!existed) // merged into a folder that was there: undo leaves it
-                addOutcome(archive, into);
+            madeFolder = !existed; // merged into a folder that was there: undo leaves it
         } else if (!replace) {
             for (const QString &t : tops) {
                 if (existsNoFollow(dest + QLatin1Char('/') + t))
@@ -866,11 +867,18 @@ void Job::runUnpack()
         };
         hooks.advanced = [this](qint64 bytes) { addDone(bytes, 0); };
         hooks.problem = [this](const QString &m) { addError(m); };
+        hooks.password = m_spec.password;
         QStringList created;
         const bool ok = Archive::unpack(archive, into, rename, replace, hooks, &created, &error);
         if (!own) {
             for (const QString &c : std::as_const(created))
                 addOutcome(archive, c);
+        } else if (madeFolder) {
+            // Nothing came out (a wrong password, say): no empty folder left behind.
+            if (!ok && QDir(into).isEmpty(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System))
+                QDir().rmdir(into);
+            else
+                addOutcome(archive, into);
         }
         if (m_canceled)
             return;

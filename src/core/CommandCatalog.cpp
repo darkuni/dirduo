@@ -27,13 +27,16 @@ QList<CommandInfo> buildCommands()
                       arg("TO=", {}, "Into this folder"),
                       arg("WHENEXISTS=", {QStringLiteral("rename"), QStringLiteral("replace"), QStringLiteral("skip")},
                           "When a name is taken (rename keeps both)"),
+                      arg("PASSWORD=", {}, "Extract: for encrypted archives (asked for otherwise). Create: encrypt a zip with AES-256"),
                       arg("FILE=", {}, "What to use instead of the selection")},
                      QStringLiteral("Archive EXTRACT DEST")};
     c << CommandInfo{QStringLiteral("Clipboard"), QStringLiteral("Cut, copy or paste files"),
                      {arg("COPY", {}, "Copy the selection to the clipboard"),
                       arg("CUT", {}, "Cut the selection (it moves on paste)"),
                       arg("PASTE", {}, "Paste files into the source folder; a picture or text becomes a new file"),
-                      arg("AS", {}, "With PASTE of a picture or text: ask for the file name")},
+                      arg("AS", {}, "With PASTE of a picture or text: ask for the file name"),
+                      arg("STRUCTURE=", {QStringLiteral("ask"), QStringLiteral("keep"), QStringLiteral("flat")},
+                          "With PASTE of items copied from a flat view: keep their folders, or put them all in one folder")},
                      QStringLiteral("Clipboard PASTE")};
     const QList<ArgInfo> copyArgs = {
         arg("MOVE", {}, "Move instead of copy"),

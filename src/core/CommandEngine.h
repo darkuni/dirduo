@@ -28,6 +28,11 @@ public:
     virtual bool confirm(const QString &title, const QString &text) = 0;
     virtual void showError(const QString &title, const QString &text) = 0;
     virtual QString chooseDestination(const QString &title) = 0; // empty when canceled
+    // A password typed out of sight; false when canceled.
+    virtual bool promptPassword(const QString &title, const QString &label, QString &value)
+    {
+        return promptText(title, label, value);
+    }
     // One of several answers (index), or -1 when canceled.
     virtual int choose(const QString &title, const QString &text, const QStringList &choices)
     {

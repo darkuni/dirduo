@@ -61,6 +61,7 @@ struct JobSpec
     // (Folder), or straight into destDir (Here).
     enum class ExtractMode { Smart, Folder, Here };
     ExtractMode extractMode = ExtractMode::Smart;
+    QString password; // Pack: encrypt (zip); Unpack: for encrypted archives
 };
 
 // What a finished job did with one item, for undo and the file log. For

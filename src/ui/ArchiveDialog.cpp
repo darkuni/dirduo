@@ -67,8 +67,6 @@ ArchiveDialog::ArchiveDialog(const QStringList &sources, const QString &sourceFo
     m_lastExt = m_format->currentData().toString();
 
     m_name = new QLineEdit(CommandEngine::suggestedArchiveName(sources, sourceFolder, m_lastExt), this);
-    // Select the name without its extension, ready to type over.
-    m_name->setSelection(0, m_name->text().size() - m_lastExt.size() - 1);
     form->addRow(QStringLiteral("&Name:"), m_name);
     form->addRow(QStringLiteral("&Format:"), m_format);
 
@@ -82,6 +80,11 @@ ArchiveDialog::ArchiveDialog(const QStringList &sources, const QString &sourceFo
     m_exists->addItem(QStringLiteral("Give the new one another name"), QStringLiteral("rename"));
     m_exists->addItem(QStringLiteral("Replace it"), QStringLiteral("replace"));
     form->addRow(QStringLiteral("If the name is &taken:"), m_exists);
+
+    m_password = new QLineEdit(this);
+    m_password->setEchoMode(QLineEdit::Password);
+    m_password->setClearButtonEnabled(true);
+    form->addRow(QStringLiteral("&Password:"), m_password);
     layout->addLayout(form);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -91,6 +94,9 @@ ArchiveDialog::ArchiveDialog(const QStringList &sources, const QString &sourceFo
     layout->addWidget(buttons);
 
     connect(m_format, &QComboBox::currentIndexChanged, this, &ArchiveDialog::formatChanged);
+    formatChanged();
+    // Select the name without its extension, ready to type over.
+    m_name->setSelection(0, m_name->text().size() - m_lastExt.size() - 1);
     setMinimumWidth(fontMetrics().averageCharWidth() * 60);
 }
 
@@ -106,6 +112,11 @@ void ArchiveDialog::formatChanged()
         name.chop(m_lastExt.size() + 1);
     m_name->setText(name + QLatin1Char('.') + ext);
     m_lastExt = ext;
+    // Only zip archives are encrypted here.
+    Archive::Format f;
+    const bool can = Archive::formatFromKey(ext, f) && Archive::canEncrypt(f);
+    m_password->setEnabled(can);
+    m_password->setPlaceholderText(can ? QStringLiteral("None (optional, AES-256)") : QStringLiteral("Zip archives only"));
 }
 
 QString ArchiveDialog::command() const
@@ -114,6 +125,23 @@ QString ArchiveDialog::command() const
                     .arg(quoted(m_name->text().trimmed()), m_format->currentData().toString(), m_exists->currentData().toString());
     if (m_where->currentData().toString() == QLatin1String("dest"))
         c += QStringLiteral(" DEST");
+    return c;
+}
+
+ParsedCommand ArchiveDialog::parsedCommand() const
+{
+    // Built directly, not typed out: a password may hold quotes or braces.
+    ParsedCommand c;
+    c.name = QStringLiteral("Archive");
+    c.positional << QStringLiteral("CREATE");
+    if (m_where->currentData().toString() == QLatin1String("dest"))
+        c.positional << QStringLiteral("DEST");
+    c.args.insert(QStringLiteral("NAME"), {m_name->text().trimmed()});
+    c.args.insert(QStringLiteral("FORMAT"), {m_format->currentData().toString()});
+    c.args.insert(QStringLiteral("WHENEXISTS"), {m_exists->currentData().toString()});
+    if (m_password->isEnabled() && !m_password->text().isEmpty())
+        c.args.insert(QStringLiteral("PASSWORD"), {m_password->text()});
+    c.raw = command();
     return c;
 }
 

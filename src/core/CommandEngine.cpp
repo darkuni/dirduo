@@ -444,6 +444,25 @@ bool CommandEngine::cmdArchive(const ParsedCommand &cmd, CommandContext &ctx, QS
             spec.extractMode = JobSpec::ExtractMode::Here;
         else
             return fail(QStringLiteral("MODE takes smart, folder or here."));
+        // Encrypted: ask once for them all (PASSWORD= answers in advance).
+        spec.password = cmd.value(QStringLiteral("PASSWORD"));
+        if (spec.password.isEmpty()) {
+            QStringList locked;
+            for (const QString &p : std::as_const(archives)) {
+                if (Archive::isEncrypted(p))
+                    locked << Location::fileName(p);
+            }
+            if (!locked.isEmpty()) {
+                const QString label = locked.size() == 1
+                    ? QStringLiteral("\"%1\" is protected by a password:").arg(locked.first())
+                    : QStringLiteral("%1 of these archives are protected by a password:").arg(locked.size());
+                if (!ctx.promptPassword(QStringLiteral("Extract"), label, spec.password) || spec.password.isEmpty()) {
+                    if (error)
+                        *error = kCanceled;
+                    return false;
+                }
+            }
+        }
         m_jobs.enqueue(spec);
         return true;
     }
@@ -489,6 +508,9 @@ bool CommandEngine::cmdArchive(const ParsedCommand &cmd, CommandContext &ctx, QS
         spec.archiveName = name;
         spec.archiveFormat = Archive::extensionFor(format);
         spec.whenExists = whenExists;
+        spec.password = cmd.value(QStringLiteral("PASSWORD"));
+        if (!spec.password.isEmpty() && !Archive::canEncrypt(format))
+            return fail(QStringLiteral("Only zip archives can have a password."));
         m_jobs.enqueue(spec);
         return true;
     }
@@ -1027,6 +1049,9 @@ bool CommandEngine::cmdClipboard(const ParsedCommand &cmd, CommandContext &ctx, 
         for (const QUrl &u : urls)
             gnome += '\n' + u.toEncoded();
         mime->setData(QStringLiteral("x-special/gnome-copied-files"), gnome);
+        // Where they were picked: a flat view's items from folders further
+        // down ask at paste time whether to keep those folders.
+        mime->setData(QStringLiteral("application/x-linopus-source-folder"), ctx.sourcePath().toUtf8());
         clipboard->setMimeData(mime);
         return true;
     }
@@ -1064,7 +1089,20 @@ bool CommandEngine::cmdClipboard(const ParsedCommand &cmd, CommandContext &ctx, 
             const QByteArray g = mime->data(QStringLiteral("x-special/gnome-copied-files"));
             isCut = g.startsWith("cut");
         }
-        copyItems(sources, ctx.sourcePath(), isCut);
+        const QString root = QString::fromUtf8(mime->data(QStringLiteral("application/x-linopus-source-folder")));
+        if (fromSubfolders(sources, root)) {
+            const QString structure = cmd.value(QStringLiteral("STRUCTURE")).toLower();
+            bool ok;
+            if (structure == QLatin1String("keep") || structure == QLatin1String("flat") || structure == QLatin1String("same"))
+                ok = copyItemsFrom(sources, root, ctx.sourcePath(), isCut, structure == QLatin1String("keep"),
+                                   CollisionAction::Ask, error);
+            else
+                ok = copyFromFlat(sources, root, ctx.sourcePath(), isCut, CollisionAction::Ask, ctx, error);
+            if (!ok)
+                return false;
+        } else {
+            copyItems(sources, ctx.sourcePath(), isCut);
+        }
         if (isCut)
             clipboard->clear(); // a cut pastes once
         return true;

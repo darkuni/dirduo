@@ -70,7 +70,29 @@ QString cleanEntry(QString n)
 QString errorOf(struct archive *a)
 {
     const char *s = archive_error_string(a);
-    return s ? QString::fromLocal8Bit(s) : QStringLiteral("unknown error");
+    const QString e = s ? QString::fromLocal8Bit(s) : QStringLiteral("unknown error");
+    // libarchive says "Passphrase required" or "Incorrect passphrase".
+    if (e.contains(QLatin1String("ncorrect passphrase"), Qt::CaseInsensitive))
+        return QStringLiteral("The password is wrong.");
+    if (e.contains(QLatin1String("assphrase"), Qt::CaseInsensitive) || e.contains(QLatin1String("encrypted"), Qt::CaseInsensitive))
+        return QStringLiteral("It is protected by a password.");
+    return e;
+}
+
+struct archive *openReader(const QString &path, const QString &password, int block, QString *error)
+{
+    struct archive *a = archive_read_new();
+    archive_read_support_filter_all(a);
+    archive_read_support_format_all(a);
+    if (!password.isEmpty())
+        archive_read_add_passphrase(a, password.toUtf8().constData());
+    if (archive_read_open_filename(a, QFile::encodeName(path).constData(), block) != ARCHIVE_OK) {
+        if (error)
+            *error = errorOf(a);
+        archive_read_free(a);
+        return nullptr;
+    }
+    return a;
 }
 #endif
 
@@ -162,19 +184,43 @@ QString baseName(const QString &path)
     return QFileInfo(path).completeBaseName();
 }
 
-QStringList topLevelNames(const QString &archivePath, QString *error)
+bool canEncrypt(Format f)
+{
+    return f == Format::Zip;
+}
+
+bool isEncrypted(const QString &archivePath)
+{
+#ifdef LINOPUS_HAVE_LIBARCHIVE
+    QString error;
+    struct archive *a = openReader(archivePath, {}, 64 * 1024, &error);
+    if (!a)
+        return error == QLatin1String("It is protected by a password.");
+    bool encrypted = false;
+    struct archive_entry *e = nullptr;
+    int r;
+    int seen = 0;
+    while (!encrypted && seen++ < 500 && ((r = archive_read_next_header(a, &e)) == ARCHIVE_OK || r == ARCHIVE_WARN)) {
+        encrypted = archive_entry_is_encrypted(e) || archive_read_has_encrypted_entries(a) > 0;
+        archive_read_data_skip(a);
+    }
+    if (!encrypted && seen <= 500 && r < ARCHIVE_WARN)
+        encrypted = errorOf(a) == QLatin1String("It is protected by a password.");
+    archive_read_free(a);
+    return encrypted;
+#else
+    Q_UNUSED(archivePath)
+    return false;
+#endif
+}
+
+QStringList topLevelNames(const QString &archivePath, QString *error, const QString &password)
 {
     QStringList out;
 #ifdef LINOPUS_HAVE_LIBARCHIVE
-    struct archive *a = archive_read_new();
-    archive_read_support_filter_all(a);
-    archive_read_support_format_all(a);
-    if (archive_read_open_filename(a, QFile::encodeName(archivePath).constData(), 64 * 1024) != ARCHIVE_OK) {
-        if (error)
-            *error = errorOf(a);
-        archive_read_free(a);
+    struct archive *a = openReader(archivePath, password, 64 * 1024, error);
+    if (!a)
         return out;
-    }
     QSet<QString> seen;
     struct archive_entry *e = nullptr;
     int r;
@@ -191,7 +237,7 @@ QStringList topLevelNames(const QString &archivePath, QString *error)
         *error = errorOf(a);
     archive_read_free(a);
 #else
-    Q_UNUSED(archivePath)
+    Q_UNUSED(archivePath) Q_UNUSED(password)
     if (error)
         *error = QStringLiteral("This build of Linopus has no archive support.");
 #endif
@@ -201,11 +247,25 @@ QStringList topLevelNames(const QString &archivePath, QString *error)
 bool pack(const QStringList &sources, const QString &path, Format format, const Hooks &hooks, QString *error)
 {
 #ifdef LINOPUS_HAVE_LIBARCHIVE
+    if (!hooks.password.isEmpty() && !canEncrypt(format)) {
+        if (error)
+            *error = QStringLiteral("Only zip archives can have a password.");
+        return false;
+    }
     struct archive *a = archive_write_new();
     switch (format) {
     case Format::Zip:
         archive_write_set_format_zip(a);
         archive_write_set_options(a, "zip:hdrcharset=UTF-8");
+        if (!hooks.password.isEmpty()) {
+            if (archive_write_set_options(a, "zip:encryption=aes256") != ARCHIVE_OK
+                || archive_write_set_passphrase(a, hooks.password.toUtf8().constData()) != ARCHIVE_OK) {
+                if (error)
+                    *error = QStringLiteral("This build cannot encrypt zip files: %1").arg(errorOf(a));
+                archive_write_free(a);
+                return false;
+            }
+        }
         break;
     case Format::SevenZip:
         archive_write_set_format_7zip(a);
@@ -327,15 +387,35 @@ bool unpack(const QString &archivePath, const QString &destDir, const QMap<QStri
             const Hooks &hooks, QStringList *created, QString *error)
 {
 #ifdef LINOPUS_HAVE_LIBARCHIVE
-    struct archive *a = archive_read_new();
-    archive_read_support_filter_all(a);
-    archive_read_support_format_all(a);
-    if (archive_read_open_filename(a, QFile::encodeName(archivePath).constData(), 256 * 1024) != ARCHIVE_OK) {
-        if (error)
-            *error = errorOf(a);
-        archive_read_free(a);
-        return false;
+    // Encrypted: try the password on the first locked file before writing
+    // anything, so a wrong one leaves nothing half-extracted behind.
+    {
+        struct archive *probe = openReader(archivePath, hooks.password, 64 * 1024, error);
+        if (!probe)
+            return false;
+        struct archive_entry *pe = nullptr;
+        int pr;
+        int checked = 0;
+        while (checked++ < 500 && ((pr = archive_read_next_header(probe, &pe)) == ARCHIVE_OK || pr == ARCHIVE_WARN)) {
+            if (archive_entry_is_encrypted(pe) && archive_entry_filetype(pe) == AE_IFREG && archive_entry_size(pe) > 0) {
+                const void *buf;
+                size_t size;
+                la_int64_t offset;
+                if (archive_read_data_block(probe, &buf, &size, &offset) < ARCHIVE_WARN) {
+                    if (error)
+                        *error = errorOf(probe);
+                    archive_read_free(probe);
+                    return false;
+                }
+                break;
+            }
+            archive_read_data_skip(probe);
+        }
+        archive_read_free(probe);
     }
+    struct archive *a = openReader(archivePath, hooks.password, 256 * 1024, error);
+    if (!a)
+        return false;
     struct archive *out = archive_write_disk_new();
     // Entry names are checked here and turned into full paths under the
     // destination, so absolute paths are expected; libarchive still refuses
@@ -424,9 +504,8 @@ bool unpack(const QString &archivePath, const QString &destDir, const QMap<QStri
             }
             if (d < ARCHIVE_WARN) {
                 // A password, damage, or a method this build cannot decode.
-                const QString why = errorOf(a);
                 if (error)
-                    *error = why.contains(QLatin1String("assphrase")) ? QStringLiteral("It is protected by a password.") : why;
+                    *error = errorOf(a);
                 ok = false;
             }
             archive_write_finish_entry(out);
