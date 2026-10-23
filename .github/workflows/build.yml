@@ -107,7 +107,8 @@ jobs:
                  build-dir flatpak/com.monroeworld.Linopus.yml > build.log 2>&1; then
             # Annotations are cut at about 4 KB: send the error lines and the
             # end of the log in several pieces.
-            { grep -nE "error|Error|ERROR|not found|Could NOT|FAILED|failed" build.log | grep -v "Performing Test" | tail -n 40
+            set +e +o pipefail # bash stops at a grep that finds nothing otherwise
+            { grep -nE "error|Error|ERROR|not found|Could NOT|FAILED|failed|without" build.log | grep -v "Performing Test" | tail -n 40
               echo "----- last lines -----"
               tail -n 40 build.log; } | tr -d '\r' | cut -c1-300 > tail.txt
             split -C 3000 tail.txt piece.

@@ -2,8 +2,11 @@
 
 #include <QWidget>
 
+#include <functional>
+
 class AliasManager;
 class QCompleter;
+class QMenu;
 class QHBoxLayout;
 class QLineEdit;
 class QStackedLayout;
@@ -54,6 +57,7 @@ private:
     void stopEditing();
     void updateCompletions(const QString &text);
     void fillChildMenu(QToolButton *arrow, const QString &dir);
+    void addChildActions(QMenu *menu, const QStringList &names, const std::function<QString(const QString &)> &pathOf);
 
     AliasManager &m_aliases;
     QString m_path;

@@ -1,4 +1,7 @@
 #include "ui/BreadcrumbBar.h"
+#include <QHash>
+#include <QCollator>
+#include "core/RemoteBackend.h"
 
 #include "core/AliasManager.h"
 #include "core/Location.h"
@@ -130,13 +133,13 @@ void BreadcrumbBar::rebuild()
         QString inside = scheme + QLatin1Char(':') + file;
         Crumb archive{QFileInfo(file).fileName(), inside};
         archive.icon = QStringLiteral("application-zip");
-        archive.canList = false;
+        archive.canList = RemoteBackend::instance() != nullptr;
         m_crumbs.append(archive);
         const QString rest = QUrl(m_path).path().mid(file.size());
         for (const QString &part : rest.split(QLatin1Char('/'), Qt::SkipEmptyParts)) {
             inside = Location::join(inside, part);
             Crumb c{part, inside};
-            c.canList = false;
+            c.canList = RemoteBackend::instance() != nullptr;
             m_crumbs.append(c);
         }
     } else if (Location::isRemote(m_path)) {
@@ -150,13 +153,14 @@ void BreadcrumbBar::rebuild()
                                                            : url.host(),
                      rootLoc};
         server.icon = QStringLiteral("network-server");
-        server.canList = false;
+        // Servers and archives list their folders too, read in the background.
+        server.canList = RemoteBackend::instance() != nullptr && url.scheme() != QLatin1String("coll");
         m_crumbs.append(server);
         QString at = rootLoc;
         for (const QString &part : url.path().split(QLatin1Char('/'), Qt::SkipEmptyParts)) {
             at = Location::join(at, part);
             Crumb c{part, at};
-            c.canList = false;
+            c.canList = RemoteBackend::instance() != nullptr && url.scheme() != QLatin1String("coll");
             m_crumbs.append(c);
         }
     } else {
@@ -227,25 +231,72 @@ void BreadcrumbBar::fillChildMenu(QToolButton *arrow, const QString &dir)
 {
     QMenu *menu = arrow->menu();
     menu->clear();
+    if (!Location::isLocal(dir)) {
+        // A server or an archive: list it in the background, fill in when read.
+        RemoteBackend *backend = RemoteBackend::instance();
+        if (!backend) {
+            menu->addAction(QStringLiteral("(not available)"))->setEnabled(false);
+            return;
+        }
+        QAction *wait = menu->addAction(QStringLiteral("Reading..."));
+        wait->setEnabled(false);
+        RemoteLister *lister = backend->createLister(menu);
+        connect(lister, &RemoteLister::listed, menu, [this, menu, wait, lister](const QString &, const FileItemList &items, bool) {
+            QStringList names;
+            QHash<QString, QString> paths;
+            for (const FileItem &it : items) {
+                if (it.isDir && !it.name.startsWith(QLatin1Char('.'))) {
+                    names << it.name;
+                    paths.insert(it.name, it.path);
+                }
+            }
+            QCollator coll;
+            coll.setNumericMode(true);
+            coll.setCaseSensitivity(Qt::CaseInsensitive);
+            std::sort(names.begin(), names.end(), [&coll](const QString &a, const QString &b) { return coll.compare(a, b) < 0; });
+            menu->removeAction(wait);
+            addChildActions(menu, names, [&](const QString &n) { return paths.value(n); });
+            lister->deleteLater();
+        });
+        connect(lister, &RemoteLister::failed, menu, [menu, wait, lister](const QString &, const QString &error) {
+            wait->setText(error.isEmpty() ? QStringLiteral("(cannot be read)") : error);
+            lister->deleteLater();
+            menu->adjustSize();
+        });
+        lister->open(dir, false);
+        return;
+    }
     const QStringList children = QDir(dir).entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name | QDir::IgnoreCase);
+    addChildActions(menu, children, [&](const QString &n) { return QDir(dir).filePath(n); });
+}
+
+void BreadcrumbBar::addChildActions(QMenu *menu, const QStringList &names, const std::function<QString(const QString &)> &pathOf)
+{
+    // As in Opus: each subfolder with its icon; the one on the way to the
+    // folder shown is highlighted.
     int count = 0;
     const QIcon folder = QIcon::fromTheme(QStringLiteral("folder"));
-    for (const QString &child : children) {
+    QAction *onPath = nullptr;
+    for (const QString &child : names) {
         if (++count > kMaxMenuEntries) {
-            menu->addAction(QStringLiteral("(%1 more)").arg(children.size() - kMaxMenuEntries))->setEnabled(false);
+            menu->addAction(QStringLiteral("(%1 more)").arg(names.size() - kMaxMenuEntries))->setEnabled(false);
             break;
         }
-        const QString full = QDir(dir).filePath(child);
+        const QString full = pathOf(child);
         QAction *a = menu->addAction(folder, child);
         if (m_path.startsWith(full + QLatin1Char('/')) || m_path == full) {
             QFont f = a->font();
             f.setBold(true);
             a->setFont(f);
+            onPath = a;
         }
         connect(a, &QAction::triggered, this, [this, full]() { Q_EMIT navigateRequested(full); });
     }
-    if (children.isEmpty())
+    if (names.isEmpty())
         menu->addAction(QStringLiteral("(no folders)"))->setEnabled(false);
+    if (onPath)
+        menu->setActiveAction(onPath);
+    menu->adjustSize();
 }
 
 void BreadcrumbBar::relayout()
