@@ -44,6 +44,8 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Right-click a screenshot > View: arrows step through the folder, F for full screen, the wheel zooms, Esc closes.
 - [ ] Help > About shows the build (commit and date).
 - [ ] Copy from a card and pull it out halfway (or copy an unreadable file): it asks Retry / Skip / Skip All / Abort. Put the card back and Retry.
+- [ ] Copy a big folder from the NAS and unplug the network for a moment: it asks Retry; plug back in and Retry, it carries on without copying finished files again.
+- [ ] Navigation Lock with a server on one side and a local folder on the other: going into and out of folders follows on both.
 - [ ] Make a zip with a password, then Extract it: it asks; a wrong password says so and leaves nothing behind.
 - [ ] The status line shows free space for the internal drive and the SD card. Copy something bigger than the card's free space: it stops at once with "not enough room".
 - [ ] Copy files from an ungrouped flat view with Ctrl+C, paste with Ctrl+V: it asks Keep Folder Structure or Same Folder.

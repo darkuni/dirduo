@@ -1213,26 +1213,40 @@ void ListerWindow::mirrorNavigation(FileDisplay *from, const QString &oldPath, c
 {
     if (m_mirroring || !m_dual || oldPath == newPath)
         return;
-    if (Location::isRemote(oldPath) || Location::isRemote(newPath))
-        return; // mirrors local trees only for now
     FileDisplay *other = from == m_displays[0] ? m_displays[1] : m_displays[0];
     FolderTab *t = other->currentTab();
     if (!t)
         return;
+    // Works on local folders and servers alike (either side can be either).
+    const QString oldClean = Location::clean(oldPath);
+    const QString newClean = Location::clean(newPath);
+    auto under = [](const QString &child, const QString &parent) {
+        return child.startsWith(parent.endsWith(QLatin1Char('/')) ? parent : parent + QLatin1Char('/'));
+    };
     QString target;
-    if (newPath.startsWith(oldPath == QLatin1String("/") ? oldPath : oldPath + QLatin1Char('/'))) {
-        // Went down: follow into the same relative folder, if it exists there.
-        const QString rel = newPath.mid(oldPath == QLatin1String("/") ? 1 : oldPath.size() + 1);
-        target = QDir::cleanPath(t->path() + QLatin1Char('/') + rel);
-    } else if (oldPath.startsWith(newPath == QLatin1String("/") ? newPath : newPath + QLatin1Char('/'))) {
+    if (under(newClean, oldClean)) {
+        // Went down: follow into the same relative folder.
+        const QString rel = newClean.mid(oldClean.endsWith(QLatin1Char('/')) ? oldClean.size() : oldClean.size() + 1);
+        target = Location::clean(t->path());
+        for (const QString &part : rel.split(QLatin1Char('/'), Qt::SkipEmptyParts))
+            target = Location::join(target, part);
+    } else if (under(oldClean, newClean)) {
         // Went up: climb the same number of levels.
-        const int levels = QDir::cleanPath(oldPath).count(QLatin1Char('/')) - QDir::cleanPath(newPath).count(QLatin1Char('/'));
-        target = t->path();
-        for (int i = 0; i < levels && target != QLatin1String("/"); ++i)
-            target = QFileInfo(target).absolutePath();
+        int levels = 0;
+        for (QString p = oldClean; p != newClean && levels < 64; p = Location::parent(p))
+            ++levels;
+        target = Location::clean(t->path());
+        for (int i = 0; i < levels; ++i) {
+            const QString up = Location::parent(target);
+            if (up.isEmpty() || up == target)
+                break;
+            target = up;
+        }
     } else {
         return; // a jump elsewhere is not mirrored
     }
+    // A local folder that is not there is not followed; a server folder is
+    // tried (the tab says so if it is missing).
     if (Location::isLocal(target) && !QFileInfo(target).isDir())
         return;
     m_mirroring = true;

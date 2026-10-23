@@ -192,10 +192,26 @@ void RemoteJob::onResult(KJob *job)
         return;
     m_current.clear();
     if (job->error()) {
-        if (job->error() == KJob::KilledJobError)
+        const int e = job->error();
+        const bool connection = e == KIO::ERR_CONNECTION_BROKEN || e == KIO::ERR_SERVER_TIMEOUT || e == KIO::ERR_CANNOT_CONNECT
+            || e == KIO::ERR_WORKER_DIED || e == KIO::ERR_UNKNOWN_HOST || e == KIO::ERR_CANNOT_READ
+            || e == KIO::ERR_CANNOT_WRITE;
+        if (e == KJob::KilledJobError) {
             m_canceled = true;
-        else
+        } else if (connection && m_spec.askOnError && m_spec.type == JobType::Copy && !m_oneAtATime && m_notifier) {
+            // A dropped connection: ask Retry / Skip / Abort. Retry copies
+            // again, skipping what already arrived in full.
+            m_waitingProblem = true;
+            m_state = JobState::WaitingForUser;
+            CollisionRequest req;
+            req.jobId = m_id;
+            req.source = m_spec.sources.value(0);
+            req.problem = job->errorString();
+            m_notifier(req);
+            return;
+        } else {
             m_errors << job->errorString();
+        }
     }
     if (m_oneAtATime && !m_queue.isEmpty() && !m_canceled) {
         m_bytesBefore = m_doneBytes;
@@ -263,6 +279,14 @@ void RemoteJob::handleRename(KJob *job, const QUrl &src, const QUrl &dest, bool 
         Q_EMIT m_bridge->askUserRenameResult(KIO::Result_Overwrite, QUrl(), job);
         return;
     }
+    if (m_retrying) {
+        // Copying again after a dropped connection: a file that arrived in
+        // full (same date) is skipped, a broken one is copied over.
+        CollisionDecision d;
+        d.action = (mtimeSrc.isValid() && mtimeSrc == mtimeDest) ? CollisionAction::Skip : CollisionAction::Replace;
+        answerRename(p, d);
+        return;
+    }
     if (m_hasSticky) {
         answerRename(p, m_sticky);
         return;
@@ -290,6 +314,21 @@ void RemoteJob::handleRename(KJob *job, const QUrl &src, const QUrl &dest, bool 
 
 void RemoteJob::provideDecision(const CollisionDecision &decision)
 {
+    if (m_waitingProblem) {
+        m_waitingProblem = false;
+        if (decision.action == CollisionAction::Retry) {
+            m_retrying = true;
+            m_state = JobState::Running;
+            attach(KIO::copy(Location::toUrls(m_spec.sources), Location::toUrl(m_spec.destDir), KIO::HideProgressInfo));
+            return;
+        }
+        if (decision.action == CollisionAction::CancelJob)
+            m_canceled = true;
+        else
+            m_errors << QStringLiteral("The connection was lost; the rest was not copied.");
+        finish();
+        return;
+    }
     if (!m_waiting)
         return;
     m_waiting = false;
@@ -319,6 +358,7 @@ void RemoteJob::answerRename(const PendingRename &p, const CollisionDecision &d)
         break;
     case CollisionAction::Skip:
     case CollisionAction::Ask:
+    case CollisionAction::Retry:
         result = all ? KIO::Result_AutoSkip : KIO::Result_Skip;
         break;
     case CollisionAction::Rename: {

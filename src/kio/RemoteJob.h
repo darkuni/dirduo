@@ -85,6 +85,8 @@ private:
     bool m_bypassQueue = false;
 
     bool m_waiting = false;
+    bool m_waitingProblem = false; // asked Retry / Skip / Abort after a dropped connection
+    bool m_retrying = false;       // copying again: files already there in full are skipped
     PendingRename m_pending;
     bool m_hasSticky = false;
     CollisionDecision m_sticky;
