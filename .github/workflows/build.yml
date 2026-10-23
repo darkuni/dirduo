@@ -16,7 +16,7 @@ jobs:
       - name: Install Qt
         run: |
           sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends qt6-base-dev qt6-base-dev-tools libgl-dev ninja-build pkgconf libtag1-dev libexiv2-dev qt6-multimedia-dev
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends qt6-base-dev qt6-base-dev-tools libgl-dev ninja-build pkgconf libtag1-dev libexiv2-dev qt6-multimedia-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good
       - name: Configure
         run: cmake -S . -B build -G Ninja
       - name: Build
@@ -30,6 +30,8 @@ jobs:
           if [ $status -ne 0 ]; then
             # Failing tests as annotations, readable without the full log.
             grep -E "^FAIL!|Loc: \[|Actual|Expected|tests failed|\*\*\*|\(Failed\)|Timeout|Exception|SegFault|Subprocess|QFATAL|Received a fatal" ctest.log | head -40 | while IFS= read -r line; do echo "::error::$line"; done
+            # A crash leaves no FAIL line: the last tests that ran say where.
+            grep -E "^(PASS|FAIL|QFATAL|QWARN|QDEBUG)" ctest.log | grep -v propagateSizeHints | tail -n 8 | while IFS= read -r line; do echo "::error title=last output::$line"; done
           fi
           exit $status
 
