@@ -95,6 +95,7 @@ jobs:
             fb-${{ matrix.variant.arch }}-${{ hashFiles('flatpak/*.yml') }}-
             fb-${{ matrix.variant.arch }}-
       - name: Build Flatpak
+        shell: bash
         env:
           ARCH: ${{ matrix.variant.arch }}
         run: |
