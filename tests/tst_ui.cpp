@@ -1451,6 +1451,24 @@ private Q_SLOTS:
 
         t->selectPaths({pics + QStringLiteral("/notes.txt")});
         QVERIFY(!w->evaluateCondition(QStringLiteral("images"), true));
+        // The right-click menu offers Convert only when every pick is a picture.
+        auto menuHas = [this](const QString &text) {
+            QMenu menu;
+            w->fillContextMenu(menu, w->display(0), true);
+            for (QAction *a : menu.actions()) {
+                if (a->text() == text)
+                    return true;
+            }
+            return false;
+        };
+        QVERIFY(!menuHas(QStringLiteral("Convert Image...")));
+        t->selectPaths({pics + QStringLiteral("/one.png"), pics + QStringLiteral("/notes.txt")});
+        QVERIFY(!menuHas(QStringLiteral("Convert Images...")));
+        t->selectPaths({pics + QStringLiteral("/one.png")});
+        QVERIFY(menuHas(QStringLiteral("Convert Image...")));
+        t->selectPaths({pics + QStringLiteral("/one.png"), pics + QStringLiteral("/two.png")});
+        QVERIFY(menuHas(QStringLiteral("Convert Images...")));
+        t->selectPaths({pics + QStringLiteral("/notes.txt")});
         QVERIFY(!runFailing(QStringLiteral("Image RUN"))); // no pictures in the selection
 
         t->selectPaths({pics + QStringLiteral("/one.png"), pics + QStringLiteral("/two.png"), pics + QStringLiteral("/notes.txt")});
@@ -1683,6 +1701,46 @@ private Q_SLOTS:
         QVERIFY(t->view()->font().pointSizeF() > base);
         QVERIFY(w->runCommand(QStringLiteral("Set SIZE=normal\nSet TREE=off")));
         w->setZoom(100, w->display(1));
+    }
+
+    void columnsResizable()
+    {
+        FolderTab *t = w->display(0)->currentTab();
+        t->setViewMode(FolderTab::ViewMode::Details);
+        QHeaderView *h = t->detailsView()->header();
+        for (int c = 0; c < FileListModel::ColumnCount; ++c)
+            QCOMPARE(h->sectionResizeMode(c), QHeaderView::Interactive);
+        QVERIFY(t->nameColumnFills());
+        QVERIFY(h->style()->pixelMetric(QStyle::PM_HeaderGripMargin, nullptr, h) >= Style::instance()->scaled(7));
+
+        // Widening another column takes the room from the name.
+        const int name = h->sectionSize(FileListModel::NameColumn);
+        const int size = h->sectionSize(FileListModel::SizeColumn);
+        h->resizeSection(FileListModel::SizeColumn, size + 40);
+        if (name - 40 >= t->detailsView()->fontMetrics().averageCharWidth() * 18)
+            QCOMPARE(h->sectionSize(FileListModel::NameColumn), name - 40);
+
+        // Dragging the name's edge sizes it by hand; that sticks.
+        QWidget *hw = h->viewport();
+        QMouseEvent press(QEvent::MouseButtonPress, QPointF(5, 5), hw->mapToGlobal(QPointF(5, 5)), Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(h, &press);
+        h->resizeSection(FileListModel::NameColumn, 150);
+        QMouseEvent release(QEvent::MouseButtonRelease, QPointF(5, 5), hw->mapToGlobal(QPointF(5, 5)), Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(h, &release);
+        QVERIFY(!t->nameColumnFills());
+        h->resizeSection(FileListModel::SizeColumn, size);
+        QCOMPARE(h->sectionSize(FileListModel::NameColumn), 150);
+        const QByteArray state = t->headerState();
+        FolderTab *other = w->display(0)->addTab(root);
+        other->restoreHeaderState(state);
+        QVERIFY(!other->nameColumnFills());
+        QCOMPARE(other->detailsView()->header()->sectionSize(FileListModel::NameColumn), 150);
+        w->display(0)->closeTab(w->display(0)->tabCount() - 1);
+
+        // Double-clicking its edge makes it fill again.
+        Q_EMIT h->sectionHandleDoubleClicked(FileListModel::NameColumn);
+        QTRY_VERIFY(t->nameColumnFills());
+        QVERIFY(h->sectionSize(FileListModel::NameColumn) != 150 || t->detailsView()->viewport()->width() < 400);
     }
 
     void expandableFolders()

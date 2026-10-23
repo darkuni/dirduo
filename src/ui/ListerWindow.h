@@ -73,6 +73,8 @@ public:
     void zoomChanged();
     FileDisplay *destDisplay() const; // null in single mode
     FileDisplay *display(int index) const { return m_displays[index]; }
+    // The file display's right-click menu (onItem: clicked on a file).
+    void fillContextMenu(QMenu &menu, FileDisplay *d, bool onItem);
     bool isDual() const { return m_dual; }
 
     enum class ToolbarPlace { Top, Bottom, Left, Right, Between };

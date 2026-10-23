@@ -1794,6 +1794,12 @@ void ListerWindow::onContextMenu(FileDisplay *d, const QPoint &globalPos, bool o
 {
     makeSource(d);
     QMenu menu(this);
+    fillContextMenu(menu, d, onItem);
+    menu.exec(globalPos);
+}
+
+void ListerWindow::fillContextMenu(QMenu &menu, FileDisplay *d, bool onItem)
+{
     FolderTab *t = d->currentTab();
     const QStringList sel = t ? t->selectedPaths() : QStringList();
     const bool oneFolder = sel.size() == 1 && t && t->isFolder(sel.first());
@@ -1844,11 +1850,22 @@ void ListerWindow::onContextMenu(FileDisplay *d, const QPoint &globalPos, bool o
         menu.addAction(commandAction(QStringLiteral("Rename"), QStringLiteral("Rename"), {}, QStringLiteral("edit-rename")));
         menu.addAction(commandAction(QStringLiteral("Move to Trash"), QStringLiteral("Delete"), {}, QStringLiteral("user-trash")));
         menu.addAction(commandAction(QStringLiteral("Delete Permanently"), QStringLiteral("Delete NORECYCLE"), {}, QStringLiteral("edit-delete")));
+        // Pictures: convert them (all of the selection must be pictures).
+        bool pictures = sel.size() <= 2000;
+        for (const QString &p : sel) {
+            if (!pictures)
+                break;
+            pictures = Location::isLocal(p) && !t->isFolder(p) && ImageConvert::canRead(p);
+        }
+        if (pictures) {
+            menu.addSeparator();
+            menu.addAction(commandAction(sel.size() == 1 ? QStringLiteral("Convert Image...") : QStringLiteral("Convert Images..."),
+                                         QStringLiteral("Image"), {}, QStringLiteral("image-x-generic")));
+        }
     }
     menu.addSeparator();
     menu.addAction(commandAction(QStringLiteral("New Folder..."), QStringLiteral("CreateFolder"), {}, QStringLiteral("folder-new")));
     menu.addAction(m_actHidden);
-    menu.exec(globalPos);
 }
 
 void ListerWindow::openFile(const QString &path)

@@ -109,6 +109,8 @@ public:
     // The lister's zoom, in percent of the normal text and icon size.
     void setZoom(int percent);
     int zoom() const { return m_zoom; }
+    // Does the name column fill the room left over (not sized by hand)?
+    bool nameColumnFills() const;
     // Size in pixels at this text size and zoom.
     int zoomed(int px) const;
 
@@ -183,6 +185,7 @@ private:
     void autoSwitchForContent();
     void updateLocationColumn();
     void fitNameColumn();
+    static QStyle *headerGripStyle();
     void applySize();
 
     QString m_path;
@@ -208,6 +211,9 @@ private:
     FolderFormat m_baseFormat;
     bool m_autoIcons = false;
     int m_zoom = 100;
+    bool m_nameFills = true;    // the name column takes the room left over
+    bool m_fittingName = false; // sizing it ourselves
+    bool m_headerDragging = false;
     QHash<QString, DirLister *> m_children; // one per expanded folder
     QWidget *m_fayt = nullptr;
     QLineEdit *m_faytEdit = nullptr;

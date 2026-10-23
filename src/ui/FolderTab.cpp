@@ -26,6 +26,8 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QHeaderView>
+#include <QPointer>
+#include <QProxyStyle>
 #include <QKeyEvent>
 #include <QApplication>
 #include <QListView>
@@ -145,10 +147,32 @@ FolderTab::FolderTab(QWidget *parent)
     m_details->sortByColumn(FileListModel::NameColumn, Qt::AscendingOrder);
     QHeaderView *header = m_details->header();
     header->setStretchLastSection(false);
-    header->setSectionResizeMode(FileListModel::NameColumn, QHeaderView::Stretch);
-    header->setSectionResizeMode(FileListModel::SizeColumn, QHeaderView::Interactive);
-    header->setSectionResizeMode(FileListModel::TypeColumn, QHeaderView::Interactive);
-    header->setSectionResizeMode(FileListModel::ModifiedColumn, QHeaderView::Interactive);
+    // Every column, the name too, is sized by dragging its right edge. The
+    // name fills the room the others leave until it has been dragged;
+    // double-clicking its edge makes it fill again.
+    header->setSectionResizeMode(QHeaderView::Interactive);
+    header->setMinimumSectionSize(24);
+    header->setStyle(headerGripStyle());
+    header->installEventFilter(this);
+    connect(header, &QHeaderView::sectionResized, this, [this](int logical, int, int) {
+        if (m_fittingName)
+            return;
+        if (logical == FileListModel::NameColumn && m_headerDragging) {
+            m_nameFills = false;
+            Q_EMIT viewStateChanged();
+        } else if (logical != FileListModel::NameColumn) {
+            fitNameColumn();
+        }
+    });
+    connect(header, &QHeaderView::sectionHandleDoubleClicked, this, [this](int logical) {
+        if (logical != FileListModel::NameColumn)
+            return;
+        QTimer::singleShot(0, this, [this]() {
+            m_nameFills = true;
+            fitNameColumn();
+            Q_EMIT viewStateChanged();
+        });
+    });
     header->resizeSection(FileListModel::SizeColumn, 90);
     header->resizeSection(FileListModel::TypeColumn, 130);
     header->resizeSection(FileListModel::ModifiedColumn, 140);
@@ -812,6 +836,13 @@ bool FolderTab::eventFilter(QObject *watched, QEvent *event)
         }
         return false;
     }
+    if (watched == m_details->header()) {
+        if (event->type() == QEvent::MouseButtonPress)
+            m_headerDragging = true;
+        else if (event->type() == QEvent::MouseButtonRelease)
+            m_headerDragging = false;
+        return QWidget::eventFilter(watched, event);
+    }
     const bool isView = watched == m_details || watched == m_list;
     const bool isViewport = watched == m_details->viewport() || watched == m_list->viewport();
     if (!isView && !isViewport)
@@ -1008,6 +1039,8 @@ QByteArray FolderTab::headerState() const
 {
     QByteArray out = kHeaderTag;
     out += QByteArray::number(FileListModel::ColumnCount);
+    if (!m_nameFills)
+        out += 'f'; // the name column was sized by hand
     out += ':';
     out += m_details->header()->saveState();
     return out;
@@ -1019,21 +1052,33 @@ void FolderTab::restoreHeaderState(const QByteArray &saved)
         return;
     QByteArray state = saved;
     int columns = FileListModel::ColumnsBeforeMetadata;
+    bool fills = true;
     if (state.startsWith(kHeaderTag)) {
         const int colon = state.indexOf(':', kHeaderTag.size());
         if (colon < 0)
             return;
-        columns = state.mid(kHeaderTag.size(), colon - kHeaderTag.size()).toInt();
+        QByteArray count = state.mid(kHeaderTag.size(), colon - kHeaderTag.size());
+        fills = !count.endsWith('f');
+        if (!fills)
+            count.chop(1);
+        columns = count.toInt();
         state = state.mid(colon + 1);
     }
     QHeaderView *h = m_details->header();
-    if (!h->restoreState(state))
+    m_fittingName = true;
+    const bool restored = h->restoreState(state);
+    // Older states kept the name column stretched, which cannot be dragged.
+    h->setSectionResizeMode(QHeaderView::Interactive);
+    m_fittingName = false;
+    if (!restored)
         return;
+    m_nameFills = fills;
     for (int c = qMax(1, columns); c < FileListModel::ColumnCount; ++c) {
         h->setSectionHidden(c, true);
         h->resizeSection(c, 120);
     }
     updateLocationColumn();
+    fitNameColumn();
 }
 
 QString FolderTab::viewModeName(ViewMode mode)
@@ -1091,6 +1136,7 @@ void FolderTab::setColumnVisible(int column, bool visible)
 void FolderTab::resetColumns()
 {
     QHeaderView *h = m_details->header();
+    m_nameFills = true;
     for (int c = 0; c < FileListModel::ColumnCount; ++c) {
         const bool standard = c == FileListModel::NameColumn || c == FileListModel::SizeColumn
             || c == FileListModel::TypeColumn || c == FileListModel::ModifiedColumn;
@@ -1427,8 +1473,11 @@ void FolderTab::autoSwitchForContent()
 
 void FolderTab::fitNameColumn()
 {
-    // The name column takes the room left over, but never less than enough to
-    // read a name: on a narrow display the list scrolls sideways instead.
+    // Until it has been sized by hand, the name column takes the room left
+    // over, but never less than enough to read a name: on a narrow display
+    // the list scrolls sideways instead.
+    if (!m_nameFills)
+        return;
     QHeaderView *h = m_details->header();
     const int minName = m_details->fontMetrics().averageCharWidth() * 18;
     int others = 0;
@@ -1436,13 +1485,39 @@ void FolderTab::fitNameColumn()
         if (c != FileListModel::NameColumn && !h->isSectionHidden(c))
             others += h->sectionSize(c);
     }
-    const bool roomy = m_details->viewport()->width() - others >= minName;
-    if (roomy && h->sectionResizeMode(FileListModel::NameColumn) != QHeaderView::Stretch) {
-        h->setSectionResizeMode(FileListModel::NameColumn, QHeaderView::Stretch);
-    } else if (!roomy && h->sectionResizeMode(FileListModel::NameColumn) == QHeaderView::Stretch) {
-        h->setSectionResizeMode(FileListModel::NameColumn, QHeaderView::Interactive);
-        h->resizeSection(FileListModel::NameColumn, minName);
+    const int want = qMax(minName, m_details->viewport()->width() - others);
+    if (h->sectionSize(FileListModel::NameColumn) == want)
+        return;
+    m_fittingName = true;
+    h->resizeSection(FileListModel::NameColumn, want);
+    m_fittingName = false;
+}
+
+bool FolderTab::nameColumnFills() const
+{
+    return m_nameFills;
+}
+
+QStyle *FolderTab::headerGripStyle()
+{
+    // A wider grab area at the column edges, for fingers on a touchscreen.
+    class GripStyle : public QProxyStyle
+    {
+    public:
+        int pixelMetric(PixelMetric m, const QStyleOption *o, const QWidget *w) const override
+        {
+            const int base = QProxyStyle::pixelMetric(m, o, w);
+            if (m == PM_HeaderGripMargin)
+                return qMax(base, Style::instance()->scaled(7));
+            return base;
+        }
+    };
+    static QPointer<QStyle> style;
+    if (!style) {
+        style = new GripStyle;
+        style->setParent(qApp);
     }
+    return style;
 }
 
 // ---- Print Folder ----------------------------------------------------------
