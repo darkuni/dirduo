@@ -42,6 +42,7 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Right-click a ROM or a text file > Open With: your apps (Flatpak ones too) are listed with icons. Other Application...: tick Always use; double-clicking the file now opens it there.
 - [ ] F3 viewer: an MP3 shows its tags and Play; it plays, the bar moves. Arrow to another file: it stops. A 7z or RAR lists what is inside.
 - [ ] Right-click a screenshot > View: arrows step through the folder, F for full screen, the wheel zooms, Esc closes.
+- [ ] Preferences > General: turn off free space and counts; the status line follows. Pick another terminal. File Types lists your Always-use choices.
 - [ ] Help > About shows the build (commit and date).
 - [ ] Copy from a card and pull it out halfway (or copy an unreadable file): it asks Retry / Skip / Skip All / Abort. Put the card back and Retry.
 - [ ] Copy a big folder from the NAS and unplug the network for a moment: it asks Retry; plug back in and Retry, it carries on without copying finished files again.

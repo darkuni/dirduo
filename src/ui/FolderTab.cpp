@@ -1,4 +1,5 @@
 #include "ui/FolderTab.h"
+#include "core/Prefs.h"
 #include "core/CommandCatalog.h"
 
 #include "core/Collections.h"
@@ -540,21 +541,25 @@ QString FolderTab::statusText() const
         else
             ++files;
     }
-    QString text = QStringLiteral("%1 %2, %3 %4")
-                       .arg(folders)
-                       .arg(folders == 1 ? QStringLiteral("folder") : QStringLiteral("folders"))
-                       .arg(files)
-                       .arg(files == 1 ? QStringLiteral("file") : QStringLiteral("files"));
+    // The parts shown are chosen in Preferences > General.
+    const Prefs::Values &prefs = Prefs::instance()->values();
+    QString text;
+    if (prefs.statusCounts)
+        text = QStringLiteral("%1 %2, %3 %4")
+                   .arg(folders)
+                   .arg(folders == 1 ? QStringLiteral("folder") : QStringLiteral("folders"))
+                   .arg(files)
+                   .arg(files == 1 ? QStringLiteral("file") : QStringLiteral("files"));
 
     const QStringList sel = selectedPaths();
-    if (!sel.isEmpty()) {
+    if (!sel.isEmpty() && prefs.statusSelection) {
         qint64 bytes = 0;
         for (const QString &p : sel) {
             const int row = m_model->rowForPath(p);
             if (row >= 0 && !m_model->item(row).isDir)
                 bytes += m_model->item(row).size;
         }
-        text += QStringLiteral(" - %1 selected (%2)").arg(sel.size()).arg(FileOps::formatSize(bytes));
+        text += QStringLiteral("%1%2 selected (%3)").arg(text.isEmpty() ? QString() : QStringLiteral(" - ")).arg(sel.size()).arg(FileOps::formatSize(bytes));
     }
     if (!m_proxy->filterText().isEmpty()) {
         const int hidden = m_model->rowCount() - m_proxy->rowCount();

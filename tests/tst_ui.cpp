@@ -37,6 +37,7 @@
 #include "ui/Style.h"
 #include "core/Location.h"
 #include "ui/ArchiveDialog.h"
+#include "core/Prefs.h"
 #include "ui/ImageViewer.h"
 #include "ui/OpenWithDialog.h"
 #include "core/Apps.h"
@@ -53,6 +54,8 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QSpinBox>
+#include <QTableWidget>
+#include <QCheckBox>
 #include <QDateTimeEdit>
 #include <QPushButton>
 #include <QTreeWidget>
@@ -1272,6 +1275,43 @@ private Q_SLOTS:
         QVERIFY(freq.actions().size() >= 4); // three folders, separator, clear
         f->setItems({});
         f->clearFrequent();
+    }
+
+    void preferencesGeneralAndFileTypes()
+    {
+        FolderTab *t = w->display(0)->currentTab();
+        QVERIFY(t->statusText().contains(QStringLiteral("folder")));
+        Apps::setDefaultFor(QStringLiteral("text/plain"), QStringLiteral("nothing-installed.desktop"));
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("general"));
+            QCOMPARE(dlg.currentPage(), QStringLiteral("general"));
+            QCOMPARE(dlg.search(QStringLiteral("terminal")), QStringList{QStringLiteral("general")});
+            dlg.generalBox(QStringLiteral("counts"))->setChecked(false);
+            dlg.generalBox(QStringLiteral("free"))->setChecked(false);
+            dlg.terminalBox()->setCurrentIndex(dlg.terminalBox()->findData(QStringLiteral("kitty")));
+            // File types: Linopus's own choices, and back to the desktop's.
+            QTableWidget *types = dlg.fileTypesTable();
+            QCOMPARE(types->rowCount(), 1);
+            QCOMPARE(types->item(0, 0)->text(), QStringLiteral("text/plain"));
+            QVERIFY(types->item(0, 2)->text().contains(QStringLiteral("not installed")));
+            types->selectRow(0);
+            for (QPushButton *b : dlg.findChildren<QPushButton *>()) {
+                if (b->text() == QStringLiteral("Use the Desktop's Choice"))
+                    b->click();
+            }
+            QCOMPARE(types->rowCount(), 0);
+            QVERIFY(Apps::defaultFor(QStringLiteral("text/plain")).isEmpty());
+            QVERIFY(dlg.apply());
+        }
+        QVERIFY(!Prefs::instance()->values().statusCounts);
+        QCOMPARE(Prefs::instance()->values().terminal, QStringLiteral("kitty"));
+        QTRY_VERIFY(!w->display(0)->freeSpaceText().contains(QStringLiteral("free")));
+        QVERIFY(!t->statusText().contains(QStringLiteral("folder")));
+        Prefs::Values v = Prefs::instance()->values();
+        v.statusCounts = v.statusFree = true;
+        v.terminal.clear();
+        Prefs::instance()->setValues(v);
+        QTRY_VERIFY(w->display(0)->freeSpaceText().contains(QStringLiteral("free")));
     }
 
     void preferencesWindow()

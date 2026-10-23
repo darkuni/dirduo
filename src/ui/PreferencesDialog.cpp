@@ -1,4 +1,8 @@
 #include "ui/PreferencesDialog.h"
+#include <QSet>
+#include <QMimeDatabase>
+#include "core/Apps.h"
+#include "core/Prefs.h"
 
 #include "core/AliasManager.h"
 #include "core/FileKind.h"
@@ -133,8 +137,8 @@ QString safeFileName(QString name)
 
 QStringList PreferencesDialog::pageNames()
 {
-    return {QStringLiteral("appearance"), QStringLiteral("theme"), QStringLiteral("labels"),
-            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("toolbars")};
+    return {QStringLiteral("general"), QStringLiteral("appearance"), QStringLiteral("theme"), QStringLiteral("labels"),
+            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("filetypes"), QStringLiteral("toolbars")};
 }
 
 PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, const QString &page)
@@ -170,6 +174,9 @@ PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, cons
     });
     layout->addWidget(buttons);
 
+    addPage(QStringLiteral("general"), QStringLiteral("General"), QStringLiteral("preferences-system"), buildGeneral(),
+            {QStringLiteral("status"), QStringLiteral("free space"), QStringLiteral("terminal"), QStringLiteral("konsole"),
+             QStringLiteral("retry"), QStringLiteral("skip"), QStringLiteral("error")});
     addPage(QStringLiteral("appearance"), QStringLiteral("Appearance"), QStringLiteral("preferences-desktop-theme"), buildAppearance(),
             {QStringLiteral("theme"), QStringLiteral("size"), QStringLiteral("font"), QStringLiteral("icon"), QStringLiteral("dark"),
              QStringLiteral("light"), QStringLiteral("workbench"), QStringLiteral("scale")});
@@ -183,6 +190,8 @@ PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, cons
             {QStringLiteral("shortcut"), QStringLiteral("path"), QStringLiteral("folder"), QStringLiteral("server")});
     addPage(QStringLiteral("formats"), QStringLiteral("Folder Formats"), QStringLiteral("view-list-details"), buildFormats(),
             {QStringLiteral("columns"), QStringLiteral("view"), QStringLiteral("group"), QStringLiteral("icons"), QStringLiteral("pictures")});
+    addPage(QStringLiteral("filetypes"), QStringLiteral("File Types"), QStringLiteral("preferences-desktop-filetype-association"), buildFileTypes(),
+            {QStringLiteral("open with"), QStringLiteral("application"), QStringLiteral("default"), QStringLiteral("program")});
     addPage(QStringLiteral("toolbars"), QStringLiteral("Toolbars"), QStringLiteral("configure-toolbars"), buildToolbars(),
             {QStringLiteral("button"), QStringLiteral("customize"), QStringLiteral("customize")});
 
@@ -198,6 +207,101 @@ PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, cons
 }
 
 PreferencesDialog::~PreferencesDialog() = default;
+
+QWidget *PreferencesDialog::buildGeneral()
+{
+    auto *page = new QWidget;
+    auto *layout = new QVBoxLayout(page);
+    const Prefs::Values &v = Prefs::instance()->values();
+    auto *status = new QGroupBox(QStringLiteral("Status line"), page);
+    auto *sl = new QVBoxLayout(status);
+    auto box = [&](const QString &key, const QString &text, bool on, QLayout *into, QWidget *parent) {
+        auto *b = new QCheckBox(text, parent);
+        b->setChecked(on);
+        into->addWidget(b);
+        m_general.insert(key, b);
+    };
+    box(QStringLiteral("counts"), QStringLiteral("Folders and files in the list"), v.statusCounts, sl, status);
+    box(QStringLiteral("selection"), QStringLiteral("What is selected, and its size"), v.statusSelection, sl, status);
+    box(QStringLiteral("free"), QStringLiteral("Free space on the drive or card"), v.statusFree, sl, status);
+    layout->addWidget(status);
+    auto *copies = new QGroupBox(QStringLiteral("Copying"), page);
+    auto *cl = new QVBoxLayout(copies);
+    box(QStringLiteral("ask"), QStringLiteral("Ask Retry / Skip / Abort when an item fails (otherwise skip it and list it at the end)"),
+        v.askOnError, cl, copies);
+    layout->addWidget(copies);
+    auto *term = new QGroupBox(QStringLiteral("Terminal"), page);
+    auto *tl = new QFormLayout(term);
+    m_terminal = new QComboBox(term);
+    m_terminal->setEditable(true);
+    m_terminal->addItem(QStringLiteral("Konsole (or the first one installed)"), QString());
+    for (const char *t : {"konsole", "gnome-terminal", "kgx", "xfce4-terminal", "tilix", "alacritty", "kitty", "foot", "xterm"})
+        m_terminal->addItem(QString::fromLatin1(t), QString::fromLatin1(t));
+    const int at = m_terminal->findData(v.terminal);
+    if (at >= 0)
+        m_terminal->setCurrentIndex(at);
+    else
+        m_terminal->setEditText(v.terminal);
+    tl->addRow(QStringLiteral("Open Konsole Here uses:"), m_terminal);
+    layout->addWidget(term);
+    layout->addStretch(1);
+    return page;
+}
+
+QCheckBox *PreferencesDialog::generalBox(const QString &key) const
+{
+    return m_general.value(key);
+}
+
+QWidget *PreferencesDialog::buildFileTypes()
+{
+    auto *page = new QWidget;
+    auto *layout = new QVBoxLayout(page);
+    auto *intro = new QLabel(QStringLiteral("Applications Linopus uses for these types of file, instead of the desktop's choice. "
+                                            "Set one with right-click > Open With > Other Application... and \"Always use\"."),
+                             page);
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+    m_fileTypes = new QTableWidget(0, 3, page);
+    m_fileTypes->setHorizontalHeaderLabels({QStringLiteral("Type"), QStringLiteral("Kind"), QStringLiteral("Opens with")});
+    m_fileTypes->horizontalHeader()->setStretchLastSection(true);
+    m_fileTypes->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_fileTypes->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_fileTypes->verticalHeader()->hide();
+    layout->addWidget(m_fileTypes, 1);
+    auto *remove = new QPushButton(QStringLiteral("Use the Desktop's Choice"), page);
+    remove->setToolTip(QStringLiteral("Forget Linopus's application for the selected types"));
+    connect(remove, &QPushButton::clicked, this, [this]() {
+        QSet<int> rows;
+        for (QTableWidgetItem *it : m_fileTypes->selectedItems())
+            rows.insert(it->row());
+        for (int r : rows)
+            Apps::setDefaultFor(m_fileTypes->item(r, 0)->text(), QString());
+        refreshFileTypes();
+    });
+    auto *row = new QHBoxLayout;
+    row->addStretch(1);
+    row->addWidget(remove);
+    layout->addLayout(row);
+    refreshFileTypes();
+    return page;
+}
+
+void PreferencesDialog::refreshFileTypes()
+{
+    const QMap<QString, QString> defaults = Apps::defaults();
+    m_fileTypes->setRowCount(0);
+    static const QMimeDatabase db;
+    for (auto it = defaults.cbegin(); it != defaults.cend(); ++it) {
+        const int r = m_fileTypes->rowCount();
+        m_fileTypes->insertRow(r);
+        const AppInfo app = Apps::find(it.value());
+        m_fileTypes->setItem(r, 0, new QTableWidgetItem(it.key()));
+        m_fileTypes->setItem(r, 1, new QTableWidgetItem(db.mimeTypeForName(it.key()).comment()));
+        m_fileTypes->setItem(r, 2, new QTableWidgetItem(app.isValid() ? app.name : it.value() + QStringLiteral(" (not installed)")));
+    }
+    m_fileTypes->resizeColumnsToContents();
+}
 
 void PreferencesDialog::addPage(const QString &key, const QString &title, const QString &icon, QWidget *page, const QStringList &keywords)
 {
@@ -815,6 +919,17 @@ QWidget *PreferencesDialog::buildToolbars()
 
 bool PreferencesDialog::apply(QString *error)
 {
+    // General.
+    Prefs::Values v = Prefs::instance()->values();
+    v.statusCounts = m_general.value(QStringLiteral("counts"))->isChecked();
+    v.statusSelection = m_general.value(QStringLiteral("selection"))->isChecked();
+    v.statusFree = m_general.value(QStringLiteral("free"))->isChecked();
+    v.askOnError = m_general.value(QStringLiteral("ask"))->isChecked();
+    const QString typed = m_terminal->currentText().trimmed();
+    const int at = m_terminal->findText(typed);
+    v.terminal = at >= 0 ? m_terminal->itemData(at).toString() : typed;
+    Prefs::instance()->setValues(v);
+
     // Theme: an edited theme is saved under its name, so it survives a restart.
     if (m_themeDirty && !saveTheme(error))
         return false;

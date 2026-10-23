@@ -6,6 +6,7 @@
 #include "core/HostRun.h"
 #include "core/Servers.h"
 #include "core/Apps.h"
+#include "core/Prefs.h"
 #include "core/Collections.h"
 #include "core/FileOps.h"
 #include "core/JobManager.h"
@@ -293,7 +294,7 @@ int CommandEngine::copyItems(const QStringList &sources, const QString &destDir,
     spec.destDir = destDir;
     spec.whenExists = whenExists;
     spec.targetNames = newNames;
-    spec.askOnError = m_interactive;
+    spec.askOnError = m_interactive && Prefs::instance()->values().askOnError;
     return m_jobs.enqueue(spec);
 }
 
@@ -654,7 +655,10 @@ bool CommandEngine::cmdTerminal(const ParsedCommand &cmd, CommandContext &ctx, Q
             *error = QStringLiteral("A terminal opens in folders on this computer and its cards.");
         return false;
     }
-    return HostRun::openTerminal(dir, cmd.value(QStringLiteral("PROGRAM")), error);
+    QString program = cmd.value(QStringLiteral("PROGRAM"));
+    if (program.isEmpty())
+        program = Prefs::instance()->values().terminal; // Preferences > General
+    return HostRun::openTerminal(dir, program, error);
 }
 
 bool CommandEngine::cmdServer(const ParsedCommand &cmd, CommandContext &ctx, QString *error)

@@ -4,6 +4,7 @@
 #include "ui/Style.h"
 
 #include <QDialog>
+#include <QHash>
 #include <QToolButton>
 
 class AppContext;
@@ -47,7 +48,7 @@ public:
     PreferencesDialog(AppContext &app, ListerWindow *lister, const QString &page = {});
     ~PreferencesDialog() override;
 
-    static QStringList pageNames(); // appearance, theme, labels, aliases, formats, toolbars
+    static QStringList pageNames(); // general, appearance, theme, labels, aliases, formats, file types, toolbars
     bool setPage(const QString &name);
     QString currentPage() const;
     // Pages matching the search text (all when empty); the list shows only these.
@@ -63,6 +64,11 @@ public:
     QList<LabelRule> labelRules() const;
     void addLabelRule(const LabelRule &rule);
 
+    // General and file types, for tests.
+    QCheckBox *generalBox(const QString &key) const; // counts, selection, free, ask
+    QComboBox *terminalBox() const { return m_terminal; }
+    QTableWidget *fileTypesTable() const { return m_fileTypes; }
+
     // Aliases, for tests.
     void setAliasRow(int row, const QString &name, const QString &path);
     int addAliasRow();
@@ -72,6 +78,9 @@ public:
     void reject() override;
 
 private:
+    QWidget *buildGeneral();
+    QWidget *buildFileTypes();
+    void refreshFileTypes();
     QWidget *buildAppearance();
     QWidget *buildTheme();
     QWidget *buildLabels();
@@ -86,6 +95,9 @@ private:
     void refreshFormats();
 
     AppContext &m_app;
+    QHash<QString, QCheckBox *> m_general;
+    QComboBox *m_terminal = nullptr;
+    QTableWidget *m_fileTypes = nullptr;
     ListerWindow *m_lister;
     QListWidget *m_nav;
     QStackedWidget *m_stack;

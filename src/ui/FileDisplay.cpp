@@ -1,4 +1,5 @@
 #include "ui/FileDisplay.h"
+#include "core/Prefs.h"
 #include <QLocale>
 #include "core/Location.h"
 #include "core/FileOps.h"
@@ -272,6 +273,11 @@ FileDisplay::FileDisplay(AliasManager &aliases, QWidget *parent)
     connect(m_tabs, &QTabBar::tabBarClicked, this, [this](int) { Q_EMIT activated(this); });
 
     connect(Style::instance(), &Style::changed, this, &FileDisplay::applyStyle);
+    connect(Prefs::instance(), &Prefs::changed, this, [this]() {
+        if (FolderTab *t = currentTab())
+            m_status->setText(t->statusText());
+        updateFreeSpace();
+    });
     setRole(Role::None);
 }
 
@@ -466,7 +472,7 @@ void FileDisplay::updateFreeSpace()
     qint64 free = -1;
     qint64 total = -1;
     // Folders on this computer and its cards only: asking a server is slow.
-    if (Location::isLocal(path)) {
+    if (Location::isLocal(path) && Prefs::instance()->values().statusFree) {
         free = FileOps::bytesFree(path);
         total = FileOps::bytesTotal(path);
     }

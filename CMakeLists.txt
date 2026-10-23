@@ -82,6 +82,7 @@ add_library(linopus_core STATIC
     src/core/Servers.cpp
     src/core/ScriptRunner.cpp
     src/core/Apps.cpp
+    src/core/Prefs.cpp
     src/core/Metadata.cpp
     src/core/Thumbnails.cpp
     src/core/History.cpp
