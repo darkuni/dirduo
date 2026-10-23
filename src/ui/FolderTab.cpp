@@ -1,5 +1,6 @@
 #include "ui/FolderTab.h"
 #include "core/Prefs.h"
+#include "core/StatusFormat.h"
 #include "core/CommandCatalog.h"
 
 #include "core/Collections.h"
@@ -526,53 +527,108 @@ QString FolderTab::focusedPath() const
     return cur.isValid() ? cur.data(FileListModel::PathRole).toString() : QString();
 }
 
-QString FolderTab::statusText() const
+QString FolderTab::statusMessage() const
 {
     if (!m_error.isEmpty())
         return QStringLiteral("Cannot open this folder: %1").arg(m_error);
     if (m_lister->isBusy() && m_model->rowCount() == 0)
         return QStringLiteral("Reading folder...");
+    return {};
+}
 
-    int folders = 0;
-    int files = 0;
+QHash<QString, QString> FolderTab::statusValues(bool withDisk) const
+{
+    QHash<QString, QString> v;
+    int folders = 0, files = 0;
+    qint64 bytes = 0;
     for (int r = 0; r < m_proxy->rowCount(); ++r) {
-        if (m_proxy->index(r, 0).data(FileListModel::IsDirRole).toBool())
+        const QModelIndex i = m_proxy->index(r, 0);
+        if (i.data(FileListModel::IsDirRole).toBool()) {
             ++folders;
-        else
+        } else {
             ++files;
-    }
-    // The parts shown are chosen in Preferences > General.
-    const Prefs::Values &prefs = Prefs::instance()->values();
-    QString text;
-    if (prefs.statusCounts)
-        text = QStringLiteral("%1 %2, %3 %4")
-                   .arg(folders)
-                   .arg(folders == 1 ? QStringLiteral("folder") : QStringLiteral("folders"))
-                   .arg(files)
-                   .arg(files == 1 ? QStringLiteral("file") : QStringLiteral("files"));
-
-    const QStringList sel = selectedPaths();
-    if (!sel.isEmpty() && prefs.statusSelection) {
-        qint64 bytes = 0;
-        for (const QString &p : sel) {
-            const int row = m_model->rowForPath(p);
-            if (row >= 0 && !m_model->item(row).isDir)
+            const int row = m_proxy->mapToSource(i).row();
+            if (row >= 0)
                 bytes += m_model->item(row).size;
         }
-        text += QStringLiteral("%1%2 selected (%3)").arg(text.isEmpty() ? QString() : QStringLiteral(" - ")).arg(sel.size()).arg(FileOps::formatSize(bytes));
     }
-    if (!m_proxy->filterText().isEmpty()) {
-        const int hidden = m_model->rowCount() - m_proxy->rowCount();
-        text += QStringLiteral(" - filter \"%1\"").arg(m_proxy->filterText());
-        if (hidden > 0)
-            text += QStringLiteral(", %1 hidden").arg(hidden);
+    int selFolders = 0, selFiles = 0;
+    qint64 selBytes = 0;
+    for (const QString &p : selectedPaths()) {
+        const int row = m_model->rowForPath(p);
+        if (row < 0)
+            continue;
+        if (m_model->item(row).isDir) {
+            ++selFolders;
+        } else {
+            ++selFiles;
+            selBytes += m_model->item(row).size;
+        }
     }
+    auto words = [](int n, const char *one, const char *many) {
+        return QStringLiteral("%1 %2").arg(n).arg(QLatin1String(n == 1 ? one : many));
+    };
+    v.insert(QStringLiteral("td"), QString::number(folders));
+    v.insert(QStringLiteral("tf"), QString::number(files));
+    v.insert(QStringLiteral("ti"), QString::number(folders + files));
+    v.insert(QStringLiteral("tb"), FileOps::formatSize(bytes));
+    v.insert(QStringLiteral("folders"), words(folders, "folder", "folders"));
+    v.insert(QStringLiteral("files"), words(files, "file", "files"));
+    v.insert(QStringLiteral("items"), words(folders + files, "item", "items"));
+    v.insert(QStringLiteral("sd"), QString::number(selFolders));
+    v.insert(QStringLiteral("sf"), QString::number(selFiles));
+    v.insert(QStringLiteral("si"), QString::number(selFolders + selFiles));
+    v.insert(QStringLiteral("sb"), selFolders + selFiles > 0 ? FileOps::formatSize(selBytes) : QString());
+    v.insert(QStringLiteral("selected"), selFolders + selFiles > 0 ? QStringLiteral("%1 selected").arg(selFolders + selFiles) : QString());
+    const int hidden = m_model->rowCount() - m_proxy->rowCount();
+    v.insert(QStringLiteral("hidden"), hidden > 0 ? QString::number(hidden) : QString());
+    v.insert(QStringLiteral("filter"), m_proxy->filterText());
+    QString flat;
     if (m_lister->flatMode() != DirLister::FlatMode::Off) {
-        text += QStringLiteral(" - flat view");
+        flat = QStringLiteral("flat view");
         if (m_lister->lastListingTruncated())
-            text += QStringLiteral(" (stopped at %1 items)").arg(DirLister::kFlatLimit);
+            flat += QStringLiteral(" (stopped at %1 items)").arg(DirLister::kFlatLimit);
     }
-    return text;
+    v.insert(QStringLiteral("flat"), flat);
+    const QString focus = focusedPath();
+    const int frow = focus.isEmpty() ? -1 : m_model->rowForPath(focus);
+    if (frow >= 0) {
+        const FileItem &it = m_model->item(frow);
+        v.insert(QStringLiteral("name"), it.name);
+        v.insert(QStringLiteral("size"), it.isDir ? QString() : FileOps::formatSize(it.size));
+        v.insert(QStringLiteral("modified"), QLocale().toString(it.modified, QLocale::ShortFormat));
+        v.insert(QStringLiteral("type"), m_model->data(m_model->index(frow, FileListModel::TypeColumn), Qt::DisplayRole).toString());
+    } else {
+        for (const char *k : {"name", "size", "modified", "type"})
+            v.insert(QLatin1String(k), QString());
+    }
+    v.insert(QStringLiteral("path"), Location::display(path()));
+    v.insert(QStringLiteral("folder"), Location::title(path()));
+    // The drive's space: folders on this computer and its cards only (asking a server is slow).
+    for (const char *k : {"df", "dt", "du", "dp", "low"})
+        v.insert(QLatin1String(k), QString());
+    if (withDisk && Location::isLocal(path())) {
+        const qint64 free = FileOps::bytesFree(path());
+        const qint64 total = FileOps::bytesTotal(path());
+        if (free >= 0 && total > 0) {
+            v.insert(QStringLiteral("df"), FileOps::formatSize(free));
+            v.insert(QStringLiteral("dt"), FileOps::formatSize(total));
+            v.insert(QStringLiteral("du"), FileOps::formatSize(total - free));
+            v.insert(QStringLiteral("dp"), QString::number(qRound(100.0 * double(total - free) / double(total))));
+            // Nearly full (under 5%, or under 1 GB): shown in the warning color.
+            v.insert(QStringLiteral("low"), (free < total / 20 || free < qint64(1) << 30) ? QStringLiteral("1") : QStringLiteral("0"));
+        }
+    }
+    return v;
+}
+
+QString FolderTab::statusText() const
+{
+    const QString msg = statusMessage();
+    if (!msg.isEmpty())
+        return msg;
+    const QString def = Prefs::instance()->values().effectiveStatusDefinition();
+    return StatusFormat::plainText(StatusFormat::render(def, statusValues(def.contains(QLatin1String("{d")) || def.contains(QLatin1String("{bar}")))), false);
 }
 
 void FolderTab::selectPaths(const QStringList &paths)

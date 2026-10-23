@@ -1,4 +1,6 @@
 #include "ui/FileDisplay.h"
+#include "ui/StatusLine.h"
+#include "core/StatusFormat.h"
 #include "core/Prefs.h"
 #include <QLocale>
 #include "core/Location.h"
@@ -107,7 +109,7 @@ FileDisplay::FileDisplay(AliasManager &aliases, QWidget *parent)
     , m_crumbs(new BreadcrumbBar(aliases, this))
     , m_tabs(new QTabBar(this))
     , m_stack(new QStackedWidget(this))
-    , m_status(new QLabel(this))
+    , m_status(new StatusLine(this))
 {
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -198,22 +200,11 @@ FileDisplay::FileDisplay(AliasManager &aliases, QWidget *parent)
     m_body->setChildrenCollapsible(false);
     layout->addWidget(m_body, 1);
 
-    m_status->setContentsMargins(6, 2, 6, 2);
-    m_status->setTextInteractionFlags(Qt::NoTextInteraction);
-    QFont small = m_status->font();
+    // The status bar, laid out by its definition (Preferences > Status Bar).
+    QFont small = font();
     small.setPointSizeF(small.pointSizeF() * 0.92);
-    m_status->setFont(small);
-    // Free space on the drive, at the right of the status line.
-    m_free = new QLabel(this);
-    m_free->setContentsMargins(6, 2, 6, 2);
-    m_free->setFont(small);
-    m_free->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    auto *statusRow = new QHBoxLayout;
-    statusRow->setContentsMargins(0, 0, 0, 0);
-    statusRow->setSpacing(0);
-    statusRow->addWidget(m_status, 1);
-    statusRow->addWidget(m_free);
-    layout->addLayout(statusRow);
+    m_status->setTextFont(small);
+    layout->addWidget(m_status);
 
     connect(m_back, &QToolButton::clicked, this, [this]() {
         if (auto *t = currentTab())
@@ -274,8 +265,6 @@ FileDisplay::FileDisplay(AliasManager &aliases, QWidget *parent)
 
     connect(Style::instance(), &Style::changed, this, &FileDisplay::applyStyle);
     connect(Prefs::instance(), &Prefs::changed, this, [this]() {
-        if (FolderTab *t = currentTab())
-            m_status->setText(t->statusText());
         updateFreeSpace();
     });
     setRole(Role::None);
@@ -409,10 +398,8 @@ void FileDisplay::wireTab(FolderTab *t)
         }
     });
     connect(t, &FolderTab::statusChanged, this, [this, t]() {
-        if (t == currentTab()) {
-            m_status->setText(t->statusText());
+        if (t == currentTab())
             updateFreeSpace();
-        }
     });
     connect(t, &FolderTab::activated, this, [this]() { Q_EMIT activated(this); });
     for (auto sig : {&FolderTab::selectionChanged, &FolderTab::viewStateChanged, &FolderTab::statusChanged}) {
@@ -461,55 +448,51 @@ void FileDisplay::updateHeader()
     m_up->setEnabled(t->path() != QLatin1String("/"));
     if (m_tree)
         m_tree->setPath(t->path());
-    m_status->setText(t->statusText());
     updateFreeSpace();
 }
 
 void FileDisplay::updateFreeSpace()
 {
+    // The whole status bar: its definition, filled in for the list shown.
     FolderTab *t = currentTab();
-    const QString path = t ? t->path() : QString();
-    qint64 free = -1;
-    qint64 total = -1;
-    // Folders on this computer and its cards only: asking a server is slow.
-    if (Location::isLocal(path) && Prefs::instance()->values().statusFree) {
-        free = FileOps::bytesFree(path);
-        total = FileOps::bytesTotal(path);
-    }
-    if (free < 0 || total <= 0) {
-        m_free->clear();
-        m_free->setToolTip(QString());
+    if (!t) {
+        m_status->setMessage(QString());
         return;
     }
-    m_free->setText(QStringLiteral("%1 free of %2").arg(FileOps::formatSize(free), FileOps::formatSize(total)));
-    m_free->setToolTip(QStringLiteral("%1 bytes free").arg(QLocale().toString(free)));
-    // Nearly full (under 5%, or under 1 GB): shown in the warning color.
-    const bool low = free < total / 20 || free < qint64(1) << 30;
-    m_free->setProperty("low", low);
-    QPalette pal = m_status->palette();
-    if (low)
-        pal.setColor(QPalette::WindowText, QColor(0xd0, 0x40, 0x30));
-    m_free->setPalette(pal);
+    const QString msg = t->statusMessage();
+    if (!msg.isEmpty()) {
+        m_status->setMessage(msg);
+        return;
+    }
+    const QString def = Prefs::instance()->values().effectiveStatusDefinition();
+    QHash<QString, QString> v = t->statusValues(def.contains(QLatin1String("{d")) || def.contains(QLatin1String("{bar}")));
+    v.insert(QStringLiteral("tabs"), QString::number(tabCount()));
+    v.insert(QStringLiteral("role"), m_role == Role::Source ? QStringLiteral("SOURCE") : m_role == Role::Dest ? QStringLiteral("DEST") : QString());
+    m_status->setSegments(StatusFormat::render(def, v));
 }
 
 QString FileDisplay::freeSpaceText() const
 {
-    return m_free->text();
+    return m_status->rightText();
+}
+
+QString FileDisplay::statusLineText() const
+{
+    return m_status->leftText();
 }
 
 void FileDisplay::setRole(Role role)
 {
     m_role = role;
     applyStyle();
+    updateFreeSpace(); // {role}
 }
 
 void FileDisplay::applyStyle()
 {
     QFont small = font();
     small.setPointSizeF(font().pointSizeF() * 0.92);
-    m_status->setFont(small);
-    if (m_free)
-        m_free->setFont(small);
+    m_status->setTextFont(small);
     const Theme &theme = Style::instance()->theme();
     const QPalette pal = palette();
     auto textOn = [](const QColor &c) {

@@ -1,4 +1,11 @@
 #include "ui/PreferencesDialog.h"
+#include <QTextCursor>
+#include <QToolButton>
+#include <QPlainTextEdit>
+#include <QFontDatabase>
+#include "ui/FolderTab.h"
+#include "core/StatusFormat.h"
+#include "ui/StatusLine.h"
 #include <QSet>
 #include <QMimeDatabase>
 #include "core/Apps.h"
@@ -138,7 +145,7 @@ QString safeFileName(QString name)
 QStringList PreferencesDialog::pageNames()
 {
     return {QStringLiteral("general"), QStringLiteral("appearance"), QStringLiteral("theme"), QStringLiteral("labels"),
-            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("filetypes"), QStringLiteral("toolbars")};
+            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("filetypes"), QStringLiteral("toolbars"), QStringLiteral("statusbar")};
 }
 
 PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, const QString &page)
@@ -175,7 +182,7 @@ PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, cons
     layout->addWidget(buttons);
 
     addPage(QStringLiteral("general"), QStringLiteral("General"), QStringLiteral("preferences-system"), buildGeneral(),
-            {QStringLiteral("status"), QStringLiteral("free space"), QStringLiteral("terminal"), QStringLiteral("konsole"),
+            {QStringLiteral("terminal"), QStringLiteral("konsole"), QStringLiteral("junk"),
              QStringLiteral("retry"), QStringLiteral("skip"), QStringLiteral("error")});
     addPage(QStringLiteral("appearance"), QStringLiteral("Appearance"), QStringLiteral("preferences-desktop-theme"), buildAppearance(),
             {QStringLiteral("theme"), QStringLiteral("size"), QStringLiteral("font"), QStringLiteral("icon"), QStringLiteral("dark"),
@@ -194,6 +201,9 @@ PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, cons
             {QStringLiteral("open with"), QStringLiteral("application"), QStringLiteral("default"), QStringLiteral("program")});
     addPage(QStringLiteral("toolbars"), QStringLiteral("Toolbars"), QStringLiteral("configure-toolbars"), buildToolbars(),
             {QStringLiteral("button"), QStringLiteral("customize"), QStringLiteral("customize")});
+    addPage(QStringLiteral("statusbar"), QStringLiteral("Status Bar"), QStringLiteral("view-list-details"), buildStatusBar(),
+            {QStringLiteral("status"), QStringLiteral("free space"), QStringLiteral("codes"), QStringLiteral("definition"),
+             QStringLiteral("bar graph"), QStringLiteral("selected"), QStringLiteral("count")});
 
     connect(m_nav, &QListWidget::currentRowChanged, this, [this](int row) {
         if (row >= 0)
@@ -213,18 +223,12 @@ QWidget *PreferencesDialog::buildGeneral()
     auto *page = new QWidget;
     auto *layout = new QVBoxLayout(page);
     const Prefs::Values &v = Prefs::instance()->values();
-    auto *status = new QGroupBox(QStringLiteral("Status line"), page);
-    auto *sl = new QVBoxLayout(status);
     auto box = [&](const QString &key, const QString &text, bool on, QLayout *into, QWidget *parent) {
         auto *b = new QCheckBox(text, parent);
         b->setChecked(on);
         into->addWidget(b);
         m_general.insert(key, b);
     };
-    box(QStringLiteral("counts"), QStringLiteral("Folders and files in the list"), v.statusCounts, sl, status);
-    box(QStringLiteral("selection"), QStringLiteral("What is selected, and its size"), v.statusSelection, sl, status);
-    box(QStringLiteral("free"), QStringLiteral("Free space on the drive or card"), v.statusFree, sl, status);
-    layout->addWidget(status);
     auto *copies = new QGroupBox(QStringLiteral("Copying"), page);
     auto *cl = new QVBoxLayout(copies);
     box(QStringLiteral("ask"), QStringLiteral("Ask Retry / Skip / Abort when an item fails (otherwise skip it and list it at the end)"),
@@ -305,6 +309,129 @@ void PreferencesDialog::refreshFileTypes()
         m_fileTypes->setItem(r, 2, new QTableWidgetItem(app.isValid() ? app.name : it.value() + QStringLiteral(" (not installed)")));
     }
     m_fileTypes->resizeColumnsToContents();
+}
+
+QWidget *PreferencesDialog::buildStatusBar()
+{
+    auto *page = new QWidget;
+    auto *layout = new QVBoxLayout(page);
+    const Prefs::Values &v = Prefs::instance()->values();
+    auto box = [&](const QString &key, const QString &text, bool on, QLayout *into, QWidget *parent) {
+        auto *b = new QCheckBox(text, parent);
+        b->setChecked(on);
+        into->addWidget(b);
+        m_general.insert(key, b);
+        return b;
+    };
+    auto *simple = new QGroupBox(QStringLiteral("Simple"), page);
+    auto *sl = new QVBoxLayout(simple);
+    box(QStringLiteral("counts"), QStringLiteral("Folders and files in the list"), v.statusCounts, sl, simple);
+    box(QStringLiteral("selection"), QStringLiteral("What is selected, and its size"), v.statusSelection, sl, simple);
+    box(QStringLiteral("free"), QStringLiteral("Free space on the drive or card"), v.statusFree, sl, simple);
+    layout->addWidget(simple);
+
+    QCheckBox *custom = box(QStringLiteral("custom"), QStringLiteral("Use my own definition, with codes (as in Opus)"),
+                            !v.statusDefinition.trimmed().isEmpty(), layout, page);
+    auto *defBox = new QGroupBox(QStringLiteral("Definition"), page);
+    auto *dl = new QVBoxLayout(defBox);
+    auto *row = new QHBoxLayout;
+    auto *codesBtn = new QToolButton(defBox);
+    codesBtn->setText(QStringLiteral("Codes"));
+    codesBtn->setPopupMode(QToolButton::InstantPopup);
+    auto *codesMenu = new QMenu(codesBtn);
+    QHash<QString, QMenu *> groups;
+    m_statusDef = new QPlainTextEdit(defBox);
+    m_statusDef->setObjectName(QStringLiteral("status-definition"));
+    m_statusDef->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    m_statusDef->setPlainText(v.effectiveStatusDefinition());
+    m_statusDef->setFixedHeight(fontMetrics().height() * 6);
+    for (const StatusFormat::CodeInfo &c : StatusFormat::codes()) {
+        QMenu *&g = groups[c.group];
+        if (!g)
+            g = codesMenu->addMenu(c.group);
+        QAction *a = g->addAction(QStringLiteral("%1   %2").arg(c.text, c.code));
+        const QString code = c.code;
+        connect(a, &QAction::triggered, this, [this, code]() {
+            QTextCursor cur = m_statusDef->textCursor();
+            // Paired tags go around what is selected, the cursor between them.
+            const int mid = code.indexOf(QStringLiteral("></"));
+            if (code.startsWith(QLatin1Char('<')) && mid > 0) {
+                const QString sel = cur.selectedText();
+                cur.insertText(code.left(mid + 1) + sel + code.mid(mid + 1));
+                if (sel.isEmpty())
+                    cur.movePosition(QTextCursor::Left, QTextCursor::MoveAnchor, int(code.size() - mid - 1));
+            } else if (code == QLatin1String("[ ]")) {
+                const QString sel = cur.selectedText();
+                cur.insertText(QLatin1Char('[') + sel + QLatin1Char(']'));
+                if (sel.isEmpty())
+                    cur.movePosition(QTextCursor::Left);
+            } else {
+                cur.insertText(code);
+            }
+            m_statusDef->setTextCursor(cur);
+            m_statusDef->setFocus();
+        });
+    }
+    codesBtn->setMenu(codesMenu);
+    auto *samplesBtn = new QToolButton(defBox);
+    samplesBtn->setText(QStringLiteral("Samples"));
+    samplesBtn->setPopupMode(QToolButton::InstantPopup);
+    auto *samplesMenu = new QMenu(samplesBtn);
+    for (const auto &smp : StatusFormat::samples()) {
+        const QString text = smp.second;
+        connect(samplesMenu->addAction(smp.first), &QAction::triggered, this, [this, text]() { m_statusDef->setPlainText(text); });
+    }
+    samplesBtn->setMenu(samplesMenu);
+    row->addWidget(codesBtn);
+    row->addWidget(samplesBtn);
+    row->addStretch(1);
+    dl->addLayout(row);
+    dl->addWidget(m_statusDef);
+    auto *help = new QLabel(QStringLiteral("{right} moves what follows to the right; [ ] shows a part only when a code in it has a value; "
+                                           "<b>, <i>, <u> and <#rrggbb> style text. Preview, for the list you are in:"),
+                            defBox);
+    help->setTextFormat(Qt::PlainText);
+    help->setWordWrap(true);
+    dl->addWidget(help);
+    m_statusPreview = new StatusLine(defBox);
+    m_statusPreview->setObjectName(QStringLiteral("status-preview"));
+    m_statusPreview->setAutoFillBackground(true);
+    m_statusPreview->setBackgroundRole(QPalette::Base);
+    dl->addWidget(m_statusPreview);
+    m_statusError = new QLabel(defBox);
+    m_statusError->setStyleSheet(QStringLiteral("color: #d04030"));
+    dl->addWidget(m_statusError);
+    layout->addWidget(defBox);
+    layout->addStretch(1);
+
+    auto refresh = [this, custom, simple, defBox]() {
+        simple->setEnabled(!custom->isChecked());
+        m_statusDef->setReadOnly(!custom->isChecked());
+        if (!custom->isChecked()) {
+            const QSignalBlocker b(m_statusDef);
+            m_statusDef->setPlainText(StatusFormat::defaultDefinition(m_general.value(QStringLiteral("counts"))->isChecked(),
+                                                                      m_general.value(QStringLiteral("selection"))->isChecked(),
+                                                                      m_general.value(QStringLiteral("free"))->isChecked()));
+        }
+        const QString def = m_statusDef->toPlainText();
+        QString err;
+        m_statusError->setText(StatusFormat::check(def, &err) ? QString() : err);
+        QHash<QString, QString> values;
+        if (m_lister) {
+            if (FolderTab *t = m_lister->sourceTabForTesting())
+                values = t->statusValues(true);
+        }
+        values.insert(QStringLiteral("role"), QStringLiteral("SOURCE"));
+        values.insert(QStringLiteral("tabs"), QStringLiteral("1"));
+        m_statusPreview->setSegments(StatusFormat::render(def, values));
+        Q_UNUSED(defBox);
+    };
+    connect(custom, &QCheckBox::toggled, this, refresh);
+    for (const char *k : {"counts", "selection", "free"})
+        connect(m_general.value(QLatin1String(k)), &QCheckBox::toggled, this, refresh);
+    connect(m_statusDef, &QPlainTextEdit::textChanged, this, refresh);
+    refresh();
+    return page;
 }
 
 void PreferencesDialog::addPage(const QString &key, const QString &title, const QString &icon, QWidget *page, const QStringList &keywords)
@@ -929,6 +1056,17 @@ bool PreferencesDialog::apply(QString *error)
     v.statusSelection = m_general.value(QStringLiteral("selection"))->isChecked();
     v.statusFree = m_general.value(QStringLiteral("free"))->isChecked();
     v.askOnError = m_general.value(QStringLiteral("ask"))->isChecked();
+    if (m_general.value(QStringLiteral("custom"))->isChecked()) {
+        QString err;
+        if (!StatusFormat::check(m_statusDef->toPlainText(), &err)) {
+            if (error)
+                *error = QStringLiteral("Status bar: %1").arg(err);
+            return false;
+        }
+        v.statusDefinition = m_statusDef->toPlainText().trimmed();
+    } else {
+        v.statusDefinition.clear();
+    }
     v.junkHidden = m_general.value(QStringLiteral("junk"))->isChecked();
     const QString typed = m_terminal->currentText().trimmed();
     const int at = m_terminal->findText(typed);

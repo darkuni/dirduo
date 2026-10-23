@@ -11,6 +11,7 @@ class FolderTree;
 class QSplitter;
 class BreadcrumbBar;
 class QLabel;
+class StatusLine;
 class QMenu;
 class QStackedWidget;
 class QTabBar;
@@ -73,7 +74,8 @@ public:
     // Every tab and the tree, in percent.
     void setZoom(int percent);
     int zoom() const { return m_zoom; }
-    QString freeSpaceText() const; // "12.3 GB free of 64 GB", empty for servers
+    QString freeSpaceText() const; // the right of the status bar: "12.3 GB free of 64 GB", empty for servers
+    QString statusLineText() const; // the left of the status bar
 
 Q_SIGNALS:
     void activated(FileDisplay *display);
@@ -126,7 +128,6 @@ private:
     BreadcrumbBar *m_crumbs;
     QTabBar *m_tabs;
     QStackedWidget *m_stack;
-    QLabel *m_status;
-    QLabel *m_free = nullptr;
+    StatusLine *m_status;
     void updateFreeSpace();
 };

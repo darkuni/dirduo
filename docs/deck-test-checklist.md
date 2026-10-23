@@ -107,6 +107,7 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Window > Customize Toolbars > Commands > Toolbar pieces: drag "Copy Files ▾" onto a toolbar. Click it: copies; click its arrow: the menu. Drag a Spacer in front of a button: that button goes to the far end. Drag a Filter box in and type `*.png`.
 - [ ] In customize mode, right-click a toolbar > Button Style > Icons Only, and Large Icons. Right-click a toolbar (outside customize mode) > In the Menu Bar.
 - [ ] Window > Customize Toolbars > Default Toolbars: Add This Toolbar on Tools; drag "Turn Left" from Images onto it. Then Use the Opus Arrangement.
+- [ ] Preferences > Status Bar: tick "Use my own definition", Samples > Opus style, OK. The status bars show counts with icons, SOURCE/DEST and a disk bar. Codes menu > Disk space > Percent used adds {dp}.
 
 ## Report back
 

@@ -7,6 +7,8 @@
 #include "core/JobManager.h"
 #include "core/Location.h"
 #include "core/Paths.h"
+#include "core/StatusFormat.h"
+#include "core/Prefs.h"
 #include "ui/AppContext.h"
 #include "ui/CollisionDialog.h"
 #include "ui/DrivesBar.h"
@@ -597,6 +599,21 @@ int main(int argc, char *argv[])
             QTest::qWait(300);
             dlg->grab().save(out + QStringLiteral("/43-default-toolbars.png"));
             dlg->close();
+        }
+        {
+            Prefs::Values v = Prefs::instance()->values();
+            v.statusDefinition = StatusFormat::samples().at(1).second; // Opus style
+            Prefs::instance()->setValues(v);
+            w->display(0)->currentTab()->selectPaths({});
+            QTest::qWait(400);
+            shot(w, out, QStringLiteral("44-status-opus-style"));
+            PreferencesDialog prefs(context, w, QStringLiteral("statusbar"));
+            prefs.resize(860, 620);
+            prefs.show();
+            QTest::qWait(400);
+            prefs.grab().save(out + QStringLiteral("/45-status-preferences.png"));
+            v.statusDefinition.clear();
+            Prefs::instance()->setValues(v);
         }
     }
 

@@ -50,6 +50,10 @@ public:
     // From the listing, so it also works for remote items.
     bool isFolder(const QString &path) const;
     QString statusText() const;
+    // An error or "Reading folder...", which shows instead of the definition.
+    QString statusMessage() const;
+    // The values of the status bar's codes for this list (StatusFormat).
+    QHash<QString, QString> statusValues(bool withDisk) const;
     QString lastError() const { return m_error; }
 
     // Selects these paths once they are listed (now, or after the next refresh).

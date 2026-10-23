@@ -38,6 +38,7 @@
 #include "core/Location.h"
 #include "ui/ArchiveDialog.h"
 #include "ui/TagsDialog.h"
+#include "ui/StatusLine.h"
 #include "core/Condition.h"
 #include "ui/ChecksumDialog.h"
 #include "core/Checksum.h"
@@ -1614,6 +1615,41 @@ private Q_SLOTS:
         QVERIFY(w->runCommand(hidden ? QStringLiteral("Set HIDDEN=on") : QStringLiteral("Set HIDDEN=off")));
         t->navigate(back);
         waitListed(t, QDir(back).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
+    }
+
+    void statusBarDefinitions()
+    {
+        FolderTab *t = w->display(0)->currentTab();
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("statusbar"));
+            QCOMPARE(dlg.currentPage(), QStringLiteral("statusbar"));
+            QVERIFY(dlg.search(QStringLiteral("status")).contains(QStringLiteral("statusbar")));
+            QVERIFY(dlg.statusDefinitionEdit()->isReadOnly()); // simple until asked
+            dlg.generalBox(QStringLiteral("custom"))->setChecked(true);
+            dlg.statusDefinitionEdit()->setPlainText(QStringLiteral("Here: {ti} [<b>{selected}</b>]{right}{role} {bar}"));
+            auto *preview = dlg.findChild<StatusLine *>(QStringLiteral("status-preview"));
+            QVERIFY(preview);
+            QVERIFY(preview->leftText().startsWith(QStringLiteral("Here: ")));
+            QCOMPARE(preview->rightText(), QStringLiteral("SOURCE"));
+            QVERIFY(dlg.apply());
+        }
+        QVERIFY(!Prefs::instance()->values().statusDefinition.isEmpty());
+        QTRY_VERIFY(w->display(0)->statusLineText().startsWith(QStringLiteral("Here: ")));
+        QVERIFY(t->statusText().startsWith(QStringLiteral("Here: ")));
+        QTRY_VERIFY(w->display(0)->findChild<QWidget *>(QStringLiteral("status-bar-graph")));
+        // A broken one is refused.
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("statusbar"));
+            dlg.statusDefinitionEdit()->setPlainText(QStringLiteral("[{ti}"));
+            QString err;
+            QVERIFY(!dlg.apply(&err));
+            QVERIFY(err.contains(QStringLiteral("not closed")));
+            // Back to simple.
+            dlg.generalBox(QStringLiteral("custom"))->setChecked(false);
+            QVERIFY(dlg.apply());
+        }
+        QVERIFY(Prefs::instance()->values().statusDefinition.isEmpty());
+        QTRY_VERIFY(t->statusText().contains(QStringLiteral("folder")));
     }
 
     void preferencesGeneralAndFileTypes()

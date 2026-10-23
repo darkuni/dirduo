@@ -12,6 +12,8 @@ class ListerWindow;
 class QCheckBox;
 class QComboBox;
 class QLabel;
+class QPlainTextEdit;
+class StatusLine;
 class QLineEdit;
 class QListWidget;
 class QStackedWidget;
@@ -66,6 +68,7 @@ public:
 
     // General and file types, for tests.
     QCheckBox *generalBox(const QString &key) const; // counts, selection, free, ask
+    QPlainTextEdit *statusDefinitionEdit() const { return m_statusDef; }
     QComboBox *terminalBox() const { return m_terminal; }
     QTableWidget *fileTypesTable() const { return m_fileTypes; }
 
@@ -87,6 +90,10 @@ private:
     QWidget *buildAliases();
     QWidget *buildFormats();
     QWidget *buildToolbars();
+    QWidget *buildStatusBar();
+    QPlainTextEdit *m_statusDef = nullptr;
+    StatusLine *m_statusPreview = nullptr;
+    QLabel *m_statusError = nullptr;
     void addPage(const QString &key, const QString &title, const QString &icon, QWidget *page, const QStringList &keywords);
     void loadThemeIntoEditor(const Theme &t);
     void previewTheme();

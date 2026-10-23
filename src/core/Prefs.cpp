@@ -1,6 +1,7 @@
 #include "core/Prefs.h"
 
 #include "core/Paths.h"
+#include "core/StatusFormat.h"
 
 #include <QSettings>
 
@@ -25,6 +26,7 @@ void Prefs::reload()
     v.statusFree = s.value(QStringLiteral("statusFree"), true).toBool();
     v.askOnError = s.value(QStringLiteral("askOnError"), true).toBool();
     v.junkHidden = s.value(QStringLiteral("junkHidden"), true).toBool();
+    v.statusDefinition = s.value(QStringLiteral("statusDefinition")).toString();
     v.terminal = s.value(QStringLiteral("terminal")).toString();
     m_values = v;
 }
@@ -39,6 +41,13 @@ void Prefs::setValues(const Values &v)
     s.setValue(QStringLiteral("statusFree"), v.statusFree);
     s.setValue(QStringLiteral("askOnError"), v.askOnError);
     s.setValue(QStringLiteral("junkHidden"), v.junkHidden);
+    s.setValue(QStringLiteral("statusDefinition"), v.statusDefinition);
     s.setValue(QStringLiteral("terminal"), v.terminal);
     Q_EMIT changed();
+}
+
+QString Prefs::Values::effectiveStatusDefinition() const
+{
+    return statusDefinition.trimmed().isEmpty() ? StatusFormat::defaultDefinition(statusCounts, statusSelection, statusFree)
+                                                : statusDefinition;
 }
