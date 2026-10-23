@@ -64,6 +64,7 @@
 #include <QTest>
 #include <QWheelEvent>
 #include <QSignalSpy>
+#include <QMessageBox>
 #include <QTimer>
 
 namespace {
@@ -1701,6 +1702,83 @@ private Q_SLOTS:
         QVERIFY(t->view()->font().pointSizeF() > base);
         QVERIFY(w->runCommand(QStringLiteral("Set SIZE=normal\nSet TREE=off")));
         w->setZoom(100, w->display(1));
+    }
+
+    void flatViewCopyStructure()
+    {
+        QTemporaryDir own;
+        const QString base = own.path();
+        const QString src = base + QStringLiteral("/src");
+        touch(src + QStringLiteral("/top.txt"));
+        touch(src + QStringLiteral("/sub/x.txt"));
+        touch(src + QStringLiteral("/sub/deep/y.txt"));
+        for (const char *d : {"keep", "same", "asked", "cancel"})
+            QDir().mkpath(base + QLatin1Char('/') + QLatin1String(d));
+        FolderTab *t = w->display(0)->currentTab();
+        t->navigate(src);
+        waitListed(t, 2);
+        // Ungrouped: one list, no folder headings; toggling brings it back.
+        QVERIFY(w->runCommand(QStringLiteral("Set FLATVIEW=ungrouped")));
+        waitListed(t, 5); // sub, deep and three files
+        QCOMPARE(t->groupBy(), FileListModel::GroupBy::None);
+        QVERIFY(w->runCommand(QStringLiteral("Set FLATVIEW=toggle")));
+        QCOMPARE(t->flatMode(), DirLister::FlatMode::Off);
+        QVERIFY(w->runCommand(QStringLiteral("Set FLATVIEW=toggle")));
+        QCOMPARE(t->flatMode(), DirLister::FlatMode::Mixed);
+        waitListed(t, 5);
+
+        const QStringList files = {src + QStringLiteral("/top.txt"), src + QStringLiteral("/sub/x.txt"),
+                                   src + QStringLiteral("/sub/deep/y.txt")};
+        t->selectPaths(files);
+        QVERIFY(w->runCommand(QStringLiteral("Copy TO=\"%1/keep\" STRUCTURE=keep").arg(base)));
+        m_app->jobs().waitForIdle(5000);
+        QTRY_VERIFY(QFile::exists(base + QStringLiteral("/keep/sub/deep/y.txt")));
+        QVERIFY(QFile::exists(base + QStringLiteral("/keep/sub/x.txt")));
+        QVERIFY(QFile::exists(base + QStringLiteral("/keep/top.txt")));
+
+        QVERIFY(w->runCommand(QStringLiteral("Copy TO=\"%1/same\" STRUCTURE=flat").arg(base)));
+        m_app->jobs().waitForIdle(5000);
+        QTRY_VERIFY(QFile::exists(base + QStringLiteral("/same/y.txt")));
+        QVERIFY(QFile::exists(base + QStringLiteral("/same/x.txt")));
+        QVERIFY(!QFile::exists(base + QStringLiteral("/same/sub")));
+
+        // A folder picked with things inside it: the folder carries them.
+        t->selectPaths({src + QStringLiteral("/sub"), src + QStringLiteral("/sub/deep/y.txt")});
+        QVERIFY(w->runCommand(QStringLiteral("Copy TO=\"%1/keep\" STRUCTURE=keep WHENEXISTS=replace").arg(base)));
+        m_app->jobs().waitForIdle(5000);
+        QVERIFY(!QFile::exists(base + QStringLiteral("/keep/deep")));
+
+        // Without STRUCTURE it asks.
+        auto answer = [](const QString &button) {
+            QTimer::singleShot(0, [button]() {
+                auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+                QVERIFY(box);
+                for (QAbstractButton *b : box->buttons()) {
+                    if (b->text().remove(QLatin1Char('&')) == button) {
+                        b->click();
+                        return;
+                    }
+                }
+                box->reject();
+            });
+        };
+        t->selectPaths(files);
+        answer(QStringLiteral("Same Folder"));
+        QVERIFY(w->runCommand(QStringLiteral("Copy TO=\"%1/asked\"").arg(base)));
+        m_app->jobs().waitForIdle(5000);
+        QTRY_VERIFY(QFile::exists(base + QStringLiteral("/asked/y.txt")));
+        answer(QStringLiteral("Cancel"));
+        w->runCommand(QStringLiteral("Copy TO=\"%1/cancel\"").arg(base));
+        m_app->jobs().waitForIdle(5000);
+        QVERIFY(QDir(base + QStringLiteral("/cancel")).isEmpty());
+        // Files all from the folder itself: no question.
+        t->selectPaths({src + QStringLiteral("/top.txt")});
+        QVERIFY(w->runCommand(QStringLiteral("Copy TO=\"%1/cancel\"").arg(base)));
+        m_app->jobs().waitForIdle(5000);
+        QTRY_VERIFY(QFile::exists(base + QStringLiteral("/cancel/top.txt")));
+        QVERIFY(w->runCommand(QStringLiteral("Set FLATVIEW=off")));
+        t->navigate(root);
+        waitListed(t, QDir(root).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
     }
 
     void columnsResizable()

@@ -1372,9 +1372,9 @@ bool FolderTab::flatModeFromName(const QString &name, DirLister::FlatMode &out)
         out = DirLister::FlatMode::Off;
     else if (n == QLatin1String("grouped") || n == QLatin1String("on"))
         out = DirLister::FlatMode::Grouped;
-    else if (n == QLatin1String("mixed"))
+    else if (n == QLatin1String("mixed") || n == QLatin1String("ungrouped"))
         out = DirLister::FlatMode::Mixed;
-    else if (n == QLatin1String("nofolders") || n == QLatin1String("mixednofolders"))
+    else if (n == QLatin1String("nofolders") || n == QLatin1String("mixednofolders") || n == QLatin1String("files"))
         out = DirLister::FlatMode::MixedNoFolders;
     else
         return false;

@@ -39,6 +39,7 @@
 #include "ui/ProgressWindow.h"
 
 #include <QAbstractItemView>
+#include <QPushButton>
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
@@ -259,8 +260,8 @@ void ListerWindow::fillViewMenus()
     fill(m_flatMenu,
          {{QStringLiteral("Off"), QStringLiteral("Set FLATVIEW=off")},
           {QStringLiteral("Grouped by Folder"), QStringLiteral("Set FLATVIEW=grouped")},
-          {QStringLiteral("Mixed"), QStringLiteral("Set FLATVIEW=mixed")},
-          {QStringLiteral("Mixed, Files Only"), QStringLiteral("Set FLATVIEW=nofolders")}},
+          {QStringLiteral("Ungrouped"), QStringLiteral("Set FLATVIEW=mixed")},
+          {QStringLiteral("Ungrouped, Files Only"), QStringLiteral("Set FLATVIEW=nofolders")}},
          t ? FolderTab::flatModeName(t->flatMode()) : QString());
     using G = FileListModel::GroupBy;
     QList<QPair<QString, QString>> groups;
@@ -1264,6 +1265,19 @@ bool ListerWindow::promptText(const QString &title, const QString &label, QStrin
     return true;
 }
 
+int ListerWindow::choose(const QString &title, const QString &text, const QStringList &choices)
+{
+    QMessageBox box(QMessageBox::Question, title, text, QMessageBox::NoButton, this);
+    QList<QAbstractButton *> buttons;
+    for (const QString &c : choices)
+        buttons << box.addButton(c, QMessageBox::AcceptRole);
+    box.addButton(QMessageBox::Cancel);
+    if (!buttons.isEmpty())
+        box.setDefaultButton(qobject_cast<QPushButton *>(buttons.first()));
+    box.exec();
+    return int(buttons.indexOf(box.clickedButton()));
+}
+
 bool ListerWindow::confirm(const QString &title, const QString &text)
 {
     return QMessageBox::question(this, title, text, QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes;
@@ -1550,11 +1564,13 @@ bool ListerWindow::set(const ParsedCommand &cmd, QString *error)
             sourceTab()->setLiveFolderSizes(on);
         } else if (key == QLatin1String("FLATVIEW")) {
             DirLister::FlatMode mode;
+            // Toggling turns on the kind of flat view used last.
             if (value == QLatin1String("toggle") || value.isEmpty())
-                mode = sourceTab()->flatMode() == DirLister::FlatMode::Off ? DirLister::FlatMode::Grouped
-                                                                           : DirLister::FlatMode::Off;
+                mode = sourceTab()->flatMode() == DirLister::FlatMode::Off ? m_lastFlat : DirLister::FlatMode::Off;
             else if (!FolderTab::flatModeFromName(value, mode))
-                return fail(QStringLiteral("FLATVIEW takes off, grouped, mixed, nofolders or toggle."));
+                return fail(QStringLiteral("FLATVIEW takes off, grouped, ungrouped, nofolders or toggle."));
+            if (mode != DirLister::FlatMode::Off)
+                m_lastFlat = mode;
             sourceTab()->setFlatMode(mode);
         } else if (key == QLatin1String("TREE") || key == QLatin1String("FOLDERTREE")) {
             TreeMode mode;
@@ -1787,7 +1803,23 @@ void ListerWindow::onDropRequested(FileDisplay *d, const QList<QUrl> &urls, cons
         return;
 
     makeSource(d);
-    m_app.engine().copyItems(sources, targetDir, move);
+    // Dragged out of a flat view: keep the folders the items came from?
+    QString flatRoot;
+    for (FileDisplay *from : m_displays) {
+        FolderTab *t = from->currentTab();
+        if (t && t->flatMode() != DirLister::FlatMode::Off && CommandEngine::fromSubfolders(sources, t->path())) {
+            flatRoot = t->path();
+            break;
+        }
+    }
+    if (flatRoot.isEmpty()) {
+        m_app.engine().copyItems(sources, targetDir, move);
+        return;
+    }
+    QString error;
+    if (!m_app.engine().copyFromFlat(sources, flatRoot, targetDir, move, CollisionAction::Ask, *this, &error)
+        && error != CommandEngine::kCanceled && !error.isEmpty())
+        showError(move ? QStringLiteral("Move") : QStringLiteral("Copy"), error);
 }
 
 void ListerWindow::onContextMenu(FileDisplay *d, const QPoint &globalPos, bool onItem)

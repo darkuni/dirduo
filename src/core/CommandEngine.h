@@ -28,6 +28,14 @@ public:
     virtual bool confirm(const QString &title, const QString &text) = 0;
     virtual void showError(const QString &title, const QString &text) = 0;
     virtual QString chooseDestination(const QString &title) = 0; // empty when canceled
+    // One of several answers (index), or -1 when canceled.
+    virtual int choose(const QString &title, const QString &text, const QStringList &choices)
+    {
+        Q_UNUSED(title)
+        Q_UNUSED(text)
+        Q_UNUSED(choices)
+        return -1;
+    }
 
     // Commands that change the lister itself. cmd carries PATH= already
     // resolved to an absolute path where one was given.
@@ -124,6 +132,18 @@ public:
     int copyItems(const QStringList &sources, const QString &destDir, bool move,
                   CollisionAction whenExists = CollisionAction::Ask,
                   const QMap<QString, QString> &newNames = {});
+    // Items picked in a flat view of root: do some come from folders inside it?
+    static bool fromSubfolders(const QStringList &sources, const QString &root);
+    // Copies or moves items picked in a flat view of root. With keep, items
+    // from folders inside root land in the same folders under destDir (made
+    // as needed); otherwise they all land in destDir. Local destinations only
+    // when keeping.
+    bool copyItemsFrom(const QStringList &sources, const QString &root, const QString &destDir, bool move, bool keep,
+                       CollisionAction whenExists, QString *error);
+    // Asks whether to keep the folders (when some items come from inside
+    // root) and copies. False when canceled or it failed (error set).
+    bool copyFromFlat(const QStringList &sources, const QString &root, const QString &destDir, bool move,
+                      CollisionAction whenExists, CommandContext &ctx, QString *error);
     int trashItems(const QStringList &paths);
     int deleteItems(const QStringList &paths);
 

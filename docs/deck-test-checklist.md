@@ -27,6 +27,9 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 
 - [ ] Group button (by type): headings with counts; the arrow folds a group; clicking a heading selects the group.
 - [ ] Right-click a column header: add Created and Extension; Reset Columns puts them back.
+- [ ] Drag column edges with the mouse and with a finger, the Name column too. Double-click the Name column's right edge: it fills the room again.
+- [ ] Flat view > Ungrouped, select files from different subfolders, copy them to the other display: it asks Keep Folder Structure or Same Folder; try both.
+- [ ] Right-click one or several pictures: Convert Image(s)... is there; it is not there when a non-picture is selected.
 - [ ] Ctrl+F filter: type `*.png` and only PNGs stay; Esc clears it.
 - [ ] Sizes button on a big folder (Emulation, for example): sizes and bars fill in without freezing.
 - [ ] Flat button on a folder with subfolders: everything below, grouped by folder.
@@ -53,7 +56,7 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] ROMs on internal storage on one side, the SD card's ROMs on the other: Edit > Select by Comparing > Newer Here, or Not There selects what the card is missing.
 - [ ] Copy something to the SD card, then Ctrl+Z: the copy goes (to the SD card's trash). Trash a file, Ctrl+Z: it is back. Tools > File Log shows both.
 - [ ] In Details view, click the triangle beside a folder (or press Right): it opens in place under itself; Left closes it.
-- [ ] Hold Shift and scroll (mouse wheel, or the right trackpad) over a list: that lister zooms; a second lister stays as it is. Ctrl+0 resets. Try a two-finger pinch on the touchscreen too.
+- [ ] Hold Shift and scroll (mouse wheel, or the right trackpad) over a list: that list zooms; the other display and a second lister stay as they are. Ctrl+0 resets. Try a two-finger pinch on the touchscreen too.
 - [ ] Take a screenshot with Spectacle and copy it to the clipboard, then Ctrl+V in a folder: a PNG appears.
 - [ ] Select a few files, Shift+F2: Advanced Rename shows the before and after; rename, then Edit > Undo Rename.
 - [ ] Window > Customize Toolbars: drag a button to another spot, double-click one to edit, close.

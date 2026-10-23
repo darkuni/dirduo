@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/CommandEngine.h"
+#include "core/DirLister.h"
 
 #include <QMainWindow>
 #include <QPointer>
@@ -101,6 +102,7 @@ public:
     bool confirm(const QString &title, const QString &text) override;
     void showError(const QString &title, const QString &text) override;
     QString chooseDestination(const QString &title) override;
+    int choose(const QString &title, const QString &text, const QStringList &choices) override;
     bool go(const ParsedCommand &cmd, QString *error) override;
     bool set(const ParsedCommand &cmd, QString *error) override;
     bool select(const ParsedCommand &cmd, QString *error) override;
@@ -201,6 +203,7 @@ private:
     QMenu *m_themeMenu = nullptr;
     QMenu *m_sizeMenu = nullptr;
     QAction *m_actZoomReset = nullptr;
+    DirLister::FlatMode m_lastFlat = DirLister::FlatMode::Grouped;
     class MetadataPane *m_metaPane = nullptr;
 public:
     MetadataPane *metadataPane() const { return m_metaPane; }

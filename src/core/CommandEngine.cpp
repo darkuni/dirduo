@@ -13,6 +13,7 @@
 #include <QDateTime>
 #include <QBuffer>
 #include <QDir>
+#include <QHash>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QMimeData>
@@ -271,6 +272,97 @@ int CommandEngine::copyItems(const QStringList &sources, const QString &destDir,
     return m_jobs.enqueue(spec);
 }
 
+bool CommandEngine::fromSubfolders(const QStringList &sources, const QString &root)
+{
+    if (root.isEmpty())
+        return false;
+    const QString base = Location::clean(root);
+    const QString prefix = base.endsWith(QLatin1Char('/')) ? base : base + QLatin1Char('/');
+    for (const QString &s : sources) {
+        const QString parent = Location::parent(s);
+        if (parent != base && parent.startsWith(prefix))
+            return true;
+    }
+    return false;
+}
+
+bool CommandEngine::copyItemsFrom(const QStringList &sources, const QString &root, const QString &destDir, bool move,
+                                  bool keep, CollisionAction whenExists, QString *error)
+{
+    if (!keep) {
+        copyItems(sources, destDir, move, whenExists);
+        return true;
+    }
+    if (!Location::isLocal(destDir)) {
+        if (error)
+            *error = QStringLiteral("Keeping the folder structure works with folders on this computer and its cards for now. "
+                                    "Choose Same Folder to send them all to the server folder.");
+        return false;
+    }
+    const QString base = Location::clean(root);
+    const QString prefix = base.endsWith(QLatin1Char('/')) ? base : base + QLatin1Char('/');
+    // A folder carries what is inside it: drop items that sit in another picked folder.
+    QStringList picked;
+    for (const QString &s : sources)
+        picked << Location::clean(s);
+    QStringList kept;
+    for (const QString &s : std::as_const(picked)) {
+        bool inside = false;
+        for (const QString &other : std::as_const(picked)) {
+            if (other != s && s.startsWith(other + QLatin1Char('/'))) {
+                inside = true;
+                break;
+            }
+        }
+        if (!inside)
+            kept << s;
+    }
+    // One job per folder, in the order the folders first appear.
+    QStringList order;
+    QHash<QString, QStringList> groups;
+    for (const QString &s : std::as_const(kept)) {
+        const QString parent = Location::parent(s);
+        const QString rel = parent.startsWith(prefix) ? parent.mid(prefix.size()) : QString();
+        if (!groups.contains(rel))
+            order << rel;
+        groups[rel] << s;
+    }
+    const QString dest = QDir::cleanPath(destDir);
+    for (const QString &rel : std::as_const(order)) {
+        const QString target = rel.isEmpty() ? dest : dest + QLatin1Char('/') + rel;
+        if (!QDir().mkpath(target)) {
+            if (error)
+                *error = QStringLiteral("Could not make the folder \"%1\".").arg(target);
+            return false;
+        }
+        copyItems(groups.value(rel), target, move, whenExists);
+    }
+    return true;
+}
+
+bool CommandEngine::copyFromFlat(const QStringList &sources, const QString &root, const QString &destDir, bool move,
+                                 CollisionAction whenExists, CommandContext &ctx, QString *error)
+{
+    if (!fromSubfolders(sources, root)) {
+        copyItems(sources, destDir, move, whenExists);
+        return true;
+    }
+    const QString verb = move ? QStringLiteral("Move") : QStringLiteral("Copy");
+    const int answer = ctx.choose(
+        verb,
+        QStringLiteral("Some of these come from folders inside \"%1\".\n\n"
+                       "Keep Folder Structure makes the same folders at the destination.\n"
+                       "Same Folder puts everything straight into the destination.")
+            .arg(Location::fileName(root)),
+        {QStringLiteral("Keep Folder Structure"), QStringLiteral("Same Folder")});
+    if (answer < 0) {
+        if (error)
+            *error = kCanceled;
+        return false;
+    }
+    return copyItemsFrom(sources, root, destDir, move, answer == 0, whenExists, error);
+}
+
 int CommandEngine::trashItems(const QStringList &paths)
 {
     if (paths.isEmpty())
@@ -358,6 +450,19 @@ bool CommandEngine::cmdCopy(const ParsedCommand &cmd, CommandContext &ctx, bool 
         }
     }
 
+    // Picked in a flat view: items from folders inside it keep those folders
+    // or all land in the destination (STRUCTURE=keep|flat, else ask).
+    const QString structure = cmd.value(QStringLiteral("STRUCTURE")).toLower();
+    if (newNames.isEmpty() && fromSubfolders(sources, ctx.sourcePath())) {
+        if (structure == QLatin1String("keep") || structure == QLatin1String("flat") || structure == QLatin1String("same"))
+            return copyItemsFrom(sources, ctx.sourcePath(), dest, move, structure == QLatin1String("keep"), whenExists, error);
+        if (!structure.isEmpty() && structure != QLatin1String("ask")) {
+            if (error)
+                *error = QStringLiteral("STRUCTURE takes keep, flat or ask.");
+            return false;
+        }
+        return copyFromFlat(sources, ctx.sourcePath(), dest, move, whenExists, ctx, error);
+    }
     copyItems(sources, dest, move, whenExists, newNames);
     return true;
 }
