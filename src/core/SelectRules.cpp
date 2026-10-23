@@ -46,7 +46,8 @@ QString SelectRules::compareName(Compare c)
 bool SelectRules::isEmpty() const
 {
     return pattern.trimmed().isEmpty() && !hasKind && type == Type::Both && minSize < 0 && maxSize < 0
-        && !newerThan.isValid() && !olderThan.isValid() && compare == Compare::None;
+        && !newerThan.isValid() && !olderThan.isValid() && compare == Compare::None && label.isEmpty() && minRating < 0
+        && maxRating < 0 && tag.isEmpty();
 }
 
 QString SelectRules::counterpart(const QString &path) const
@@ -106,6 +107,24 @@ bool SelectRules::matches(const FileItem &item) const
         return false;
     if (olderThan.isValid() && !(item.modified < olderThan))
         return false;
+    if (!label.isEmpty()) {
+        if (label == QLatin1String("*") ? item.tags.label.isEmpty()
+            : label.compare(QLatin1String("none"), Qt::CaseInsensitive) == 0 ? !item.tags.label.isEmpty()
+                                                                              : item.tags.label.compare(label, Qt::CaseInsensitive) != 0)
+            return false;
+    }
+    if (minRating >= 0 && item.tags.rating < minRating)
+        return false;
+    if (maxRating >= 0 && item.tags.rating > maxRating)
+        return false;
+    if (!tag.isEmpty()) {
+        if (tag.compare(QLatin1String("none"), Qt::CaseInsensitive) == 0) {
+            if (!item.tags.tags.isEmpty())
+                return false;
+        } else if (!item.tags.tags.contains(tag, Qt::CaseInsensitive)) {
+            return false;
+        }
+    }
     if (compare != Compare::None) {
         const Compare c = classify(item);
         if (compare == Compare::NewerOrMissing)

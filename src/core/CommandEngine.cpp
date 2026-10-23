@@ -6,6 +6,7 @@
 #include "core/HostRun.h"
 #include "core/Servers.h"
 #include "core/Apps.h"
+#include "core/FileTags.h"
 #include "core/Prefs.h"
 #include "core/Collections.h"
 #include "core/FileOps.h"
@@ -19,6 +20,7 @@
 #include <QDateTime>
 #include <QBuffer>
 #include <QDir>
+#include <QRegularExpression>
 #include <QPointer>
 #include <QHash>
 #include <QFileInfo>
@@ -68,8 +70,10 @@ CommandEngine::CommandEngine(AliasManager &aliases, JobManager &jobs, QObject *p
 
 void CommandEngine::recordRename(const QList<QPair<QString, QString>> &done)
 {
-    for (const auto &d : done)
+    for (const auto &d : done) {
         Collections::instance()->renamed(d.second, d.first);
+        FileTags::renamed(d.second, d.first);
+    }
     UndoEntry e;
     e.kind = UndoEntry::Kind::Rename;
     e.items = done;
@@ -100,7 +104,7 @@ QStringList CommandEngine::commandNames()
             QStringLiteral("Image"),
             QStringLiteral("Layout"), QStringLiteral("MakeLink"), QStringLiteral("Metadata"), QStringLiteral("Move"), QStringLiteral("OpenWith"), QStringLiteral("Print"),
             QStringLiteral("Properties"), QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Server"), QStringLiteral("Set"), QStringLiteral("SetAttr"), QStringLiteral("Settings"), QStringLiteral("Show"),
-            QStringLiteral("Sync"), QStringLiteral("Terminal"), QStringLiteral("Toolbar"), QStringLiteral("Undo")};
+            QStringLiteral("Sync"), QStringLiteral("Tag"), QStringLiteral("Terminal"), QStringLiteral("Toolbar"), QStringLiteral("Undo")};
 }
 
 QString CommandEngine::resolvePath(const QString &input, const QString &base) const
@@ -234,6 +238,8 @@ bool CommandEngine::execute(const ParsedCommand &cmd, CommandContext &ctx, QStri
         return cmdServer(cmd, ctx, error);
     if (cmd.is(QStringLiteral("OpenWith")))
         return cmdOpenWith(cmd, ctx, error);
+    if (cmd.is(QStringLiteral("Tag")))
+        return cmdTag(cmd, ctx, error);
     if (cmd.is(QStringLiteral("Show")))
         return ctx.tool(cmd, error); // the picture viewer
     if (cmd.is(QStringLiteral("Sync")) || cmd.is(QStringLiteral("Duplicates")) || cmd.is(QStringLiteral("Find"))
@@ -699,6 +705,135 @@ bool CommandEngine::cmdServer(const ParsedCommand &cmd, CommandContext &ctx, QSt
     return ctx.tool(cmd, error);
 }
 
+bool CommandEngine::applyFileTags(const QList<QPair<QString, FileTagData>> &changes, const QString &title, QStringList *problems)
+{
+    UndoEntry undo;
+    undo.kind = UndoEntry::Kind::Labels;
+    undo.title = title;
+    for (const auto &[path, data] : changes) {
+        const FileTagData before = FileTags::read(path);
+        if (before == data)
+            continue;
+        QString why;
+        if (!FileTags::write(path, data, &why)) {
+            if (problems)
+                *problems << QStringLiteral("%1: %2").arg(Location::fileName(path), why);
+            continue;
+        }
+        undo.items << qMakePair(path, path);
+        undo.before << before.toMap();
+    }
+    if (!undo.items.isEmpty())
+        m_history.add(undo);
+    return problems == nullptr || problems->isEmpty();
+}
+
+bool CommandEngine::cmdTag(const ParsedCommand &cmd, CommandContext &ctx, QString *error)
+{
+    auto fail = [error](const QString &msg) {
+        if (error)
+            *error = msg;
+        return false;
+    };
+    const QStringList flags = {QStringLiteral("CLEAR"), QStringLiteral("CLEARALL")};
+    QStringList paths;
+    for (const QString &p : sourcesFor(cmd, ctx, flags)) {
+        if (!Location::isLocal(p))
+            return fail(QStringLiteral("Labels and tags work with items on this computer and its cards for now."));
+        paths << p;
+    }
+    if (paths.isEmpty())
+        return fail(QStringLiteral("Select something first."));
+    const bool anything = cmd.hasArg(QStringLiteral("LABEL")) || cmd.hasArg(QStringLiteral("RATING")) || cmd.hasArg(QStringLiteral("ADD"))
+        || cmd.hasArg(QStringLiteral("REMOVE")) || cmd.hasArg(QStringLiteral("SET")) || cmd.hasArg(QStringLiteral("COMMENT"))
+        || cmd.hasArg(QStringLiteral("DESCRIPTION")) || cmd.hasFlag(QStringLiteral("CLEAR")) || cmd.hasFlag(QStringLiteral("CLEARALL"));
+    if (!anything)
+        return ctx.tool(cmd, error); // the Tags window
+
+    auto list = [](const QString &v) {
+        QStringList out;
+        for (const QString &t : v.split(QRegularExpression(QStringLiteral("[,;]")), Qt::SkipEmptyParts))
+            if (!t.trimmed().isEmpty())
+                out << t.trimmed();
+        return out;
+    };
+    QString label;
+    const bool setLabel = cmd.hasArg(QStringLiteral("LABEL"));
+    if (setLabel) {
+        label = cmd.value(QStringLiteral("LABEL")).trimmed();
+        if (label.compare(QLatin1String("none"), Qt::CaseInsensitive) == 0)
+            label.clear();
+        else {
+            bool known = false;
+            for (const LabelDef &d : FileTags::labels()) {
+                if (d.name.compare(label, Qt::CaseInsensitive) == 0) {
+                    label = d.name;
+                    known = true;
+                }
+            }
+            if (!known) {
+                QStringList names;
+                for (const LabelDef &d : FileTags::labels())
+                    names << d.name;
+                return fail(QStringLiteral("LABEL takes none or one of: %1.").arg(names.join(QStringLiteral(", "))));
+            }
+        }
+    }
+    int rating = -1;
+    int ratingStep = 0;
+    if (cmd.hasArg(QStringLiteral("RATING"))) {
+        const QString v = cmd.value(QStringLiteral("RATING")).trimmed();
+        bool ok = false;
+        if (v == QLatin1String("+") || v == QLatin1String("up"))
+            ratingStep = 1;
+        else if (v == QLatin1String("-") || v == QLatin1String("down"))
+            ratingStep = -1;
+        else {
+            rating = v.toInt(&ok);
+            if (!ok || rating < 0 || rating > 5)
+                return fail(QStringLiteral("RATING takes 0 to 5 stars, + or -."));
+        }
+    }
+    QList<QPair<QString, FileTagData>> changes;
+    for (const QString &p : std::as_const(paths)) {
+        FileTagData d = FileTags::read(p);
+        if (cmd.hasFlag(QStringLiteral("CLEARALL")))
+            d = FileTagData{};
+        if (setLabel)
+            d.label = label;
+        if (rating >= 0)
+            d.rating = rating;
+        if (ratingStep != 0)
+            d.rating = qBound(0, d.rating + ratingStep, 5);
+        if (cmd.hasFlag(QStringLiteral("CLEAR")))
+            d.tags.clear();
+        if (cmd.hasArg(QStringLiteral("SET")))
+            d.tags = list(cmd.value(QStringLiteral("SET")));
+        for (const QString &t : list(cmd.values(QStringLiteral("ADD")).join(QLatin1Char(',')))) {
+            if (!d.tags.contains(t, Qt::CaseInsensitive))
+                d.tags << t;
+        }
+        for (const QString &t : list(cmd.values(QStringLiteral("REMOVE")).join(QLatin1Char(','))))
+            d.tags.removeIf([&t](const QString &x) { return x.compare(t, Qt::CaseInsensitive) == 0; });
+        if (cmd.hasArg(QStringLiteral("COMMENT")))
+            d.comment = cmd.value(QStringLiteral("COMMENT"));
+        if (cmd.hasArg(QStringLiteral("DESCRIPTION")))
+            d.comment = cmd.value(QStringLiteral("DESCRIPTION"));
+        changes << qMakePair(p, d);
+    }
+    QString what = setLabel ? (label.isEmpty() ? QStringLiteral("Remove label") : QStringLiteral("Label %1").arg(label))
+        : (rating >= 0 || ratingStep) ? QStringLiteral("Rate")
+                                      : QStringLiteral("Tag");
+    const QString title = paths.size() == 1 ? QStringLiteral("%1: %2").arg(what, Location::fileName(paths.first()))
+                                            : QStringLiteral("%1: %2 items").arg(what).arg(paths.size());
+    QStringList problems;
+    applyFileTags(changes, title, &problems);
+    ctx.afterLocalChange(paths);
+    if (!problems.isEmpty())
+        return fail(problems.mid(0, 10).join(QLatin1Char('\n')));
+    return true;
+}
+
 bool CommandEngine::cmdOpenWith(const ParsedCommand &cmd, CommandContext &ctx, QString *error)
 {
     auto fail = [error](const QString &msg) {
@@ -1039,6 +1174,7 @@ bool CommandEngine::cmdRename(const ParsedCommand &cmd, CommandContext &ctx, QSt
         return true;
     }
     Collections::instance()->renamed(from, newPath);
+    FileTags::renamed(from, newPath);
     ctx.afterLocalChange({newPath});
     return true;
 }

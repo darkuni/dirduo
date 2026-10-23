@@ -1184,6 +1184,9 @@ void FolderTab::showHeaderMenu(const QPoint &globalPos)
     QMenu *pictures = menu.addMenu(QIcon::fromTheme(QStringLiteral("image-x-generic")), QStringLiteral("Pictures"));
     for (int c : {M::DimensionsColumn, M::TakenColumn, M::CameraColumn})
         addColumn(pictures, c);
+    QMenu *tagMenu = menu.addMenu(QIcon::fromTheme(QStringLiteral("tag")), QStringLiteral("Labels and Tags"));
+    for (int c : {M::RatingColumn, M::LabelColumn, M::TagsColumn, M::DescriptionColumn})
+        addColumn(tagMenu, c);
     QMenu *group = menu.addMenu(QStringLiteral("Group By"));
     using G = FileListModel::GroupBy;
     for (G g : FileListModel::allGroupings()) {

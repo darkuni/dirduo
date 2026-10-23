@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/FileTags.h"
+
 #include <QDateTime>
 #include <QFile>
 #include <QMetaType>
@@ -28,6 +30,7 @@ struct FileItem
     bool isSymlink = false;
     bool isHidden = false;
     bool isReadable = true;
+    FileTagData tags; // label, rating, tags, description
 
     static FileItem fromFileInfo(const QFileInfo &info);
 
@@ -35,7 +38,7 @@ struct FileItem
     bool sameContentAs(const FileItem &o) const
     {
         return name == o.name && size == o.size && modified == o.modified && isDir == o.isDir && relPath == o.relPath
-            && isSymlink == o.isSymlink && permissions == o.permissions && symlinkTarget == o.symlinkTarget;
+            && isSymlink == o.isSymlink && permissions == o.permissions && symlinkTarget == o.symlinkTarget && tags == o.tags;
     }
 };
 

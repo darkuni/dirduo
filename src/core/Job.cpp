@@ -3,6 +3,7 @@
 #include "core/Archive.h"
 
 #include "core/FileOps.h"
+#include "core/FileTags.h"
 #include "core/Location.h"
 #include "core/Trash.h"
 
@@ -617,8 +618,10 @@ void Job::runCopyMove()
                 markIncomplete(e.parent);
                 continue;
             }
-            if (made)
+            if (made) {
+                FileTags::copyAttributes(e.src, target);
                 record(i, target, false);
+            }
             targetPath[i] = target;
             dirTimes.emplace_back(target, QFileInfo(e.src).lastModified());
             addDone(0, 1);
@@ -662,6 +665,9 @@ void Job::runCopyMove()
         }
         if (m_canceled)
             return;
+        // Labels, ratings, tags and descriptions travel with the copy.
+        if (ok && !e.isSymlink && !(move && FileOps::sameDevice(e.src, parentTarget)))
+            FileTags::copyAttributes(e.src, target);
         if (!ok) {
             addError(QStringLiteral("%1: %2").arg(e.src, error));
             markIncomplete(e.parent);

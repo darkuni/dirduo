@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/ScriptRunner.h"
+#include "core/FileTags.h"
 #include "core/CommandParser.h"
 #include "core/Job.h"
 #include "core/History.h"
@@ -166,6 +167,8 @@ public:
     // The archive name Add to Archive suggests: the item's own name for one,
     // the folder's name for several; with the format's extension.
     static QString suggestedArchiveName(const QStringList &sources, const QString &folder, const QString &formatKey);
+    // Labels, ratings, tags and descriptions for files, undoable as one step.
+    bool applyFileTags(const QList<QPair<QString, FileTagData>> &changes, const QString &title, QStringList *problems);
     int trashItems(const QStringList &paths);
     int deleteItems(const QStringList &paths);
 
@@ -210,6 +213,7 @@ private:
     bool cmdServer(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool runScript(const QString &script, CommandContext &ctx);
     bool cmdOpenWith(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
+    bool cmdTag(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     void recordNew(const QStringList &paths, const QString &what);
 
     QStringList sourcesFor(const ParsedCommand &cmd, CommandContext &ctx, const QStringList &flags) const;

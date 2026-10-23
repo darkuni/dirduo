@@ -96,6 +96,9 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] A music folder: right-click the column header > Music > Artist and Album; they fill in. Group By > Artist. F3 on a song shows its tags.
 - [ ] A folder of phone or camera photos: Pictures > Date Taken and Camera fill in; Group By > Date Taken.
 - [ ] Select a few Steam screenshots, Tools > Convert Images: JPEG, Width 1280, Destination; Convert. The JPEGs land in the other display.
+- [ ] Right-click a few files > Label > Green: their names turn green. Alt+4 gives them four stars. Right-click a column header > Labels and Tags > Rating and Label. Group By > Label.
+- [ ] Ctrl+Shift+T on two files: add the tag `demo`, a description, OK. Open the same folder in Dolphin: the tags and stars are there too. Copy one to the SD card: in Linopus it keeps them.
+- [ ] Ctrl+Shift+P, `Select TAG=demo`: both are selected. Ctrl+Z undoes the last label change.
 
 ## Report back
 

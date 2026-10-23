@@ -21,5 +21,6 @@ FileItem FileItem::fromFileInfo(const QFileInfo &info)
     item.permissions = info.permissions();
     item.isHidden = item.name.startsWith(QLatin1Char('.'));
     item.isReadable = info.isReadable();
+    item.tags = FileTags::read(item.path);
     return item;
 }

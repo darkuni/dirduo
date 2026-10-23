@@ -84,6 +84,14 @@ QString FileListModel::columnName(int column)
         return QStringLiteral("Date Taken");
     case CameraColumn:
         return QStringLiteral("Camera");
+    case RatingColumn:
+        return QStringLiteral("Rating");
+    case LabelColumn:
+        return QStringLiteral("Label");
+    case TagsColumn:
+        return QStringLiteral("Tags");
+    case DescriptionColumn:
+        return QStringLiteral("Description");
     }
     return {};
 }
@@ -101,9 +109,9 @@ QString FileListModel::groupByLabel(GroupBy g)
 
 QList<FileListModel::GroupBy> FileListModel::allGroupings()
 {
-    return {GroupBy::None,   GroupBy::Type,   GroupBy::Name,  GroupBy::Size, GroupBy::Modified,
-            GroupBy::Extension, GroupBy::Folder, GroupBy::Artist, GroupBy::Album, GroupBy::Genre,
-            GroupBy::Year,   GroupBy::Camera, GroupBy::Taken};
+    return {GroupBy::None,   GroupBy::Type,   GroupBy::Name,  GroupBy::Size,   GroupBy::Modified,
+            GroupBy::Extension, GroupBy::Folder, GroupBy::Label, GroupBy::Rating, GroupBy::Artist,
+            GroupBy::Album,  GroupBy::Genre,  GroupBy::Year,  GroupBy::Camera, GroupBy::Taken};
 }
 
 QString FileListModel::groupByName(GroupBy g)
@@ -123,6 +131,10 @@ QString FileListModel::groupByName(GroupBy g)
         return QStringLiteral("extension");
     case GroupBy::Folder:
         return QStringLiteral("folder");
+    case GroupBy::Label:
+        return QStringLiteral("label");
+    case GroupBy::Rating:
+        return QStringLiteral("rating");
     case GroupBy::Artist:
         return QStringLiteral("artist");
     case GroupBy::Album:
@@ -312,6 +324,22 @@ QPair<QString, QString> FileListModel::groupFor(int row) const
     }
     case GroupBy::Folder:
         return {it.relPath, it.relPath.isEmpty() ? QStringLiteral("(this folder)") : it.relPath};
+    case GroupBy::Label: {
+        if (it.tags.label.isEmpty())
+            return {QStringLiteral("9"), QStringLiteral("No label")};
+        // In the order the labels are defined.
+        const QList<LabelDef> defs = FileTags::labels();
+        int at = 0;
+        for (; at < defs.size(); ++at) {
+            if (defs.at(at).name.compare(it.tags.label, Qt::CaseInsensitive) == 0)
+                break;
+        }
+        return {QStringLiteral("1:%1").arg(at, 3, 10, QLatin1Char('0')), it.tags.label};
+    }
+    case GroupBy::Rating:
+        if (it.tags.rating <= 0)
+            return {QStringLiteral("9"), QStringLiteral("Not rated")};
+        return {QStringLiteral("%1").arg(5 - it.tags.rating), FileTags::stars(it.tags.rating)};
     case GroupBy::Artist:
     case GroupBy::Album:
     case GroupBy::Genre:
@@ -946,6 +974,14 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
             return it.group;
         case LocationColumn:
             return it.relPath;
+        case RatingColumn:
+            return FileTags::stars(it.tags.rating);
+        case LabelColumn:
+            return it.tags.label;
+        case TagsColumn:
+            return it.tags.tags.join(QStringLiteral(", "));
+        case DescriptionColumn:
+            return it.tags.comment.section(QLatin1Char('\n'), 0, 0);
         default:
             if (isMetadataColumn(col))
                 return metadataValue(index.row(), col, false);
@@ -963,8 +999,23 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
         }
         if (col == NameColumn)
             return iconFor(index.row());
+        if (col == LabelColumn && !it.tags.label.isEmpty()) {
+            const QColor c = FileTags::colorOf(it.tags.label);
+            if (c.isValid()) {
+                QPixmap dot(12, 12);
+                dot.fill(Qt::transparent);
+                QPainter p(&dot);
+                p.setRenderHint(QPainter::Antialiasing);
+                p.setBrush(c);
+                p.setPen(c.darker(130));
+                p.drawEllipse(QRectF(1, 1, 10, 10));
+                return dot;
+            }
+        }
         break;
     case Qt::ToolTipRole:
+        if (col == DescriptionColumn && !it.tags.comment.isEmpty())
+            return it.tags.comment;
         if (isMetadataColumn(col) || col == NameColumn) {
             MediaInfo info;
             if (!it.isSymlink && mediaInfo(index.row(), &info) && !info.isEmpty())
@@ -983,7 +1034,10 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
     case Qt::ForegroundRole: {
         const Style *style = Style::instance();
         QColor c;
-        if (const LabelRule *rule = style->labels().match(it.name, it.isDir); rule && rule->color.isValid())
+        // A color label colors the whole row's text, as in Opus.
+        if (!it.tags.label.isEmpty() && (c = FileTags::colorOf(it.tags.label)).isValid()) {
+            // labelled: c set
+        } else if (const LabelRule *rule = style->labels().match(it.name, it.isDir); rule && rule->color.isValid())
             c = rule->color;
         else if (col == NameColumn || col == ExtensionColumn)
             c = style->theme().typeColor(FileKind::categoryFor(it.name, it.isDir));
@@ -1066,6 +1120,14 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
             return it.group;
         case LocationColumn:
             return it.relPath;
+        case RatingColumn:
+            return it.tags.rating;
+        case LabelColumn:
+            return it.tags.label;
+        case TagsColumn:
+            return it.tags.tags.join(QLatin1Char(','));
+        case DescriptionColumn:
+            return it.tags.comment;
         default:
             if (isMetadataColumn(col))
                 return metadataValue(index.row(), col, true);

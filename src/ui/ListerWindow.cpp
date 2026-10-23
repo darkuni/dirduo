@@ -15,6 +15,8 @@
 #include "core/FindEngine.h"
 #include "ui/HistoryDialog.h"
 #include "ui/ArchiveDialog.h"
+#include "ui/TagsDialog.h"
+#include "core/FileTags.h"
 #include "ui/ImageViewer.h"
 #include "ui/OpenWithDialog.h"
 #include "core/Apps.h"
@@ -48,6 +50,7 @@
 
 #include <QAbstractItemView>
 #include <QPushButton>
+#include <QPainter>
 #include <QVBoxLayout>
 #include <QFontDatabase>
 #include <QDialogButtonBox>
@@ -359,6 +362,15 @@ void ListerWindow::buildMenus()
     connect(quit, &QAction::triggered, this, [this]() { m_app.quitAll(); });
 
     QMenu *edit = menuBar()->addMenu(QStringLiteral("&Edit"));
+    {
+        QMenu *labels = edit->addMenu(QIcon::fromTheme(QStringLiteral("tag")), QStringLiteral("Labels and Tags"));
+        for (int i = 5; i >= 0; --i)
+            labels->addAction(commandAction(i == 0 ? QStringLiteral("Not Rated") : QStringLiteral("Rate %1").arg(FileTags::stars(i)),
+                                            QStringLiteral("Tag RATING=%1").arg(i), QKeySequence(QStringLiteral("Alt+%1").arg(i))));
+        labels->addSeparator();
+        labels->addAction(commandAction(QStringLiteral("Tags and Description..."), QStringLiteral("Tag"), QKeySequence(QStringLiteral("Ctrl+Shift+T")),
+                                        QStringLiteral("tag-edit")));
+    }
     {
         // Undo anything: copies, moves, new folders, the trash, renames.
         QAction *undo = commandAction(QStringLiteral("Undo"), QStringLiteral("Undo"), QKeySequence::Undo, QStringLiteral("edit-undo"));
@@ -1750,7 +1762,8 @@ bool ListerWindow::select(const ParsedCommand &cmd, QString *error)
     // or against the other display.
     const QStringList ruleKeys = {QStringLiteral("COMPARE"), QStringLiteral("KIND"), QStringLiteral("TYPE"),
                                   QStringLiteral("MINSIZE"), QStringLiteral("MAXSIZE"), QStringLiteral("NEWER"),
-                                  QStringLiteral("OLDER"), QStringLiteral("PATTERN")};
+                                  QStringLiteral("OLDER"), QStringLiteral("PATTERN"), QStringLiteral("LABEL"),
+                                  QStringLiteral("RATING"), QStringLiteral("TAG")};
     bool rules = false;
     for (const QString &k : ruleKeys)
         rules = rules || cmd.hasArg(k);
@@ -1785,6 +1798,26 @@ bool ListerWindow::select(const ParsedCommand &cmd, QString *error)
         };
         if (!when("NEWER", r.newerThan) || !when("OLDER", r.olderThan))
             return fail(QStringLiteral("NEWER and OLDER take a number of days or a date like 2024-01-31."));
+        // Labels, ratings, tags: LABEL=Red|any|none, RATING=3 (at least), 3-5,
+        // =0 (not rated), TAG=name|none.
+        r.label = cmd.value(QStringLiteral("LABEL"));
+        if (r.label.compare(QLatin1String("any"), Qt::CaseInsensitive) == 0)
+            r.label = QStringLiteral("*");
+        r.tag = cmd.value(QStringLiteral("TAG"));
+        if (cmd.hasArg(QStringLiteral("RATING"))) {
+            const QString v = cmd.value(QStringLiteral("RATING")).trimmed();
+            bool ok1 = false, ok2 = true;
+            if (v.contains(QLatin1Char('-'))) {
+                r.minRating = v.section(QLatin1Char('-'), 0, 0).toInt(&ok1);
+                r.maxRating = v.section(QLatin1Char('-'), 1).toInt(&ok2);
+            } else {
+                r.minRating = v.toInt(&ok1);
+                if (r.minRating == 0)
+                    r.maxRating = 0;
+            }
+            if (!ok1 || !ok2 || r.minRating < 0 || r.minRating > 5 || r.maxRating > 5)
+                return fail(QStringLiteral("RATING takes 0 to 5 stars (at least that many), or a range like 3-5."));
+        }
         if (cmd.hasArg(QStringLiteral("COMPARE"))) {
             if (!SelectRules::compareFromName(cmd.value(QStringLiteral("COMPARE")), r.compare))
                 return fail(QStringLiteral("COMPARE takes newer, older, missing, same, different or newerormissing."));
@@ -1823,7 +1856,7 @@ bool ListerWindow::select(const ParsedCommand &cmd, QString *error)
         t->invertSelection();
     else {
         if (error)
-            *error = QStringLiteral("Select takes ALL, NONE, INVERT, DIALOG, PATTERN=, COMPARE=, KIND=, TYPE=, MINSIZE=, MAXSIZE=, NEWER= or OLDER=.");
+            *error = QStringLiteral("Select takes ALL, NONE, INVERT, DIALOG, PATTERN=, COMPARE=, KIND=, TYPE=, MINSIZE=, MAXSIZE=, NEWER=, OLDER=, LABEL=, RATING= or TAG=.");
         return false;
     }
     return true;
@@ -2064,6 +2097,32 @@ void ListerWindow::fillContextMenu(QMenu &menu, FileDisplay *d, bool onItem)
             menu.addAction(commandAction(QStringLiteral("Make Link in Destination"), QStringLiteral("MakeLink DEST"), {},
                                          QStringLiteral("insert-link")));
         menu.addAction(commandAction(QStringLiteral("Make Link Here"), QStringLiteral("MakeLink"), {}, QStringLiteral("insert-link")));
+    }
+    if (onItem && localSel) {
+        // Labels, ratings and tags, as in Opus.
+        menu.addSeparator();
+        QMenu *labelMenu = menu.addMenu(QIcon::fromTheme(QStringLiteral("tag")), QStringLiteral("Label"));
+        for (const LabelDef &d : FileTags::labels()) {
+            QPixmap dot(14, 14);
+            dot.fill(Qt::transparent);
+            QPainter painter(&dot);
+            painter.setRenderHint(QPainter::Antialiasing);
+            painter.setBrush(d.color);
+            painter.setPen(d.color.darker(130));
+            painter.drawEllipse(QRectF(1, 1, 12, 12));
+            painter.end();
+            QAction *a = labelMenu->addAction(QIcon(dot), d.name);
+            const QString name = d.name;
+            connect(a, &QAction::triggered, this, [this, name]() { runCommand(QStringLiteral("Tag LABEL=\"%1\"").arg(name)); });
+        }
+        labelMenu->addSeparator();
+        labelMenu->addAction(commandAction(QStringLiteral("No Label"), QStringLiteral("Tag LABEL=none")));
+        QMenu *rateMenu = menu.addMenu(QStringLiteral("Rating"));
+        for (int i = 5; i >= 1; --i)
+            rateMenu->addAction(commandAction(FileTags::stars(i), QStringLiteral("Tag RATING=%1").arg(i)));
+        rateMenu->addSeparator();
+        rateMenu->addAction(commandAction(QStringLiteral("Not Rated"), QStringLiteral("Tag RATING=0")));
+        menu.addAction(commandAction(QStringLiteral("Tags and Description..."), QStringLiteral("Tag"), {}, QStringLiteral("tag-edit")));
     }
     if ((onItem && localSel) || (!onItem && t && Location::isLocal(t->path()))) {
         menu.addSeparator();
@@ -2530,6 +2589,27 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
     }
     if (cmd.is(QStringLiteral("Image")))
         return imageCommand(cmd, error);
+    if (cmd.is(QStringLiteral("Tag"))) {
+        QStringList paths;
+        for (const QString &f : cmd.values(QStringLiteral("FILE")))
+            paths << m_app.engine().resolvePath(f, sourcePath());
+        if (paths.isEmpty())
+            paths = selectedPaths();
+        auto *dlg = new TagsDialog(paths, this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        connect(dlg, &QDialog::accepted, this, [this, dlg, paths]() {
+            QStringList problems;
+            m_app.engine().applyFileTags(dlg->changes(),
+                                          paths.size() == 1 ? QStringLiteral("Tag: %1").arg(Location::fileName(paths.first()))
+                                                            : QStringLiteral("Tag: %1 items").arg(paths.size()),
+                                          &problems);
+            afterLocalChange(paths);
+            if (!problems.isEmpty())
+                showError(QStringLiteral("Tags"), problems.mid(0, 10).join(QLatin1Char('\n')));
+        });
+        dlg->open();
+        return true;
+    }
     if (cmd.is(QStringLiteral("Show"))) {
         QStringList picked;
         for (const QString &f : cmd.values(QStringLiteral("FILE")))

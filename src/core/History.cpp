@@ -1,4 +1,5 @@
 #include "core/History.h"
+#include "core/FileTags.h"
 
 #include "core/Collections.h"
 #include "core/FileOps.h"
@@ -150,6 +151,7 @@ QString UndoHistory::kindName(UndoEntry::Kind kind)
     case UndoEntry::Kind::NewItem: return QStringLiteral("New");
     case UndoEntry::Kind::Rename: return QStringLiteral("Rename");
     case UndoEntry::Kind::Tags: return QStringLiteral("Tags");
+    case UndoEntry::Kind::Labels: return QStringLiteral("Labels");
     }
     return {};
 }
@@ -454,6 +456,31 @@ bool UndoHistory::undo(int id, QStringList *touched, QString *error)
         ok = !inverse.items.isEmpty();
         break;
     }
+    case UndoEntry::Kind::Labels: {
+        // Labels, ratings, tags and descriptions back as they were.
+        UndoEntry inverse;
+        inverse.kind = UndoEntry::Kind::Labels;
+        inverse.isUndo = true;
+        for (int i = 0; i < e.items.size() && i < e.before.size(); ++i) {
+            const QString &path = e.items.at(i).first;
+            const FileTagData now = FileTags::read(path);
+            QString why;
+            if (!FileTags::write(path, FileTagData::fromMap(e.before.at(i)), &why)) {
+                problems << QStringLiteral("%1: %2").arg(Location::fileName(path), why);
+                continue;
+            }
+            inverse.items << e.items.at(i);
+            inverse.before << now.toMap();
+            if (touched)
+                *touched << path;
+        }
+        if (!inverse.items.isEmpty()) {
+            inverse.title = QStringLiteral("Undo: %1").arg(e.title);
+            add(inverse);
+        }
+        ok = !inverse.items.isEmpty();
+        break;
+    }
     case UndoEntry::Kind::Rename: {
         // items are (now, before): rename each back.
         QString why;
@@ -467,8 +494,10 @@ bool UndoHistory::undo(int id, QStringList *touched, QString *error)
         UndoEntry inverse;
         inverse.kind = UndoEntry::Kind::Rename;
         inverse.isUndo = true;
-        for (const auto &it : e.items)
+        for (const auto &it : e.items) {
             Collections::instance()->renamed(it.first, it.second);
+            FileTags::renamed(it.first, it.second);
+        }
         for (const auto &it : e.items) {
             inverse.items << qMakePair(it.second, it.first);
             if (touched)

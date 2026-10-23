@@ -37,6 +37,8 @@
 #include "ui/Style.h"
 #include "core/Location.h"
 #include "ui/ArchiveDialog.h"
+#include "ui/TagsDialog.h"
+#include "core/FileTags.h"
 #include "core/Prefs.h"
 #include "ui/ImageViewer.h"
 #include "ui/OpenWithDialog.h"
@@ -1275,6 +1277,71 @@ private Q_SLOTS:
         QVERIFY(freq.actions().size() >= 4); // three folders, separator, clear
         f->setItems({});
         f->clearFrequent();
+    }
+
+    void labelsRatingsAndTags()
+    {
+        QTemporaryDir dir;
+        const QString d = dir.path();
+        touch(d + QStringLiteral("/one.d64"));
+        touch(d + QStringLiteral("/two.d64"));
+        touch(d + QStringLiteral("/three.d64"));
+        if (!FileTags::storedOnFile(d + QStringLiteral("/one.d64")))
+            QSKIP("No extended attributes here");
+        FolderTab *t = w->display(0)->currentTab();
+        const QString back = t->path();
+        t->navigate(d);
+        waitListed(t, 3);
+        t->selectPaths({d + QStringLiteral("/one.d64")});
+        // The right-click menu has Label, Rating and the Tags window.
+        QMenu menu;
+        w->fillContextMenu(menu, w->display(0), true);
+        QStringList texts;
+        for (QAction *a : menu.actions())
+            texts << a->text();
+        QVERIFY(texts.contains(QStringLiteral("Label")));
+        QVERIFY(texts.contains(QStringLiteral("Rating")));
+        QVERIFY(texts.contains(QStringLiteral("Tags and Description...")));
+        QVERIFY(w->runCommand(QStringLiteral("Tag LABEL=Green RATING=5")));
+        // Columns show it; the row takes the label's color.
+        t->setColumnVisible(FileListModel::RatingColumn, true);
+        t->setColumnVisible(FileListModel::LabelColumn, true);
+        auto *model = t->fileModel();
+        QTRY_VERIFY([&] {
+            const int r = model->rowForPath(d + QStringLiteral("/one.d64"));
+            return r >= 0 && model->data(model->index(r, FileListModel::RatingColumn), Qt::DisplayRole).toString() == FileTags::stars(5);
+        }());
+        const int row = model->rowForPath(d + QStringLiteral("/one.d64"));
+        QCOMPARE(model->data(model->index(row, FileListModel::LabelColumn), Qt::DisplayRole).toString(), QStringLiteral("Green"));
+        QCOMPARE(model->data(model->index(row, FileListModel::NameColumn), Qt::ForegroundRole).value<QColor>(),
+                 FileTags::colorOf(QStringLiteral("Green")));
+        // The Tags window for several items: only what is changed is written.
+        t->selectPaths({d + QStringLiteral("/one.d64"), d + QStringLiteral("/two.d64")});
+        QVERIFY(w->runCommand(QStringLiteral("Tag")));
+        TagsDialog *dlg = nullptr;
+        QTRY_VERIFY((dlg = w->findChild<TagsDialog *>()));
+        QCOMPARE(dlg->labelBox()->currentText(), QStringLiteral("(several labels)"));
+        dlg->newTagEdit()->setText(QStringLiteral("cart, demo"));
+        QTest::keyClick(dlg->newTagEdit(), Qt::Key_Return);
+        dlg->commentEdit()->setPlainText(QStringLiteral("From the shoebox"));
+        dlg->accept();
+        QCOMPARE(FileTags::read(d + QStringLiteral("/one.d64")).label, QStringLiteral("Green")); // left alone
+        QCOMPARE(FileTags::read(d + QStringLiteral("/one.d64")).rating, 5);
+        QCOMPARE(FileTags::read(d + QStringLiteral("/two.d64")).tags, (QStringList{QStringLiteral("cart"), QStringLiteral("demo")}));
+        QCOMPARE(FileTags::read(d + QStringLiteral("/two.d64")).comment, QStringLiteral("From the shoebox"));
+        QTRY_VERIFY(!w->findChild<TagsDialog *>());
+        // Select and group by them.
+        QVERIFY(w->runCommand(QStringLiteral("Select RATING=4")));
+        QTRY_COMPARE(t->selectedPaths(), QStringList{d + QStringLiteral("/one.d64")});
+        QVERIFY(w->runCommand(QStringLiteral("Select TAG=demo")));
+        QTRY_COMPARE(t->selectedPaths().size(), 2);
+        QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=label")));
+        QCOMPARE(t->groupBy(), FileListModel::GroupBy::Label);
+        QVERIFY(w->runCommand(QStringLiteral("Set GROUPBY=none")));
+        t->setColumnVisible(FileListModel::RatingColumn, false);
+        t->setColumnVisible(FileListModel::LabelColumn, false);
+        t->navigate(back);
+        waitListed(t, QDir(back).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
     }
 
     void preferencesGeneralAndFileTypes()

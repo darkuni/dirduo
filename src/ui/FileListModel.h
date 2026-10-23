@@ -40,11 +40,17 @@ public:
         DimensionsColumn,
         TakenColumn,
         CameraColumn,
+        // Labels, ratings, tags and descriptions (FileTags).
+        RatingColumn,
+        LabelColumn,
+        TagsColumn,
+        DescriptionColumn,
         ColumnCount
     };
     // Saved column layouts from before the metadata columns had this many.
     static constexpr int ColumnsBeforeMetadata = TitleColumn;
-    static bool isMetadataColumn(int column) { return column >= TitleColumn && column < ColumnCount; }
+    static bool isMetadataColumn(int column) { return column >= TitleColumn && column <= CameraColumn; }
+    static bool isTagColumn(int column) { return column >= RatingColumn && column <= DescriptionColumn; }
     enum Role {
         PathRole = Qt::UserRole + 1,
         IsDirRole,
@@ -57,7 +63,7 @@ public:
         DepthRole,       // int: 0 at the top, 1 inside an expanded folder, ...
         ExpandRole,      // int: -1 cannot expand, 0 collapsed, 1 expanded
     };
-    enum class GroupBy { None, Type, Name, Size, Modified, Extension, Folder, Artist, Album, Genre, Year, Camera, Taken };
+    enum class GroupBy { None, Type, Name, Size, Modified, Extension, Folder, Label, Rating, Artist, Album, Genre, Year, Camera, Taken };
     static QList<GroupBy> allGroupings();
     static QString groupByLabel(GroupBy g); // for menus: "No Grouping", "Date Taken"
     static bool isMetadataGrouping(GroupBy g) { return g >= GroupBy::Artist; }

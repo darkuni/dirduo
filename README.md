@@ -94,6 +94,7 @@ Servers and archives (KIO):
 - Thumbnails view (View > Thumbnails, Ctrl+4; folders that are mostly pictures open in it): pictures as themselves, read in the background. Shares the standard ~/.cache/thumbnails with Dolphin and Gwenview, so videos and documents they have already done show too, and what Linopus makes they reuse. Icons view shows thumbnails at its smaller size
 - Editing tags: the Metadata pane (View > Metadata Pane, Shift+Alt+Enter) shows the selection's tags; with several files, shared values show and differing ones say "(several values)", and a field you type in is written to all of them on Apply (untouched fields stay). Music: title, artist, album artist, album, track, disc, year, genre, comment (MP3, FLAC, Ogg, Opus, M4A, WAV, AIFF, WMA...). Photos: date taken, description, artist, copyright (JPEG, PNG, WebP, TIFF). Edit > Tags: Copy Tags and Paste Tags (artist, album, genre, year, comment; Paste All adds titles, tracks and dates) for podcast episodes, Number Tracks in list order, and moving photo dates an hour either way for a camera clock left on the wrong time. All of it can be undone
 - Music and photo columns (right-click a column header > Music or Pictures): Title, Artist, Album, Track, Year, Genre, Length and Bitrate from music tags (TagLib); Dimensions, Date Taken and Camera from photos (Exiv2). C64 SID tunes show their name, composer and release line. Read in the background as you browse, then sortable and groupable (Group By > Artist, Album, Genre, Year, Camera, Date Taken). The viewer pane shows the full tags, and the camera line under a photo. Column layouts saved before these columns existed keep them hidden
+- Labels, ratings, tags and descriptions (right-click > Label, Rating, Tags and Description...; Edit > Labels and Tags; Alt+1..5 rates, Alt+0 clears; Ctrl+Shift+T): a colored label (the row takes its color), 0 to 5 stars, any number of tags and a description, for one item or many at once (a field left alone stays as each item had it). Stored in the same extended attributes Dolphin uses, so they show in both and travel with copies; where a drive cannot hold them (FAT SD cards), Linopus keeps them in ~/.local/share/linopus/tags.json. Columns (right-click a column header > Labels and Tags), Group By Label or Rating, `Select LABEL=Red RATING=4 TAG=cart`, and Undo
 
 ## Commands
 
@@ -120,6 +121,7 @@ Every button, menu item, hotkey, drop and inline rename runs one of these. Butto
 | `Server` | `GO=<name>` (`NEWTAB`, `OPENINDEST`), `ADD` (asks) or `ADD URL=... NAME=...`, `REMOVE=<name>`; nothing: the list |
 | `Show` | `FILE=...` (the picture viewer) |
 | `Sync` | `LEFT=`, `RIGHT=`, `MODE=update\|mirror\|twoway`, `COMPARE=datesize\|date\|size\|contents`, `EXCLUDE=*.tmp;...`, `RUN` |
+| `Tag` | `LABEL=<name>\|none`, `RATING=0-5\|+\|-`, `ADD=a,b`, `REMOVE=`, `SET=` (replace the tags), `CLEAR` (tags), `CLEARALL`, `DESCRIPTION=`, `FILE=...`; nothing: the Tags window |
 | `Terminal` | `PATH=<folder>` (else the source folder), `PROGRAM=konsole\|gnome-terminal\|...` |
 | `Duplicates` | `IN=...` (several allowed), `BY=contents\|namesize\|name`, `MINSIZE=<bytes>`, `HIDDEN` |
 | `MakeLink` | `DEST`, `TO=<folder>`, `NAME=`, `RELATIVE`, `FILE=...` |
@@ -127,8 +129,8 @@ Every button, menu item, hotkey, drop and inline rename runs one of these. Butto
 | `SetAttr` | `MODIFIED=<date>\|now`, `ACCESSED=`, `PERMS=644\|rwxr-xr-x\|u+x,go-w`, `RECURSE`, `FILE=...` (nothing to change: the Properties window) |
 | `Image` | `CONVERT=png\|jpg\|webp\|...\|keep`, `QUALITY=1-100`, `WIDTH=`, `HEIGHT=` (both: fit inside), `PERCENT=`, `STRETCH`, `ENLARGE`, `ROTATE=90\|180\|270`, `FLIP=h\|v\|both`, `TO=<folder>\|dest`, `WHENEXISTS=rename\|replace\|skip`, `FILE=...`, `RUN` (no window) |
 | `Settings` | no arguments: Preferences; `PAGE=appearance\|theme\|labels\|aliases\|formats\|toolbars`; `BACKUP=<file>\|ask`, `RESTORE=<file>\|ask`, `QUIET` |
-| `Set` | `DUAL=on\|off\|toggle\|vertical\|horizontal\|flip`, `SOURCE=toggle`, `DESTLOCK=`, `NAVLOCK=`, `VIEW=details\|list\|icons\|thumbnails`, `HIDDEN=`, `VIEWER=`, `VIEWERPOS=right\|bottom\|left`, `THEME=<name>\|next`, `SIZE=normal\|large\|larger\|bigger\|smaller`, `ZOOM=in\|out\|reset\|<50-300>`, `EXPAND=toggle\|on\|off\|none`, `GROUPBY=none\|type\|name\|size\|modified\|extension\|folder\|artist\|album\|genre\|year\|camera\|taken`, `GROUPCOLLAPSE=all\|none\|toggle`, `FILTERBAR=`, `FILTER=<text>` (a leading `!` hides matches), `CHECKBOXES=`, `FOLDERSIZES=`, `FLATVIEW=off\|grouped\|ungrouped\|nofolders\|toggle`, `TREE=off\|shared\|separate\|toggle`, `FORMAT=save\|savesub\|clear\|savedefault\|cleardefault`, `AUTOFORMAT=`, `COLUMNSTOGGLE=<column>`. Switches take `on\|off\|toggle` |
-| `Select` | `ALL`, `NONE`, `INVERT`, `PATTERN=*.mp3`, `COMPARE=newerormissing\|missing\|newer\|older\|same\|different` (`BOTH`), `KIND=`, `TYPE=`, `MINSIZE=`, `MAXSIZE=`, `NEWER=`, `OLDER=`, `ADD`, `DESELECT`, `DIALOG` |
+| `Set` | `DUAL=on\|off\|toggle\|vertical\|horizontal\|flip`, `SOURCE=toggle`, `DESTLOCK=`, `NAVLOCK=`, `VIEW=details\|list\|icons\|thumbnails`, `HIDDEN=`, `VIEWER=`, `VIEWERPOS=right\|bottom\|left`, `THEME=<name>\|next`, `SIZE=normal\|large\|larger\|bigger\|smaller`, `ZOOM=in\|out\|reset\|<50-300>`, `EXPAND=toggle\|on\|off\|none`, `GROUPBY=none\|type\|name\|size\|modified\|extension\|folder\|artist\|album\|genre\|year\|camera\|taken\|label\|rating`, `GROUPCOLLAPSE=all\|none\|toggle`, `FILTERBAR=`, `FILTER=<text>` (a leading `!` hides matches), `CHECKBOXES=`, `FOLDERSIZES=`, `FLATVIEW=off\|grouped\|ungrouped\|nofolders\|toggle`, `TREE=off\|shared\|separate\|toggle`, `FORMAT=save\|savesub\|clear\|savedefault\|cleardefault`, `AUTOFORMAT=`, `COLUMNSTOGGLE=<column>`. Switches take `on\|off\|toggle` |
+| `Select` | `ALL`, `NONE`, `INVERT`, `PATTERN=*.mp3`, `COMPARE=newerormissing\|missing\|newer\|older\|same\|different` (`BOTH`), `KIND=`, `TYPE=`, `MINSIZE=`, `MAXSIZE=`, `NEWER=`, `OLDER=`, `LABEL=<name>\|none\|*`, `RATING=4` (at least) or `RATING=2-3`, `TAG=<tag>\|none`, `ADD`, `DESELECT`, `DIALOG` |
 | `Toolbar` | `NAME=buttons\|drives\|<yours>`, `PLACE=top\|bottom\|left\|right\|between`, `NEWROW`, `STATE=on\|off\|toggle`, `CUSTOMIZE` |
 
 Argument codes: `{sourcepath}`, `{destpath}`, `{filepath}` (every selected item), `{file}` (names only), `{focusedpath}`, `{dlgstring|Prompt text}`. Add `$` to require a value: `{filepath$}` stops the function when nothing is selected. Codes expand to whole arguments, so paths with spaces need no quoting.
@@ -190,6 +192,8 @@ pods=/downloads/podcasts
 | Ctrl+D | Add the source folder to Favorites |
 | Ctrl+, | Preferences |
 | F3 | Viewer pane |
+| Alt+0..5 | Rating (Alt+0 clears) |
+| Ctrl+Shift+T | Tags and Description |
 
 ## Toolbar files
 

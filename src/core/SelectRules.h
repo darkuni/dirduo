@@ -23,6 +23,11 @@ struct SelectRules
     QDateTime newerThan; // modified after
     QDateTime olderThan; // modified before
     Compare compare = Compare::None;
+    // Labels, ratings and tags.
+    QString label;       // a label name; "*" any label; "none" no label
+    int minRating = -1;  // at least this many stars (0: not rated only when maxRating is 0)
+    int maxRating = -1;
+    QString tag;         // has this tag (case-insensitive); "none" no tags
     QString otherRoot; // the other display's folder, for compare
     QString thisRoot;  // this display's folder
 
