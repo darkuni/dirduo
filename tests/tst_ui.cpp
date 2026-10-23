@@ -37,6 +37,9 @@
 #include "ui/Style.h"
 #include "core/Location.h"
 #include "ui/ArchiveDialog.h"
+#include "ui/OpenWithDialog.h"
+#include "core/Apps.h"
+#include "core/HostRun.h"
 #include "ui/DrivesBar.h"
 #include "ui/ServerDialog.h"
 #include "core/Servers.h"
@@ -2069,6 +2072,70 @@ private Q_SLOTS:
         QTest::qWait(500);
         QVERIFY(!w->findChild<QDialog *>(QStringLiteral("scriptOutput")));
         Paths::setCacheHomeOverride(QString());
+    }
+
+    void openWith()
+    {
+        QTemporaryDir apps;
+        auto write = [](const QString &path, const QByteArray &data) {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(data);
+        };
+        write(apps.filePath(QStringLiteral("kate.desktop")),
+              "[Desktop Entry]\nType=Application\nName=Kate\nExec=kate %U\nMimeType=text/plain;\n");
+        write(apps.filePath(QStringLiteral("gimp.desktop")),
+              "[Desktop Entry]\nType=Application\nName=GIMP\nExec=gimp %F\nMimeType=image/png;\n");
+        Apps::setSearchDirsOverride({apps.path()});
+        QStringList ran;
+        HostRun::setStarter([&](const QStringList &cmd, const QString &) {
+            ran = cmd;
+            return true;
+        });
+        FolderTab *t = w->display(0)->currentTab();
+        const QString file = root + QStringLiteral("/a/one.txt");
+        t->navigate(root + QStringLiteral("/a"));
+        QTRY_COMPARE(t->path(), root + QStringLiteral("/a"));
+        QTRY_VERIFY(t->view()->model()->rowCount() > 0);
+        t->selectPaths({file});
+        QMenu menu;
+        w->fillContextMenu(menu, w->display(0), true);
+        QMenu *with = nullptr;
+        for (QAction *a : menu.actions()) {
+            if (a->menu() && a->text() == QStringLiteral("Open With"))
+                with = a->menu();
+        }
+        QVERIFY(with);
+        QStringList texts;
+        for (QAction *a : with->actions())
+            texts << a->text();
+        QVERIFY(texts.contains(QStringLiteral("Kate")));
+        QVERIFY(!texts.contains(QStringLiteral("GIMP")));
+        QVERIFY(texts.contains(QStringLiteral("Other Application...")));
+        for (QAction *a : with->actions()) {
+            if (a->text() == QStringLiteral("Kate"))
+                a->trigger();
+        }
+        QCOMPARE(ran.value(0), QStringLiteral("kate"));
+        // Other Application: every app, with "always use".
+        QVERIFY(w->runCommand(QStringLiteral("OpenWith")));
+        OpenWithDialog *dlg = nullptr;
+        QTRY_VERIFY((dlg = w->findChild<OpenWithDialog *>()));
+        dlg->search()->setText(QStringLiteral("gim"));
+        QTRY_COMPARE(dlg->chosen().name, QStringLiteral("GIMP"));
+        dlg->alwaysBox()->setChecked(true);
+        dlg->accept();
+        QCOMPARE(ran.value(0), QStringLiteral("gimp"));
+        QCOMPARE(Apps::defaultFor(QStringLiteral("text/plain")), QStringLiteral("gimp.desktop"));
+        // Opening the file now uses Linopus's default.
+        ran.clear();
+        w->openFile(file);
+        QCOMPARE(ran.value(0), QStringLiteral("gimp"));
+        QVERIFY(w->runCommand(QStringLiteral("OpenWith APP=Kate DEFAULT")));
+        QCOMPARE(Apps::defaultFor(QStringLiteral("text/plain")), QStringLiteral("kate.desktop"));
+        Apps::setDefaultFor(QStringLiteral("text/plain"), QString());
+        HostRun::setStarter({});
+        Apps::setSearchDirsOverride({});
     }
 
     void freeSpaceShown()

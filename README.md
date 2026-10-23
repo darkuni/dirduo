@@ -48,6 +48,7 @@ Servers and archives (KIO):
 - Links: right-click > Make Link Here ("Name (link)") or Make Link in Destination. `MakeLink RELATIVE` makes links that keep working when both move together (an SD card in another machine). Undo removes them
 - Location bar laid out as in Opus: Back, Forward, Up, Refresh, Home (a "best favorite": middle-click it, or right-click > Set to This Folder, to make the current folder Home), a Favorites star (pick one, add this folder, organize), the folder's icon (drag it to copy, move or link the folder), the path, a list of recent folders, and (with two displays) Open This Folder in the Other Display and Swap Folders. The bar takes the display's role color (source, destination, locked destination)
 - Shell script buttons: a button whose function starts with `#!/bin/bash` (or any `#!`) runs as a script on the real system (outside the Flatpak). The selected items are `"$@"`, it starts in the source folder, and `$LINOPUS_SOURCE`, `$LINOPUS_DEST` and `$LINOPUS_FOCUSED` are set. `# linopus: terminal` runs it in Konsole, `# linopus: output` always shows what it printed (otherwise only when it fails), `# linopus: norefresh` leaves the listings alone. The button editor's New Script puts in a template
+- Open With: right-click > Open With lists the applications for the file's type (from the system's .desktop files, Flatpak apps included), plus Other Application... to pick any app, search by name, and Always use it for that type. Linopus's choice wins over the desktop's when opening files. `OpenWith APP=Kate DEFAULT`
 - Help > About shows which build this is
 - Right-click empty space > Open Konsole in This Folder (also Tools > Open Konsole Here, Shift+F4, and the `Terminal` command). Uses Konsole, or the first other terminal installed; from the Flatpak it opens on the real system
 - Free space: the status line shows how much room is left on the drive or card (in red when it is nearly full), and a copy that will not fit stops before writing anything
@@ -112,6 +113,7 @@ Every button, menu item, hotkey, drop and inline rename runs one of these. Butto
 | `Collection` | `ADD=<name>\|ask`, `REMOVE`, `CREATE=`, `DELETE=`, `OPEN=<name>`, `NEWTAB` |
 | `Metadata` | `TITLE=`, `ARTIST=`, `ALBUMARTIST=`, `ALBUM=`, `GENRE=`, `COMMENT=`, `YEAR=`, `TRACK=<n>\|auto` (`START=`), `DISC=`, `TAKEN=`, `SHIFT=+1h\|-30m\|+2d`, `DESCRIPTION=`, `COPYRIGHT=` (empty clears), `COPY`, `PASTE` (`ALL`), `FILE=`, `PANE=toggle\|on\|off` |
 | `Undo` | no arguments: the latest; `ID=`, `LIST`, `LOG` (`FIND=`) |
+| `OpenWith` | `APP=<name or desktop id>` (asks when left out), `DEFAULT`, `FILE=...` |
 | `Server` | `GO=<name>` (`NEWTAB`, `OPENINDEST`), `ADD` (asks) or `ADD URL=... NAME=...`, `REMOVE=<name>`; nothing: the list |
 | `Sync` | `LEFT=`, `RIGHT=`, `MODE=update\|mirror\|twoway`, `COMPARE=datesize\|date\|size\|contents`, `EXCLUDE=*.tmp;...`, `RUN` |
 | `Terminal` | `PATH=<folder>` (else the source folder), `PROGRAM=konsole\|gnome-terminal\|...` |

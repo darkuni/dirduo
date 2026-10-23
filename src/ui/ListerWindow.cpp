@@ -15,6 +15,8 @@
 #include "core/FindEngine.h"
 #include "ui/HistoryDialog.h"
 #include "ui/ArchiveDialog.h"
+#include "ui/OpenWithDialog.h"
+#include "core/Apps.h"
 #include "ui/ServerDialog.h"
 #include "core/Servers.h"
 #include "ui/PropertiesDialog.h"
@@ -1949,6 +1951,29 @@ void ListerWindow::fillContextMenu(QMenu &menu, FileDisplay *d, bool onItem)
                     openFile(p);
             });
         }
+        // Open With: the applications for the type, then any other.
+        bool files = true;
+        for (const QString &p : sel)
+            files = files && Location::isLocal(p) && !t->isFolder(p);
+        if (files && !sel.isEmpty()) {
+            QMenu *with = menu.addMenu(QIcon::fromTheme(QStringLiteral("document-open")), QStringLiteral("Open With"));
+            int shown = 0;
+            for (const AppInfo &a : Apps::forFile(sel.first())) {
+                if (++shown > 12)
+                    break;
+                const QString id = a.id;
+                QAction *act = with->addAction(OpenWithDialog::iconFor(a), a.name);
+                act->setData(id);
+                connect(act, &QAction::triggered, this, [this, id, sel]() {
+                    QString err;
+                    if (!Apps::open(Apps::find(id), sel, &err))
+                        showError(QStringLiteral("Open With"), err);
+                });
+            }
+            if (shown > 0)
+                with->addSeparator();
+            with->addAction(commandAction(QStringLiteral("Other Application..."), QStringLiteral("OpenWith")));
+        }
         menu.addSeparator();
         menu.addAction(commandAction(QStringLiteral("Cut"), QStringLiteral("Clipboard CUT"), {}, QStringLiteral("edit-cut")));
         menu.addAction(commandAction(QStringLiteral("Copy"), QStringLiteral("Clipboard COPY"), {}, QStringLiteral("edit-copy")));
@@ -2039,6 +2064,14 @@ void ListerWindow::openFile(const QString &path)
             backend->openFile(path);
         else
             showError(QStringLiteral("Open"), QStringLiteral("Remote files need the KIO build of Linopus."));
+        return;
+    }
+    // Linopus's own default for the type first, then the desktop's.
+    QString why;
+    if (Apps::openWithDefault(path, &why))
+        return;
+    if (!why.isEmpty()) {
+        showError(QStringLiteral("Open"), why);
         return;
     }
     if (!QDesktopServices::openUrl(QUrl::fromLocalFile(path)))
@@ -2481,6 +2514,25 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
     }
     if (cmd.is(QStringLiteral("Image")))
         return imageCommand(cmd, error);
+    if (cmd.is(QStringLiteral("OpenWith"))) {
+        QStringList files;
+        for (const QString &f : cmd.values(QStringLiteral("FILE")))
+            files << m_app.engine().resolvePath(f, sourcePath());
+        if (files.isEmpty())
+            files = selectedPaths();
+        auto *dlg = new OpenWithDialog(files, this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        connect(dlg, &QDialog::accepted, this, [this, dlg, files]() {
+            const AppInfo app = dlg->chosen();
+            if (dlg->alwaysUse())
+                Apps::setDefaultFor(dlg->mimeType(), app.id);
+            QString err;
+            if (!Apps::open(app, files, &err))
+                showError(QStringLiteral("Open With"), err);
+        });
+        dlg->open();
+        return true;
+    }
     if (cmd.is(QStringLiteral("Server"))) {
         if (cmd.hasFlag(QStringLiteral("ADD"))) {
             // Starting from the server folder being shown, with HERE (or when it is one).

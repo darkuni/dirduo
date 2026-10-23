@@ -73,6 +73,10 @@ void AppContext::setupIconTheme()
     if (dataDirs.isEmpty())
         dataDirs = {QStringLiteral("/usr/local/share"), QStringLiteral("/usr/share")};
     dataDirs.prepend(QDir::homePath() + QStringLiteral("/.local/share"));
+    // Application icons from the host (Open With): its system icons and the
+    // icons of installed Flatpaks.
+    dataDirs << QStringLiteral("/run/host/usr/share") << QStringLiteral("/var/lib/flatpak/exports/share")
+             << QDir::homePath() + QStringLiteral("/.local/share/flatpak/exports/share");
     for (const QString &d : std::as_const(dataDirs)) {
         const QString icons = d + QStringLiteral("/icons");
         if (!paths.contains(icons) && QFileInfo(icons).isDir())

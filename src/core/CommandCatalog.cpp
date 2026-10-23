@@ -42,6 +42,11 @@ QList<CommandInfo> buildCommands()
                       arg("NAME=", {}, "With ADD: its name"),
                       arg("REMOVE=", {}, "Remove the server with this name")},
                      QStringLiteral("Server GO=NAS")};
+    c << CommandInfo{QStringLiteral("OpenWith"), QStringLiteral("Open the selected files with an application"),
+                     {arg("APP=", {}, "The application: its name (Kate) or desktop file (org.kde.kate.desktop); asks when left out"),
+                      arg("DEFAULT", {}, "Also make it Linopus's default for this type of file"),
+                      arg("FILE=", {}, "What to open instead of the selection")},
+                     QStringLiteral("OpenWith APP=Kate")};
     c << CommandInfo{QStringLiteral("Terminal"), QStringLiteral("Open a terminal window in the folder (Konsole, or another one installed)"),
                      {arg("PATH=", {}, "Folder to open in (otherwise the source folder)"),
                       arg("PROGRAM=", {QStringLiteral("konsole"), QStringLiteral("gnome-terminal"), QStringLiteral("alacritty"), QStringLiteral("kitty")},

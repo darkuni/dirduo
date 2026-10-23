@@ -209,6 +209,7 @@ private:
     bool cmdTerminal(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool cmdServer(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool runScript(const QString &script, CommandContext &ctx);
+    bool cmdOpenWith(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     void recordNew(const QStringList &paths, const QString &what);
 
     QStringList sourcesFor(const ParsedCommand &cmd, CommandContext &ctx, const QStringList &flags) const;

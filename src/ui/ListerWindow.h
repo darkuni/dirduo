@@ -76,6 +76,8 @@ public:
     FileDisplay *display(int index) const { return m_displays[index]; }
     // The file display's right-click menu (onItem: clicked on a file).
     void fillContextMenu(QMenu &menu, FileDisplay *d, bool onItem);
+    // Opens a file: Linopus's default app for its type, else the desktop's.
+    void openFile(const QString &path);
     bool isDual() const { return m_dual; }
 
     enum class ToolbarPlace { Top, Bottom, Left, Right, Between };
@@ -142,7 +144,6 @@ private:
     void onRenameRequested(FileDisplay *d, const QString &path, const QString &newName);
     void onDropRequested(FileDisplay *d, const QList<QUrl> &urls, const QString &targetDir, Qt::DropAction action);
     void onContextMenu(FileDisplay *d, const QPoint &globalPos, bool onItem);
-    void openFile(const QString &path);
     void rebuildAliasMenu();
     void createButtonBar(const QString &id, bool show);
     void removeButtonBar(const QString &id);

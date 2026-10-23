@@ -39,6 +39,7 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Network button on the drives bar: your Windows/Samba machines show up. Open a share, sign in, copy both ways.
 - [ ] Network arrow > Add Server...: add your NAS (SFTP or SMB). It appears in the arrow menu, Go > Network and Servers, and the tree's Network group. Manage Servers... edits and removes.
 - [ ] Customize a toolbar, add a button, New Script; select some files and click it: the output window lists them. Try `# linopus: terminal`, and a script that fails (`exit 1`).
+- [ ] Right-click a ROM or a text file > Open With: your apps (Flatpak ones too) are listed with icons. Other Application...: tick Always use; double-clicking the file now opens it there.
 - [ ] Help > About shows the build (commit and date).
 - [ ] Copy from a card and pull it out halfway (or copy an unreadable file): it asks Retry / Skip / Skip All / Abort. Put the card back and Retry.
 - [ ] Make a zip with a password, then Extract it: it asks; a wrong password says so and leaves nothing behind.

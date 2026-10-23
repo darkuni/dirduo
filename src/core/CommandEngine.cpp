@@ -5,6 +5,7 @@
 #include "core/Attributes.h"
 #include "core/HostRun.h"
 #include "core/Servers.h"
+#include "core/Apps.h"
 #include "core/Collections.h"
 #include "core/FileOps.h"
 #include "core/JobManager.h"
@@ -96,7 +97,7 @@ QStringList CommandEngine::commandNames()
     return {QStringLiteral("Archive"), QStringLiteral("Clipboard"), QStringLiteral("Collection"), QStringLiteral("Copy"), QStringLiteral("CreateFolder"),
             QStringLiteral("Delete"), QStringLiteral("Duplicates"), QStringLiteral("Favorite"), QStringLiteral("Find"), QStringLiteral("Go"),
             QStringLiteral("Image"),
-            QStringLiteral("Layout"), QStringLiteral("MakeLink"), QStringLiteral("Metadata"), QStringLiteral("Move"), QStringLiteral("Print"),
+            QStringLiteral("Layout"), QStringLiteral("MakeLink"), QStringLiteral("Metadata"), QStringLiteral("Move"), QStringLiteral("OpenWith"), QStringLiteral("Print"),
             QStringLiteral("Properties"), QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Server"), QStringLiteral("Set"), QStringLiteral("SetAttr"), QStringLiteral("Settings"),
             QStringLiteral("Sync"), QStringLiteral("Terminal"), QStringLiteral("Toolbar"), QStringLiteral("Undo")};
 }
@@ -230,6 +231,8 @@ bool CommandEngine::execute(const ParsedCommand &cmd, CommandContext &ctx, QStri
         return cmdTerminal(cmd, ctx, error);
     if (cmd.is(QStringLiteral("Server")))
         return cmdServer(cmd, ctx, error);
+    if (cmd.is(QStringLiteral("OpenWith")))
+        return cmdOpenWith(cmd, ctx, error);
     if (cmd.is(QStringLiteral("Sync")) || cmd.is(QStringLiteral("Duplicates")) || cmd.is(QStringLiteral("Find"))
         || cmd.is(QStringLiteral("Favorite")) || cmd.is(QStringLiteral("Layout")) || cmd.is(QStringLiteral("Image")))
         return ctx.tool(cmd, error);
@@ -688,6 +691,33 @@ bool CommandEngine::cmdServer(const ParsedCommand &cmd, CommandContext &ctx, QSt
     }
     // ADD without an address, or nothing: the window (Add Server, or the list).
     return ctx.tool(cmd, error);
+}
+
+bool CommandEngine::cmdOpenWith(const ParsedCommand &cmd, CommandContext &ctx, QString *error)
+{
+    auto fail = [error](const QString &msg) {
+        if (error)
+            *error = msg;
+        return false;
+    };
+    const QStringList flags = {QStringLiteral("DEFAULT")};
+    QStringList files;
+    for (const QString &p : sourcesFor(cmd, ctx, flags)) {
+        if (!Location::isLocal(p))
+            return fail(QStringLiteral("Open With works with files on this computer and its cards for now."));
+        files << p;
+    }
+    if (files.isEmpty())
+        return fail(QStringLiteral("Select a file to open first."));
+    const QString appName = cmd.value(QStringLiteral("APP"));
+    if (appName.isEmpty())
+        return ctx.tool(cmd, error); // the chooser
+    const AppInfo app = Apps::find(appName);
+    if (!app.isValid())
+        return fail(QStringLiteral("There is no application called \"%1\".").arg(appName));
+    if (cmd.hasFlag(QStringLiteral("DEFAULT")))
+        Apps::setDefaultFor(Apps::mimeTypeOf(files.first()), app.id);
+    return Apps::open(app, files, error);
 }
 
 QList<ScriptRunner *> CommandEngine::runningScripts() const
