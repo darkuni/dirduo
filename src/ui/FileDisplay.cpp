@@ -8,6 +8,8 @@
 #include "ui/Style.h"
 
 #include <QSplitter>
+#include <QStorageInfo>
+#include <QStandardPaths>
 #include <QCursor>
 #include <QToolTip>
 #include <QSettings>
@@ -142,12 +144,16 @@ FileDisplay::FileDisplay(AliasManager &aliases, QWidget *parent)
     m_star->setMenu(favMenu);
     auto *handle = new FolderHandle(header);
     m_folderIcon = handle;
-    m_recent = glyphButton(QStringLiteral("Recent folders"), header);
-    m_recent->setPopupMode(QToolButton::InstantPopup);
-    m_recent->setStyleSheet(QStringLiteral("QToolButton::menu-indicator { image: none; }"));
-    auto *recentMenu = new QMenu(m_recent);
-    connect(recentMenu, &QMenu::aboutToShow, this, [this, recentMenu]() { fillRecentMenu(recentMenu); });
-    m_recent->setMenu(recentMenu);
+    m_recent = glyphButton(QStringLiteral("Folder history"), header);
+    // As in Opus: the history drops down under the whole address, full paths,
+    // newest first, the current folder on top.
+    connect(m_recent, &QToolButton::clicked, this, [this]() {
+        QMenu menu(this);
+        fillRecentMenu(&menu);
+        const QPoint at = m_crumbs->mapToGlobal(QPoint(0, m_crumbs->height()));
+        menu.setMinimumWidth(m_recent->mapToGlobal(QPoint(m_recent->width(), 0)).x() - at.x());
+        menu.exec(at);
+    });
     for (QToolButton *b : {m_back, m_forward, m_up})
         b->setArrowType(Qt::NoArrow);
     hl->addWidget(m_badge);
@@ -443,7 +449,7 @@ void FileDisplay::updateHeader()
         return;
     m_crumbs->setPath(t->path());
     static_cast<FolderHandle *>(m_folderIcon)->path = t->path();
-    m_recent->setEnabled(t->canGoBack() || t->canGoForward());
+    recordVisit(t->path());
     m_back->setEnabled(t->canGoBack());
     m_forward->setEnabled(t->canGoForward());
     m_up->setEnabled(t->path() != QLatin1String("/"));
@@ -598,36 +604,96 @@ bool FileDisplay::eventFilter(QObject *watched, QEvent *event)
     return QWidget::eventFilter(watched, event);
 }
 
+// Folders visited in any display, newest first; kept between runs.
+static QStringList &visitList()
+{
+    static QStringList list;
+    static bool loaded = false;
+    if (!loaded) {
+        loaded = true;
+        QSettings st(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+        list = st.value(QStringLiteral("Location/history")).toStringList();
+    }
+    return list;
+}
+
+void FileDisplay::recordVisit(const QString &path)
+{
+    if (path.isEmpty())
+        return;
+    QStringList &list = visitList();
+    if (!list.isEmpty() && list.first() == path)
+        return;
+    list.removeAll(path);
+    list.prepend(path);
+    while (list.size() > 40)
+        list.removeLast();
+    QSettings st(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+    st.setValue(QStringLiteral("Location/history"), list);
+}
+
+QStringList FileDisplay::history()
+{
+    return visitList();
+}
+
+static QIcon iconForFolder(const QString &path)
+{
+    // A drive, the home folder, Downloads and the like get their own icons.
+    if (Location::isLocal(path)) {
+        const QStorageInfo info(path);
+        if (info.isValid() && QDir::cleanPath(info.rootPath()) == QDir::cleanPath(path))
+            return QIcon::fromTheme(QStringLiteral("drive-harddisk"));
+        if (path == QDir::homePath())
+            return QIcon::fromTheme(QStringLiteral("user-home"));
+        for (const auto &[loc, icon] : {std::pair{QStandardPaths::DownloadLocation, "folder-download"},
+                                        std::pair{QStandardPaths::PicturesLocation, "folder-pictures"},
+                                        std::pair{QStandardPaths::MusicLocation, "folder-music"},
+                                        std::pair{QStandardPaths::MoviesLocation, "folder-videos"},
+                                        std::pair{QStandardPaths::DocumentsLocation, "folder-documents"},
+                                        std::pair{QStandardPaths::DesktopLocation, "user-desktop"}}) {
+            if (QStandardPaths::writableLocation(loc) == path)
+                return QIcon::fromTheme(QString::fromLatin1(icon), QIcon(Glyphs::pixmap(Glyphs::Glyph::Folder, Qt::black, 32)));
+        }
+        return QIcon::fromTheme(QStringLiteral("folder"), QIcon(Glyphs::pixmap(Glyphs::Glyph::Folder, Qt::black, 32)));
+    }
+    return QIcon::fromTheme(QStringLiteral("folder-remote"));
+}
+
 void FileDisplay::fillRecentMenu(QMenu *menu)
 {
     menu->clear();
     FolderTab *t = currentTab();
-    if (!t)
-        return;
-    QStringList seen{t->path()};
-    auto add = [&](const QString &p) {
-        if (seen.contains(p))
-            return;
-        seen << p;
-        QAction *a = menu->addAction(Location::title(p));
-        a->setToolTip(Location::display(p));
+    const QString here = t ? t->path() : QString();
+    QStringList list;
+    if (!here.isEmpty())
+        list << here;
+    for (const QString &p : visitList()) {
+        if (!list.contains(p))
+            list << p;
+    }
+    for (const QString &p : std::as_const(list)) {
+        QAction *a = menu->addAction(iconForFolder(p), Location::display(p));
+        if (p == here) {
+            QFont f = a->font();
+            f.setBold(true);
+            a->setFont(f);
+            menu->setActiveAction(a);
+        }
         connect(a, &QAction::triggered, this, [this, p]() {
             Q_EMIT activated(this);
             if (auto *tab = currentTab())
                 tab->navigate(p);
         });
-    };
-    const QStringList back = t->backHistory();
-    for (int i = back.size() - 1; i >= 0 && seen.size() <= 20; --i)
-        add(back.at(i));
-    const QStringList forward = t->forwardHistory();
-    if (!forward.isEmpty() && !menu->isEmpty())
+    }
+    if (list.size() > 1) {
         menu->addSeparator();
-    for (int i = forward.size() - 1; i >= 0 && seen.size() <= 30; --i)
-        add(forward.at(i));
-    menu->setToolTipsVisible(true);
-    if (menu->isEmpty())
-        menu->addAction(QStringLiteral("(no other folders yet)"))->setEnabled(false);
+        connect(menu->addAction(QStringLiteral("Clear History")), &QAction::triggered, this, []() {
+            visitList().clear();
+            QSettings st(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+            st.remove(QStringLiteral("Location/history"));
+        });
+    }
 }
 
 void FileDisplay::setDestLocked(bool locked)

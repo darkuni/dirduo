@@ -35,6 +35,7 @@
 #include "ui/FolderTree.h"
 #include "ui/GroupTreeView.h"
 #include "ui/Style.h"
+#include "core/Location.h"
 #include "ui/ArchiveDialog.h"
 #include "ui/PropertiesDialog.h"
 #include "ui/ListerWindow.h"
@@ -1949,9 +1950,12 @@ private Q_SLOTS:
         QStringList texts;
         for (QAction *a : recent.actions())
             texts << a->text();
-        QVERIFY(texts.contains(QStringLiteral("a")));
+        // Full paths, the current folder first, then the newest.
+        QCOMPARE(texts.value(0), Location::display(root + QStringLiteral("/b")));
+        QCOMPARE(texts.value(1), Location::display(root + QStringLiteral("/a")));
+        QVERIFY(FileDisplay::history().contains(root + QStringLiteral("/a")));
         for (QAction *a : recent.actions()) {
-            if (a->text() == QStringLiteral("a"))
+            if (a->text() == Location::display(root + QStringLiteral("/a")))
                 a->trigger();
         }
         QTRY_COMPARE(t->path(), root + QStringLiteral("/a"));

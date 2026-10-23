@@ -53,6 +53,9 @@ public:
     QToolButton *copyPathButton() const { return m_copyPath; }
     QToolButton *swapPathsButton() const { return m_swapPaths; }
     void fillRecentMenu(QMenu *menu);
+    // Folders visited in any display, newest first (kept between runs).
+    static QStringList history();
+    static void recordVisit(const QString &path);
     // The Home button's folder: your home folder unless set to another.
     static QString homeFolder();
     void setHomeFolder(const QString &path); // empty: back to your home folder
