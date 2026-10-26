@@ -86,6 +86,7 @@ add_library(linopus_core STATIC
     src/core/FileTags.cpp
     src/core/Checksum.cpp
     src/core/StatusFormat.cpp
+    src/core/SteamShortcut.cpp
     src/core/Metadata.cpp
     src/core/Thumbnails.cpp
     src/core/History.cpp

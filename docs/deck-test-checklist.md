@@ -109,6 +109,7 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Window > Customize Toolbars > Default Toolbars: Add This Toolbar on Tools; drag "Turn Left" from Images onto it. Then Use the Opus Arrangement.
 - [ ] Preferences > Status Bar: tick "Use my own definition", Samples > Opus style, OK. The status bars show counts with icons, SOURCE/DEST and a disk bar. Codes menu > Disk space > Percent used adds {dp}.
 - [ ] Turn on the trees (Set TREE=separate): dotted lines, + / - boxes, and a blue line (green in the destination) from the top down to the folder you are in.
+- [ ] With Steam running, right-click a Windows .exe (or an AppImage) > Add to Steam: Steam adds it to the library (on the Deck it shows in Game Mode too). A text file has no Add to Steam.
 
 ## Report back
 

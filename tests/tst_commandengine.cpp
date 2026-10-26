@@ -6,6 +6,7 @@
 #include "core/JobManager.h"
 #include "core/Paths.h"
 #include "core/FileOps.h"
+#include "core/SteamShortcut.h"
 
 #include <QClipboard>
 #include <QDir>
@@ -316,6 +317,33 @@ private Q_SLOTS:
         QVERIFY(m_engine->run(QStringLiteral("Delete NORECYCLE"), ctx));
         QVERIFY(m_jobs->waitForIdle(5000));
         QVERIFY(!QFile::exists(ctx.source + QStringLiteral("/t2")));
+    }
+
+    void addToSteam()
+    {
+        writeFile(ctx.source + QStringLiteral("/My Game.exe"));
+        writeFile(ctx.source + QStringLiteral("/notes.txt"));
+        QVERIFY(SteamShortcut::canAdd(ctx.source + QStringLiteral("/My Game.exe")));
+        QVERIFY(!SteamShortcut::canAdd(ctx.source + QStringLiteral("/notes.txt")));
+        QFile::setPermissions(ctx.source + QStringLiteral("/notes.txt"), QFile::permissions(ctx.source + QStringLiteral("/notes.txt")) | QFile::ExeOwner);
+        QVERIFY(SteamShortcut::canAdd(ctx.source + QStringLiteral("/notes.txt"))); // marked executable
+        QCOMPARE(SteamShortcut::addUrl(QStringLiteral("/home/deck/My Game.exe")),
+                 QStringLiteral("steam://addnonsteamgame/%2Fhome%2Fdeck%2FMy%20Game.exe"));
+        QStringList ran;
+        HostRun::setStarter([&](const QStringList &line, const QString &) {
+            ran = line;
+            return true;
+        });
+        ctx.selection = {ctx.source + QStringLiteral("/My Game.exe")};
+        QVERIFY(m_engine->run(QStringLiteral("Steam ADD"), ctx));
+        QVERIFY(ran.contains(QStringLiteral("sh")));
+        QVERIFY(ran.contains(SteamShortcut::hostScript()));
+        QVERIFY(ran.contains(ctx.source + QStringLiteral("/My Game.exe")));
+        QVERIFY(ran.contains(SteamShortcut::addUrl(ctx.source + QStringLiteral("/My Game.exe"))));
+        QVERIFY(SteamShortcut::hostScript().contains(QStringLiteral("steamos-add-to-steam")));
+        HostRun::setStarter({});
+        ctx.selection = {ctx.source};
+        QVERIFY(!m_engine->run(QStringLiteral("Steam ADD"), ctx)); // a folder is not a program
     }
 
     void pieceSizes()

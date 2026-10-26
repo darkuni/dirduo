@@ -18,6 +18,7 @@
 #include "ui/TagsDialog.h"
 #include "ui/ChecksumDialog.h"
 #include "core/Checksum.h"
+#include "core/SteamShortcut.h"
 #include "core/FileTags.h"
 #include "ui/ImageViewer.h"
 #include "ui/OpenWithDialog.h"
@@ -2143,6 +2144,12 @@ void ListerWindow::fillContextMenu(QMenu &menu, FileDisplay *d, bool onItem)
                 with->addSeparator();
             with->addAction(commandAction(QStringLiteral("Other Application..."), QStringLiteral("OpenWith")));
         }
+        // Programs: Add to Steam, as Dolphin has it on SteamOS.
+        bool programs = !sel.isEmpty();
+        for (const QString &p : sel)
+            programs = programs && SteamShortcut::canAdd(p);
+        if (programs)
+            menu.addAction(commandAction(QStringLiteral("Add to Steam"), QStringLiteral("Steam ADD"), {}, QStringLiteral("steam")));
         menu.addSeparator();
         menu.addAction(commandAction(QStringLiteral("Cut"), QStringLiteral("Clipboard CUT"), {}, QStringLiteral("edit-cut")));
         menu.addAction(commandAction(QStringLiteral("Copy"), QStringLiteral("Clipboard COPY"), {}, QStringLiteral("edit-copy")));

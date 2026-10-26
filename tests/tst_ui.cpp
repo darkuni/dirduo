@@ -1617,6 +1617,34 @@ private Q_SLOTS:
         waitListed(t, QDir(back).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
     }
 
+    void addToSteamInMenu()
+    {
+        QTemporaryDir dir;
+        const QString d = dir.path();
+        touch(d + QStringLiteral("/setup.exe"));
+        touch(d + QStringLiteral("/readme.txt"));
+        FolderTab *t = w->display(0)->currentTab();
+        const QString back = t->path();
+        t->navigate(d);
+        waitListed(t, 2);
+        auto texts = [&]() {
+            QMenu menu;
+            w->fillContextMenu(menu, w->display(0), true);
+            QStringList out;
+            for (QAction *a : menu.actions())
+                out << a->text();
+            return out;
+        };
+        t->selectPaths({d + QStringLiteral("/setup.exe")});
+        QTRY_COMPARE(t->selectedPaths().size(), 1);
+        QVERIFY(texts().contains(QStringLiteral("Add to Steam")));
+        t->selectPaths({d + QStringLiteral("/readme.txt")});
+        QTRY_COMPARE(t->selectedPaths(), QStringList{d + QStringLiteral("/readme.txt")});
+        QVERIFY(!texts().contains(QStringLiteral("Add to Steam")));
+        t->navigate(back);
+        waitListed(t, QDir(back).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
+    }
+
     void treePathLine()
     {
         FolderTree tree;

@@ -8,6 +8,7 @@
 #include "core/Apps.h"
 #include "core/FileTags.h"
 #include "core/Checksum.h"
+#include "core/SteamShortcut.h"
 #include "core/Prefs.h"
 #include "core/Collections.h"
 #include "core/FileOps.h"
@@ -105,7 +106,7 @@ QStringList CommandEngine::commandNames()
             QStringLiteral("Image"), QStringLiteral("Join"),
             QStringLiteral("Layout"), QStringLiteral("MakeLink"), QStringLiteral("Metadata"), QStringLiteral("Move"), QStringLiteral("OpenWith"), QStringLiteral("Print"),
             QStringLiteral("Properties"), QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Server"), QStringLiteral("Set"), QStringLiteral("SetAttr"), QStringLiteral("Settings"), QStringLiteral("Show"),
-            QStringLiteral("Split"), QStringLiteral("Sync"), QStringLiteral("Tag"), QStringLiteral("Terminal"), QStringLiteral("Toolbar"), QStringLiteral("Undo")};
+            QStringLiteral("Split"), QStringLiteral("Steam"), QStringLiteral("Sync"), QStringLiteral("Tag"), QStringLiteral("Terminal"), QStringLiteral("Toolbar"), QStringLiteral("Undo")};
 }
 
 QString CommandEngine::resolvePath(const QString &input, const QString &base) const
@@ -233,6 +234,8 @@ bool CommandEngine::execute(const ParsedCommand &cmd, CommandContext &ctx, QStri
         return ctx.tool(cmd, error);
     if (cmd.is(QStringLiteral("MakeLink")))
         return cmdMakeLink(cmd, ctx, error);
+    if (cmd.is(QStringLiteral("Steam")))
+        return cmdSteam(cmd, ctx, error);
     if (cmd.is(QStringLiteral("Terminal")))
         return cmdTerminal(cmd, ctx, error);
     if (cmd.is(QStringLiteral("Server")))
@@ -659,6 +662,30 @@ bool CommandEngine::cmdMakeLink(const ParsedCommand &cmd, CommandContext &ctx, Q
     }
     recordNew(made, QStringLiteral("link"));
     ctx.afterLocalChange(folder.isEmpty() ? made : QStringList());
+    return true;
+}
+
+bool CommandEngine::cmdSteam(const ParsedCommand &cmd, CommandContext &ctx, QString *error)
+{
+    auto fail = [error](const QString &msg) {
+        if (error)
+            *error = msg;
+        return false;
+    };
+    if (!cmd.hasFlag(QStringLiteral("ADD")))
+        return fail(QStringLiteral("Steam takes ADD."));
+    QStringList files;
+    for (const QString &p : sourcesFor(cmd, ctx, {QStringLiteral("ADD")})) {
+        if (SteamShortcut::canAdd(p))
+            files << p;
+    }
+    if (files.isEmpty())
+        return fail(QStringLiteral("Select a program to add: an .exe, .bat, AppImage, script or other executable file."));
+    for (const QString &f : std::as_const(files)) {
+        QString err;
+        if (!SteamShortcut::add(f, &err))
+            return fail(err);
+    }
     return true;
 }
 

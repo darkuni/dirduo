@@ -72,6 +72,9 @@ QList<CommandInfo> buildCommands()
                       arg("WHENEXISTS=", {QStringLiteral("replace"), QStringLiteral("skip"), QStringLiteral("rename")}, "When the file is already there"),
                       arg("FILE=", {}, "Pieces instead of the selection")},
                      QStringLiteral("Join")};
+    c << CommandInfo{QStringLiteral("Steam"), QStringLiteral("Add the selected programs to Steam as non-Steam games (Windows ones run through Proton)"),
+                     {arg("ADD", {}, "Add them (Steam must be running)"), arg("FILE=", {}, "Programs to add instead of the selection")},
+                     QStringLiteral("Steam ADD")};
     c << CommandInfo{QStringLiteral("Show"), QStringLiteral("The picture viewer: the selected picture, stepping through the folder"),
                      {arg("FILE=", {}, "Picture to show instead of the selection")},
                      QStringLiteral("Show")};
@@ -375,6 +378,7 @@ QList<CatalogButton> buildButtons()
         b("File operations", "Clean Junk", "edit-clear", "Trash .DS_Store, Thumbs.db and other clutter in the source or the selected folders", "Clean"),
         b("File operations", "Split", "split", "Cut the selected file into pieces a FAT32 card can hold (right: asks the size)", "Split SIZE=fat32", "Split"),
         b("File operations", "Join", "merge", "Put pieces (name.001...) back together", "Join"),
+        b("File operations", "Add to Steam", "steam", "Add the selected program to Steam as a non-Steam game", "Steam ADD"),
         b("File operations", "Checksums", "document-encrypt", "MD5 of the selection (right: SHA-256); verifies a selected .md5, .sha256 or .sfv list",
           "Checksum", "Checksum ALGO=sha256"),
         b("Navigation", "Network", "network-workgroup", "Windows and Samba machines on the network", "Go smb:/", "Server"),

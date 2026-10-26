@@ -214,6 +214,7 @@ private:
     bool runScript(const QString &script, CommandContext &ctx);
     bool cmdOpenWith(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool cmdClean(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
+    bool cmdSteam(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool cmdSplitJoin(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
 public:
     // "100M", "2G", "fat32", "cd", "dvd": bytes.
