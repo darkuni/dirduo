@@ -87,6 +87,7 @@ add_library(dirduo_core STATIC
     src/core/SavedFilters.cpp
     src/core/TabGroups.cpp
     src/core/ContextMenus.cpp
+    src/core/FileIndex.cpp
     src/core/FileTags.cpp
     src/core/Checksum.cpp
     src/core/StatusFormat.cpp
@@ -192,6 +193,7 @@ add_library(dirduo_ui STATIC
     src/ui/ViewerWindow.cpp
     src/ui/KeysPage.cpp
     src/ui/Notifier.cpp
+    src/ui/IndexSearch.cpp
     src/ui/MediaPanel.cpp
     src/ui/TagsDialog.cpp
     src/ui/ChecksumDialog.cpp
@@ -247,7 +249,7 @@ endif()
 if(DIRDUO_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS Test)
     enable_testing()
-    foreach(t aliases commandparser fileops trash jobmanager commandengine drives location listing condition rename foldersync find imageconvert metadata thumbnails history selectrules archive attributes apps filetags checksum statusformat scripting)
+    foreach(t aliases commandparser fileops trash jobmanager commandengine drives location listing condition rename foldersync find imageconvert metadata thumbnails history selectrules archive attributes apps filetags checksum statusformat scripting fileindex)
         add_executable(tst_${t} tests/tst_${t}.cpp)
         target_link_libraries(tst_${t} PRIVATE dirduo_core Qt6::Test)
         add_test(NAME ${t} COMMAND tst_${t})

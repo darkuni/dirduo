@@ -1,4 +1,6 @@
 #include "ui/PreferencesDialog.h"
+#include <QLocale>
+#include "core/FileIndex.h"
 #include <QDialog>
 #include "core/ContextMenus.h"
 #include <QSpinBox>
@@ -156,7 +158,7 @@ QString safeFileName(QString name)
 QStringList PreferencesDialog::pageNames()
 {
     return {QStringLiteral("general"), QStringLiteral("appearance"), QStringLiteral("theme"), QStringLiteral("labels"),
-            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("filetypes"), QStringLiteral("toolbars"), QStringLiteral("statusbar"), QStringLiteral("scripts"), QStringLiteral("viewer"), QStringLiteral("keys"), QStringLiteral("filters"), QStringLiteral("tabgroups"), QStringLiteral("contextmenu")};
+            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("filetypes"), QStringLiteral("toolbars"), QStringLiteral("statusbar"), QStringLiteral("scripts"), QStringLiteral("viewer"), QStringLiteral("keys"), QStringLiteral("filters"), QStringLiteral("tabgroups"), QStringLiteral("contextmenu"), QStringLiteral("index")};
 }
 
 PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, const QString &page)
@@ -216,6 +218,8 @@ PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, cons
     addPage(QStringLiteral("contextmenu"), QStringLiteral("Right-Click Menu"), QStringLiteral("application-menu"), buildContextMenu(),
             {QStringLiteral("context"), QStringLiteral("menu"), QStringLiteral("right-click"), QStringLiteral("file type"),
              QStringLiteral("command"), QStringLiteral("hide")});
+    addPage(QStringLiteral("index"), QStringLiteral("Index Search"), QStringLiteral("edit-find"), buildIndex(),
+            {QStringLiteral("index"), QStringLiteral("search"), QStringLiteral("everything"), QStringLiteral("find"), QStringLiteral("instant")});
     addPage(QStringLiteral("filters"), QStringLiteral("Filters"), QStringLiteral("view-filter"), buildFilters(),
             {QStringLiteral("filter"), QStringLiteral("saved"), QStringLiteral("wildcard"), QStringLiteral("pattern")});
     addPage(QStringLiteral("tabgroups"), QStringLiteral("Tab Groups"), QStringLiteral("tab-duplicate"), buildTabGroups(),
@@ -543,6 +547,92 @@ QWidget *PreferencesDialog::buildContextMenu()
     }
     m_menuBuiltIns->setMinimumHeight(m_menuBuiltIns->fontMetrics().height() * 11);
     layout->addWidget(m_menuBuiltIns, 1);
+    return page;
+}
+
+QWidget *PreferencesDialog::buildIndex()
+{
+    auto *page = new QWidget;
+    auto *layout = new QVBoxLayout(page);
+    FileIndex *fi = FileIndex::instance();
+    const FileIndex::Settings st = fi->settings();
+    auto *intro = new QLabel(QStringLiteral("Index Search (Tools > Index Search, Ctrl+E) finds any file or folder by name as you type. "
+                                            "It keeps a list of every name under the folders below, built in the background at low "
+                                            "priority and updated at once for folders DirDuo shows or copies into."),
+                             page);
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+    m_indexOn = new QCheckBox(QStringLiteral("Keep an index for Index Search"), page);
+    m_indexOn->setChecked(st.enabled);
+    layout->addWidget(m_indexOn);
+    auto *where = new QGroupBox(QStringLiteral("Folders in it"), page);
+    auto *wl = new QVBoxLayout(where);
+    m_indexRoots = new QListWidget(where);
+    m_indexRoots->setObjectName(QStringLiteral("index-roots"));
+    m_indexRoots->addItems(fi->roots());
+    m_indexRoots->setMaximumHeight(fontMetrics().height() * 6);
+    wl->addWidget(m_indexRoots);
+    auto *rr = new QHBoxLayout;
+    auto *addRoot = new QPushButton(QIcon::fromTheme(QStringLiteral("list-add")), QStringLiteral("Add Folder..."), where);
+    auto *delRoot = new QPushButton(QIcon::fromTheme(QStringLiteral("list-remove")), QStringLiteral("Remove"), where);
+    auto *defRoots = new QPushButton(QStringLiteral("Home and Cards"), where);
+    defRoots->setToolTip(FileIndex::defaultRoots().join(QLatin1Char('\n')));
+    rr->addWidget(addRoot);
+    rr->addWidget(delRoot);
+    rr->addStretch(1);
+    rr->addWidget(defRoots);
+    wl->addLayout(rr);
+    m_indexHidden = new QCheckBox(QStringLiteral("Hidden files and folders too (.local, .config, Steam's files under .local/share...)"), where);
+    m_indexHidden->setChecked(st.hidden);
+    wl->addWidget(m_indexHidden);
+    auto *exForm = new QFormLayout;
+    m_indexExclude = new QLineEdit(st.exclude.join(QStringLiteral("; ")), where);
+    m_indexExclude->setToolTip(QStringLiteral("Folders with these names are left out, wherever they are"));
+    exForm->addRow(QStringLiteral("Leave out folders named:"), m_indexExclude);
+    m_indexMinutes = new QSpinBox(where);
+    m_indexMinutes->setRange(0, 24 * 60);
+    m_indexMinutes->setSuffix(QStringLiteral(" minutes"));
+    m_indexMinutes->setSpecialValueText(QStringLiteral("Only when asked"));
+    m_indexMinutes->setValue(st.rebuildMinutes);
+    exForm->addRow(QStringLiteral("Build it again every:"), m_indexMinutes);
+    wl->addLayout(exForm);
+    layout->addWidget(where);
+    auto *statusRow = new QHBoxLayout;
+    auto *status = new QLabel(page);
+    status->setObjectName(QStringLiteral("index-prefs-status"));
+    auto *now = new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), QStringLiteral("Build It Now"), page);
+    statusRow->addWidget(status, 1);
+    statusRow->addWidget(now);
+    layout->addLayout(statusRow);
+    layout->addStretch(1);
+    auto showStatus = [status, fi]() {
+        if (!fi->settings().enabled)
+            status->setText(QStringLiteral("Off."));
+        else if (fi->isBuilding())
+            status->setText(fi->isReady() ? QStringLiteral("Updating...") : QStringLiteral("Building..."));
+        else if (fi->isReady())
+            status->setText(QStringLiteral("%1 files and folders, built %2.")
+                                .arg(QLocale().toString(fi->count()), QLocale().toString(fi->builtAt(), QLocale::ShortFormat)));
+        else
+            status->setText(QStringLiteral("Not built yet."));
+    };
+    showStatus();
+    connect(fi, &FileIndex::changed, status, showStatus);
+    connect(fi, &FileIndex::buildingChanged, status, showStatus);
+    connect(now, &QPushButton::clicked, fi, &FileIndex::rebuild);
+    connect(addRoot, &QPushButton::clicked, this, [this]() {
+        const QString dir = QFileDialog::getExistingDirectory(this, QStringLiteral("Add a Folder to the Index"), QDir::homePath());
+        if (!dir.isEmpty() && m_indexRoots->findItems(dir, Qt::MatchExactly).isEmpty())
+            m_indexRoots->addItem(dir);
+    });
+    connect(delRoot, &QPushButton::clicked, this, [this]() { delete m_indexRoots->currentItem(); });
+    connect(defRoots, &QPushButton::clicked, this, [this]() {
+        m_indexRoots->clear();
+        m_indexRoots->addItems(FileIndex::defaultRoots());
+    });
+    auto enable = [this, where]() { where->setEnabled(m_indexOn->isChecked()); };
+    enable();
+    connect(m_indexOn, &QCheckBox::toggled, this, enable);
     return page;
 }
 
@@ -1661,6 +1751,25 @@ bool PreferencesDialog::apply(QString *error)
     Prefs::instance()->setValues(v);
     if (!m_keysPage->apply(error))
         return false;
+
+    // Index Search.
+    {
+        FileIndex::Settings st = FileIndex::instance()->settings();
+        st.enabled = m_indexOn->isChecked();
+        QStringList roots;
+        for (int i = 0; i < m_indexRoots->count(); ++i)
+            roots << m_indexRoots->item(i)->text();
+        // The default folders are kept as "default", so a card put in later is found.
+        st.roots = roots == FileIndex::defaultRoots() ? QStringList() : roots;
+        st.hidden = m_indexHidden->isChecked();
+        st.rebuildMinutes = m_indexMinutes->value();
+        st.exclude.clear();
+        for (const QString &e : m_indexExclude->text().split(QLatin1Char(';'), Qt::SkipEmptyParts))
+            if (!e.trimmed().isEmpty())
+                st.exclude << e.trimmed();
+        if (!(st == FileIndex::instance()->settings()))
+            FileIndex::instance()->setSettings(st);
+    }
 
     // Right-click menu.
     {

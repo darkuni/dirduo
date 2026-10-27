@@ -21,6 +21,8 @@
 #include "ui/ViewerWindow.h"
 #include "ui/KeysPage.h"
 #include "core/ContextMenus.h"
+#include "core/FileIndex.h"
+#include "ui/IndexSearch.h"
 #include <QPainter>
 #include "ui/ViewerPane.h"
 #include "ui/ImageConvertDialog.h"
@@ -76,6 +78,7 @@ int main(int argc, char *argv[])
 
     QTemporaryDir sandbox;
     Paths::setConfigDirOverride(sandbox.filePath(QStringLiteral("config")));
+    Paths::setCacheHomeOverride(sandbox.filePath(QStringLiteral("cache")));
     Paths::setDataHomeOverride(sandbox.filePath(QStringLiteral("data")));
     const QString root = sandbox.filePath(QStringLiteral("deck"));
     writeFile(root + QStringLiteral("/Music/Joan Jett/Bad Reputation.mp3"), 4200000);
@@ -698,6 +701,20 @@ int main(int argc, char *argv[])
             prefs.show();
             QTest::qWait(300);
             prefs.grab().save(out + QStringLiteral("/52-right-click-menu.png"));
+        }
+        {
+            FileIndex::Settings st;
+            st.roots = {root};
+            FileIndex::instance()->setSettings(st);
+            FileIndex::instance()->waitIdle(10000);
+            IndexSearch *win = IndexSearch::open(w, QStringLiteral("c64"));
+            win->resize(980, 560);
+            win->waitResults(5000);
+            QTest::qWait(300);
+            win->grab().save(out + QStringLiteral("/53-index-search.png"));
+            win->close();
+            st.enabled = false;
+            FileIndex::instance()->setSettings(st);
         }
         // Opus-style tree: branch lines and the path to the current folder.
         w->runCommand(QStringLiteral("Set DUAL=vertical\nSet TREE=separate"));

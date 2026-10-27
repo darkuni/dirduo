@@ -1,4 +1,5 @@
 #include "ui/AppContext.h"
+#include "core/FileIndex.h"
 #include "core/Prefs.h"
 #include "core/FileOps.h"
 #include "ui/Notifier.h"
@@ -80,6 +81,11 @@ AppContext::AppContext(QObject *parent)
             snap = m_doneSnaps.value(id);
         m_doneSnaps.remove(id);
         const qint64 ms = m_jobClocks.contains(id) ? m_jobClocks.take(id).elapsed() : 0;
+        // Index Search: what was copied, moved or unpacked is found at once.
+        if (!snap.toFolder.isEmpty())
+            FileIndex::instance()->rescan(snap.toFolder, true);
+        if (!snap.fromFolder.isEmpty() && snap.type != JobType::Copy)
+            FileIndex::instance()->rescan(snap.fromFolder, false);
         notifyJobDone(snap, ms);
         static const QStringList kinds = {QStringLiteral("copy"), QStringLiteral("move"), QStringLiteral("trash"), QStringLiteral("delete"),
                                           QStringLiteral("pack"), QStringLiteral("unpack"), QStringLiteral("split"), QStringLiteral("join")};

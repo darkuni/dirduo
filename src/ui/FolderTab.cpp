@@ -1,4 +1,5 @@
 #include "ui/FolderTab.h"
+#include "core/FileIndex.h"
 #include <QInputDialog>
 #include "core/SavedFilters.h"
 #include "core/Prefs.h"
@@ -523,6 +524,7 @@ void FolderTab::onListed(const QString &path, const FileItemList &items, bool is
 {
     if (path != m_path)
         return;
+    FileIndex::instance()->folderListed(path, items); // keeps Index Search current
     m_error.clear();
     if (isRefresh) {
         m_model->updateListing(items);

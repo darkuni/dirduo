@@ -112,6 +112,17 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Turn on the trees (Set TREE=separate): dotted lines, + / - boxes, and a blue line (green in the destination) from the top down to the folder you are in.
 - [ ] With Steam running, right-click a Windows .exe (or an AppImage) > Add to Steam: Steam adds it to the library (on the Deck it shows in Game Mode too). A text file has no Add to Steam.
 
+## Status bar per lister
+
+- [ ] Preferences > Status Bar: tick "Only for this lister", pick Samples > Minimal, OK. A second lister (Ctrl+N) keeps the normal bar. Window > Layouts > Save This Layout, then load it later: the Minimal bar comes back with it.
+
+## Index Search
+
+- [ ] Press Ctrl+E (Tools > Index Search): the status line says how many items are indexed. Type part of a ROM's name: it shows at once. Enter: the lister goes to its folder with it selected.
+- [ ] In Index Search type `ext:iso;chd` and click Show All in a Tab: every disc image is in one tab; copy a few to the SD card from there.
+- [ ] Copy a file into a new folder, then search for it right away: it is found without waiting for a rebuild.
+- [ ] Preferences > Index Search: add or remove a folder, OK; the index builds again. Untick it: the index is gone.
+
 ## Right-click menu
 
 - [ ] Preferences > Right-Click Menu > New: name "Run in VICE", shows for `*.d64;*.prg`, command `Go /downloads`. Right-click a .d64: it is near the top and goes to Downloads; a .png does not have it.

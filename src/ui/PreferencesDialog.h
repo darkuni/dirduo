@@ -77,6 +77,7 @@ public:
     class KeysPage *keysPage() const { return m_keysPage; }
     QTreeWidget *filterList() const { return m_filterList; }
     QTreeWidget *menuItemList() const { return m_menuItems; }
+    class QListWidget *indexRootList() const { return m_indexRoots; }
     class QListWidget *menuBuiltInList() const { return m_menuBuiltIns; }
     // A right-click command added to the page (as New... does, without the editor).
     void addMenuItem(const ContextMenus::Item &m);
@@ -109,6 +110,12 @@ private:
     class KeysPage *m_keysPage = nullptr;
     QWidget *buildFilters();
     QWidget *buildContextMenu();
+    QWidget *buildIndex();
+    QCheckBox *m_indexOn = nullptr;
+    class QListWidget *m_indexRoots = nullptr;
+    QCheckBox *m_indexHidden = nullptr;
+    class QLineEdit *m_indexExclude = nullptr;
+    class QSpinBox *m_indexMinutes = nullptr;
     QTreeWidget *m_menuItems = nullptr;
     class QListWidget *m_menuBuiltIns = nullptr;
     QWidget *buildTabGroups();

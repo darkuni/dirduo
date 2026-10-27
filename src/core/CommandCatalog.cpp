@@ -75,6 +75,11 @@ QList<CommandInfo> buildCommands()
     c << CommandInfo{QStringLiteral("Steam"), QStringLiteral("Add the selected programs to Steam as non-Steam games (Windows ones run through Proton)"),
                      {arg("ADD", {}, "Add them (Steam must be running)"), arg("FILE=", {}, "Programs to add instead of the selection")},
                      QStringLiteral("Steam ADD")};
+    c << CommandInfo{QStringLiteral("Search"), QStringLiteral("Index Search: every file and folder with this in its name, at once"),
+                     {arg("QUERY=", {}, "What to look for: words, *.d64, ext:mp3;flac, folder:, roms/snes"),
+                      arg("TOTAB", {}, "Put every match in a tab (a collection) instead of the window"),
+                      arg("REBUILD", {}, "Build the index again now")},
+                     QStringLiteral("Search QUERY=\"*.d64\"")};
     c << CommandInfo{QStringLiteral("Show"), QStringLiteral("The viewer: pictures, music, video, text and more in their own window, stepping through the folder"),
                      {arg("FILE=", {}, "File (or folder) to show instead of the selection"),
                       arg("AUTOFILELIST=", {QStringLiteral("all")}, "Next/Previous go through the files shown in the tab (all: every file in the folder)"),
@@ -334,7 +339,7 @@ QList<CommandInfo> buildCommands()
                       arg("RESTORE=", {QStringLiteral("ask")}, "Put back settings from a backup zip"),
                       arg("QUIET", {}, "Restore without asking first"),
                       arg("PAGE=", {QStringLiteral("appearance"), QStringLiteral("theme"), QStringLiteral("labels"), QStringLiteral("aliases"),
-                                    QStringLiteral("formats"), QStringLiteral("toolbars"), QStringLiteral("filetypes"), QStringLiteral("statusbar"), QStringLiteral("scripts"), QStringLiteral("viewer"), QStringLiteral("keys"), QStringLiteral("filters"), QStringLiteral("tabgroups"), QStringLiteral("contextmenu")},
+                                    QStringLiteral("formats"), QStringLiteral("toolbars"), QStringLiteral("filetypes"), QStringLiteral("statusbar"), QStringLiteral("scripts"), QStringLiteral("viewer"), QStringLiteral("keys"), QStringLiteral("filters"), QStringLiteral("tabgroups"), QStringLiteral("contextmenu"), QStringLiteral("index")},
                           "Open Preferences on this page (no arguments: Preferences)")},
                      QStringLiteral("Settings PAGE=theme")};
     c << CommandInfo{QStringLiteral("Sync"), QStringLiteral("Compare two folders and make them match"),

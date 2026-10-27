@@ -53,6 +53,8 @@
 #include "core/TabGroups.h"
 #include "core/SavedFilters.h"
 #include "core/ContextMenus.h"
+#include "core/FileIndex.h"
+#include "ui/IndexSearch.h"
 #include "core/StatusFormat.h"
 #include <QListWidget>
 #include "core/KeyMap.h"
@@ -2074,6 +2076,82 @@ dirduo.on("folderOpened", e => { opened.push(e.path); dirduo.save("last", e.path
         QVERIFY(w->statusDefinition().isEmpty());
         QTRY_VERIFY(d->currentTab()->statusText().contains(QStringLiteral("file")));
         QVERIFY(m_app->deleteLayout(QStringLiteral("StatusLayout")));
+    }
+
+    void indexSearch()
+    {
+        Paths::setCacheHomeOverride(m_dir->filePath(QStringLiteral("cache")));
+        touch(root + QStringLiteral("/c/deep/Mario Kart (USA).sfc"));
+        touch(root + QStringLiteral("/c/deep/Super Mario World.sfc"));
+        FileIndex::Settings st;
+        st.roots = {root};
+        st.rebuildMinutes = 0;
+        FileIndex::instance()->setSettings(st);
+        QVERIFY(FileIndex::instance()->waitIdle(10000));
+        QTRY_VERIFY(FileIndex::instance()->isReady());
+        QVERIFY(FileIndex::instance()->waitIdle(10000));
+        // The window, from the command (Tools > Index Search, Ctrl+E).
+        QVERIFY(w->keyAction(QStringLiteral("Tools > Index Search")));
+        QCOMPARE(w->keyAction(QStringLiteral("Tools > Index Search"))->shortcut(), QKeySequence(QStringLiteral("Ctrl+E")));
+        QVERIFY(w->runCommand(QStringLiteral("Search QUERY=mario")));
+        IndexSearch *win = IndexSearch::current();
+        QVERIFY(win);
+        QVERIFY(win->waitResults(5000));
+        QCOMPARE(win->total(), 2);
+        QCOMPARE(win->results()->hit(0).name, QStringLiteral("Mario Kart (USA).sfc"));
+        QVERIFY(win->statusText().contains(QStringLiteral("2 matches")));
+        win->setQuery(QStringLiteral("two"));
+        QVERIFY(win->waitResults(5000));
+        QCOMPARE(win->results()->rowCount(), 1);
+        QCOMPARE(win->results()->hit(0).path(), root + QStringLiteral("/a/two.txt"));
+        // Going to it: its folder, with it selected.
+        FolderTab *t = w->sourceTabForTesting();
+        const QString back = t->path();
+        win->setQuery(QStringLiteral("kart"));
+        QVERIFY(win->waitResults(5000));
+        win->goToRow(0);
+        t = w->sourceTabForTesting();
+        QTRY_COMPARE(t->path(), root + QStringLiteral("/c/deep"));
+        QTRY_COMPARE(t->selectedPaths(), QStringList{root + QStringLiteral("/c/deep/Mario Kart (USA).sfc")});
+        // All of them in a tab.
+        const int tabs = w->sourceDisplay()->tabCount();
+        win->setQuery(QStringLiteral("ext:sfc"));
+        QVERIFY(win->waitResults(5000));
+        QVERIFY(win->showAllInTab());
+        QCOMPARE(w->sourceDisplay()->tabCount(), tabs + 1);
+        QCOMPARE(Collections::instance()->items(QStringLiteral("Index Search Results")).size(), 2);
+        w->sourceDisplay()->closeTab(w->sourceDisplay()->currentIndex());
+        // A copy is found at once (no rebuild).
+        t = w->sourceTabForTesting();
+        t->navigate(root + QStringLiteral("/a"));
+        waitListed(t, 3);
+        t->selectPaths({root + QStringLiteral("/a/one.txt")});
+        QTRY_COMPARE(t->selectedPaths().size(), 1);
+        QDir().mkpath(root + QStringLiteral("/c/newplace"));
+        QVERIFY(w->runCommand(QStringLiteral("Copy TO=\"%1\"").arg(root + QStringLiteral("/c/newplace"))));
+        QVERIFY(m_app->jobs().waitForIdle(5000));
+        QTRY_COMPARE(FileIndex::instance()->search(QStringLiteral("newplace/one")).total, 1);
+        // TOTAB from a button, and REBUILD.
+        QVERIFY(w->runCommand(QStringLiteral("Search QUERY=\"*.sfc\" TOTAB")));
+        QCOMPARE(w->sourceTabForTesting()->path(), Collections::location(QStringLiteral("Index Search Results")));
+        w->sourceDisplay()->closeTab(w->sourceDisplay()->currentIndex());
+        QVERIFY(w->runCommand(QStringLiteral("Search REBUILD")));
+        QVERIFY(FileIndex::instance()->waitIdle(10000));
+        // Preferences > Index Search.
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("index"));
+            QCOMPARE(dlg.currentPage(), QStringLiteral("index"));
+            QCOMPARE(dlg.indexRootList()->count(), 1);
+            QVERIFY(dlg.search(QStringLiteral("everything")).contains(QStringLiteral("index")));
+        }
+        win->close();
+        QTRY_VERIFY(!IndexSearch::current());
+        st.enabled = false;
+        FileIndex::instance()->setSettings(st);
+        QVERIFY(!runFailing(QStringLiteral("Search REBUILD")));
+        QDir(root + QStringLiteral("/c/deep")).removeRecursively();
+        QDir(root + QStringLiteral("/c/newplace")).removeRecursively();
+        w->sourceTabForTesting()->navigate(back);
     }
 
     void preferencesGeneralAndFileTypes()

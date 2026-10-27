@@ -1,3 +1,4 @@
+#include "core/FileIndex.h"
 #include "core/AliasManager.h"
 #include "core/Paths.h"
 #include "core/Scripting.h"
@@ -66,5 +67,6 @@ int main(int argc, char *argv[])
     else
         context.handleLaunch(request);
     context.scripts().fire(QStringLiteral("started"), {}, context.activeLister());
+    FileIndex::instance()->start(); // Index Search: loads the saved index, builds one when needed
     return app.exec();
 }

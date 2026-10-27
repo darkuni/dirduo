@@ -1,4 +1,6 @@
 #include "ui/ListerWindow.h"
+#include "ui/IndexSearch.h"
+#include "core/FileIndex.h"
 #include "core/StatusFormat.h"
 #include "core/ContextMenus.h"
 #include "core/SavedFilters.h"
@@ -664,6 +666,8 @@ void ListerWindow::buildMenus()
     QMenu *tools = menuBar()->addMenu(QStringLiteral("&Tools"));
     tools->addAction(commandAction(QStringLiteral("Find..."), QStringLiteral("Find"), QKeySequence(QStringLiteral("Ctrl+Shift+F")),
                                    QStringLiteral("edit-find")));
+    tools->addAction(commandAction(QStringLiteral("Index Search..."), QStringLiteral("Search"), QKeySequence(QStringLiteral("Ctrl+E")),
+                                   QStringLiteral("search")));
     tools->addAction(commandAction(QStringLiteral("Synchronize..."), QStringLiteral("Sync"), {}, QStringLiteral("folder-sync")));
     tools->addAction(commandAction(QStringLiteral("Find Duplicates..."), QStringLiteral("Duplicates"), {}, QStringLiteral("edit-copy")));
     tools->addSeparator();
@@ -2995,6 +2999,29 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
         return false;
     };
     CommandEngine &engine = m_app.engine();
+    if (cmd.is(QStringLiteral("Search"))) {
+        FileIndex *fi = FileIndex::instance();
+        if (cmd.hasFlag(QStringLiteral("REBUILD"))) {
+            if (!fi->settings().enabled)
+                return fail(QStringLiteral("The index is off (Preferences > Index Search)."));
+            fi->rebuild();
+            return true;
+        }
+        const QString q = cmd.hasArg(QStringLiteral("QUERY")) ? cmd.value(QStringLiteral("QUERY")) : cmd.positional.join(QLatin1Char(' '));
+        if (cmd.hasFlag(QStringLiteral("TOTAB"))) {
+            if (q.trimmed().isEmpty())
+                return fail(QStringLiteral("Search TOTAB needs QUERY=."));
+            if (!fi->isReady())
+                return fail(QStringLiteral("The index is not ready yet."));
+            QStringList paths;
+            for (const FileIndex::Hit &h : fi->search(q, 100000).hits)
+                paths << h.path();
+            Collections::instance()->setItems(QStringLiteral("Index Search Results"), paths);
+            return runCommand(QStringLiteral("Go \"%1\" NEWTAB").arg(Collections::location(QStringLiteral("Index Search Results"))));
+        }
+        IndexSearch::open(this, q);
+        return true;
+    }
     if (cmd.is(QStringLiteral("Sync"))) {
         SyncOptions o;
         if (cmd.hasArg(QStringLiteral("MODE")) && !SyncOptions::modeFromName(cmd.value(QStringLiteral("MODE")), o.mode))
