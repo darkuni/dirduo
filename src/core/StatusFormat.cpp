@@ -22,7 +22,7 @@ QList<QPair<QString, QString>> samples()
 {
     return {
         {QStringLiteral("DirDuo standard"), defaultDefinition()},
-        {QStringLiteral("Opus style"),
+        {QStringLiteral("Classic"),
          QStringLiteral("{i:folder} {sd} / {td} {|} {i:file} {sf} / {tf} [{|} <#e04040><b>{hidden} hidden</b></#>] {|} {sb} / {tb}"
                         "{right}<b>{role}</b> {|} {i:drive} {df} {bar}")},
         {QStringLiteral("Minimal"), QStringLiteral("{items}[ - {selected}]{right}[{df} free]")},

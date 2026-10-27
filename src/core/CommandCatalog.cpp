@@ -90,7 +90,7 @@ QList<CommandInfo> buildCommands()
                                          QStringLiteral("rotate,left"), QStringLiteral("rotate,right"), QStringLiteral("flip,h"), QStringLiteral("flip,v"),
                                          QStringLiteral("fullscreen"), QStringLiteral("slideshow"), QStringLiteral("info"), QStringLiteral("hex"),
                                          QStringLiteral("mark"), QStringLiteral("selectfile"), QStringLiteral("playpause"), QStringLiteral("close")},
-                          "A command for the open viewer (as Opus's)")},
+                          "A command for the open viewer")},
                      QStringLiteral("Show")};
     c << CommandInfo{QStringLiteral("Tag"), QStringLiteral("Color labels, star ratings, tags and descriptions (the Tags window when given nothing)"),
                      {arg("LABEL=", {QStringLiteral("Red"), QStringLiteral("Orange"), QStringLiteral("Yellow"), QStringLiteral("Green"),
@@ -349,7 +349,7 @@ QList<CommandInfo> buildCommands()
                       arg("SAMEROW", {}, "Between the displays: run on after the toolbar before it, in its row or column"),
                       arg("STATE=", onOff(), "Show or hide it"),
                       arg("CUSTOMIZE", {}, "Enter customize mode"),
-                      arg("ARRANGE=", {QStringLiteral("opus")}, "Set up toolbars as Opus has them: Operations, the drives and Favorites between the displays, Views in the menu bar")},
+                      arg("ARRANGE=", {QStringLiteral("classic")}, "The classic arrangement: Operations, the drives and Favorites between the displays, Views in the menu bar")},
                      QStringLiteral("Toolbar NAME=drives PLACE=between")};
     c << CommandInfo{QStringLiteral("Undo"), QStringLiteral("Undo a copy, move, new folder, trash or rename"),
                      {arg("ID=", {}, "Which one (the History window shows them); the latest when left out"),

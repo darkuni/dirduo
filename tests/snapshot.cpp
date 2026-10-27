@@ -592,9 +592,9 @@ int main(int argc, char *argv[])
         w->runCommand(QStringLiteral("Set DUAL=vertical"));
         QTest::qWait(500);
         shot(w, out, QStringLiteral("41-work-style-toolbars-side-by-side"));
-        w->runCommand(QStringLiteral("Toolbar NAME=work STATE=off\nToolbar NAME=views STATE=off\nSet DUAL=horizontal\nToolbar ARRANGE=opus"));
+        w->runCommand(QStringLiteral("Toolbar NAME=work STATE=off\nToolbar NAME=views STATE=off\nSet DUAL=horizontal\nToolbar ARRANGE=classic"));
         QTest::qWait(500);
-        shot(w, out, QStringLiteral("42-opus-arrangement"));
+        shot(w, out, QStringLiteral("42-classic-arrangement"));
         w->runCommand(QStringLiteral("Toolbar CUSTOMIZE"));
         QTest::qWait(300);
         if (CustomizeDialog *dlg = w->customizeDialog()) {
@@ -605,7 +605,7 @@ int main(int argc, char *argv[])
         }
         {
             Prefs::Values v = Prefs::instance()->values();
-            v.statusDefinition = StatusFormat::samples().at(1).second; // Opus style
+            v.statusDefinition = StatusFormat::samples().at(1).second; // Classic
             Prefs::instance()->setValues(v);
             w->display(0)->currentTab()->selectPaths({});
             QTest::qWait(400);

@@ -550,7 +550,7 @@ QWidget *PreferencesDialog::buildStatusBar()
     box(QStringLiteral("free"), QStringLiteral("Free space on the drive or card"), v.statusFree, sl, simple);
     layout->addWidget(simple);
 
-    QCheckBox *custom = box(QStringLiteral("custom"), QStringLiteral("Use my own definition, with codes (as in Opus)"),
+    QCheckBox *custom = box(QStringLiteral("custom"), QStringLiteral("Use my own definition, with codes"),
                             !v.statusDefinition.trimmed().isEmpty(), layout, page);
     auto *defBox = new QGroupBox(QStringLiteral("Definition"), page);
     auto *dl = new QVBoxLayout(defBox);

@@ -512,7 +512,7 @@ private Q_SLOTS:
         QCOMPARE(store.toolbar(id).buttons.size(), ToolbarStore::preset(QStringLiteral("tools")).buttons.size());
         QVERIFY(store.remove(id));
 
-        QVERIFY(w->runCommand(QStringLiteral("Set DUAL=horizontal\nToolbar ARRANGE=opus")));
+        QVERIFY(w->runCommand(QStringLiteral("Set DUAL=horizontal\nToolbar ARRANGE=classic")));
         QToolBar *ops = w->toolbarByName(QStringLiteral("operations"));
         QToolBar *favs = w->toolbarByName(QStringLiteral("favorites"));
         QToolBar *views = w->toolbarByName(QStringLiteral("views"));

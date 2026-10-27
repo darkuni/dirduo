@@ -833,9 +833,9 @@ int main(int argc, char *argv[])
     // bar, the Opus-style status bar, labels and star ratings.
     {
         Prefs::Values pv = Prefs::instance()->values();
-        pv.statusDefinition = StatusFormat::samples().at(1).second; // Opus style
+        pv.statusDefinition = StatusFormat::samples().at(1).second; // Classic
         Prefs::instance()->setValues(pv);
-        run(QStringLiteral("Set THEME=\"DirDuo Dark\"\nSet DUAL=horizontal\nSet TREE=shared\nSet VIEW=details\nToolbar ARRANGE=opus"));
+        run(QStringLiteral("Set THEME=\"DirDuo Dark\"\nSet DUAL=horizontal\nSet TREE=shared\nSet VIEW=details\nToolbar ARRANGE=classic"));
         treeDrives();
         const QString c64 = r + QStringLiteral("/Emulation/roms/c64");
         go(c64, r + QStringLiteral("/Pictures/Screenshots"));

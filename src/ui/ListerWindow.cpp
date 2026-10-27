@@ -1129,8 +1129,10 @@ bool ListerWindow::toolbar(const ParsedCommand &cmd, QString *error)
         return true;
     }
     if (cmd.hasArg(QStringLiteral("ARRANGE"))) {
-        if (cmd.value(QStringLiteral("ARRANGE")).compare(QLatin1String("opus"), Qt::CaseInsensitive) != 0)
-            return fail(QStringLiteral("ARRANGE takes opus."));
+        // "opus" is the old name, still taken from buttons made before.
+        const QString arrange = cmd.value(QStringLiteral("ARRANGE")).toLower();
+        if (arrange != QLatin1String("classic") && arrange != QLatin1String("opus"))
+            return fail(QStringLiteral("ARRANGE takes classic."));
         // Opus's default: operations, then the drives with favorites beside
         // them, between the displays; view buttons in the menu bar.
         ToolbarStore &store = m_app.toolbars();

@@ -353,15 +353,15 @@ CustomizeDialog::CustomizeDialog(ListerWindow *lister, ToolbarStore &store)
     auto *presetPage = new QWidget(tabs);
     auto *pl = new QVBoxLayout(presetPage);
     auto *presetIntro = new QLabel(QStringLiteral("Ready-made toolbars. Add one whole, or drag single buttons from them onto your own "
-                                                  "toolbars. Opus Arrangement puts Operations and the drives between the displays, "
+                                                  "toolbars. The Classic Arrangement puts Operations and the drives between the displays, "
                                                   "Favorites beside the drives and Views in the menu bar."),
                                    presetPage);
     presetIntro->setWordWrap(true);
     pl->addWidget(presetIntro);
-    auto *opus = new QPushButton(QIcon::fromTheme(QStringLiteral("view-split-top-bottom")), QStringLiteral("Use the Opus Arrangement"),
+    auto *opus = new QPushButton(QIcon::fromTheme(QStringLiteral("view-split-top-bottom")), QStringLiteral("Use the Classic Arrangement"),
                                  presetPage);
-    opus->setObjectName(QStringLiteral("opus-arrangement"));
-    connect(opus, &QPushButton::clicked, this, [this]() { m_lister->runCommand(QStringLiteral("Toolbar ARRANGE=opus")); });
+    opus->setObjectName(QStringLiteral("classic-arrangement"));
+    connect(opus, &QPushButton::clicked, this, [this]() { m_lister->runCommand(QStringLiteral("Toolbar ARRANGE=classic")); });
     pl->addWidget(opus, 0, Qt::AlignLeft);
     auto *scroll = new QScrollArea(presetPage);
     scroll->setWidgetResizable(true);
