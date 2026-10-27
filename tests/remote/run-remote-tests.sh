@@ -4,11 +4,11 @@
 #
 #   tests/remote/run-remote-tests.sh <build-dir> [test arguments]
 #
-# Set LINOPUS_REMOTE_PROGRAM to run another program from the build directory
-# against the same servers (linopus_snapshot for screenshots).
+# Set DIRDUO_REMOTE_PROGRAM to run another program from the build directory
+# against the same servers (dirduo_snapshot for screenshots).
 #
 # Needs: python3-pyftpdlib, openssh-server, dbus (dbus-run-session), and a
-# Linopus build with KIO. Run as a user that may start sshd (root in CI).
+# DirDuo build with KIO. Run as a user that may start sshd (root in CI).
 set -euo pipefail
 BUILD=${1:-build}
 WORK=$(mktemp -d)
@@ -68,10 +68,10 @@ done
 ssh-keyscan -p 2222 127.0.0.1 2>/dev/null >> "$SSH_HOME/.ssh/known_hosts"
 export HOME="$SSH_HOME"
 
-export LINOPUS_TEST_FTP="ftp://deck:steam@127.0.0.1:2121"
-export LINOPUS_TEST_FTP_DIR="$WORK/ftp"
-export LINOPUS_TEST_SFTP="sftp://$(id -un)@127.0.0.1:2222"
-export LINOPUS_TEST_SFTP_DIR="$WORK/sftp"
+export DIRDUO_TEST_FTP="ftp://deck:steam@127.0.0.1:2121"
+export DIRDUO_TEST_FTP_DIR="$WORK/ftp"
+export DIRDUO_TEST_SFTP="sftp://$(id -un)@127.0.0.1:2222"
+export DIRDUO_TEST_SFTP_DIR="$WORK/sftp"
 export QT_QPA_PLATFORM=offscreen
 export XDG_RUNTIME_DIR="$WORK/runtime"
 mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
@@ -82,7 +82,7 @@ export QTEST_FUNCTION_TIMEOUT=60000
 # Output goes to a file, not a pipe: KIO's helper daemons outlive the test
 # and would hold a pipe open forever.
 set +e
-dbus-run-session -- "$BUILD/${LINOPUS_REMOTE_PROGRAM:-tst_remote}" "${@:2}" > "$WORK/test.log" 2>&1 < /dev/null
+dbus-run-session -- "$BUILD/${DIRDUO_REMOTE_PROGRAM:-tst_remote}" "${@:2}" > "$WORK/test.log" 2>&1 < /dev/null
 rc=$?
 set -e
 cat "$WORK/test.log"

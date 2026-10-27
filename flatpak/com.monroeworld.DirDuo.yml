@@ -1,8 +1,8 @@
-id: com.monroeworld.Linopus
+id: com.monroeworld.DirDuo
 runtime: org.kde.Platform
 runtime-version: '6.10'
 sdk: org.kde.Sdk
-command: linopus
+command: dirduo
 
 # Perl modules (needed to build Samba) install into /app, not the read-only /usr.
 build-options:
@@ -192,14 +192,14 @@ modules:
         tag: v0.28.8
         commit: 2cd987a731236037b6b78cbff897d08685a8ef49
 
-  - name: linopus
+  - name: dirduo
     buildsystem: cmake-ninja
     builddir: true
     config-opts:
       - -DCMAKE_BUILD_TYPE=Release
-      - -DLINOPUS_BUILD_TESTS=OFF
-      - -DLINOPUS_REQUIRE_LIBARCHIVE=ON
-      - -DLINOPUS_REQUIRE_MULTIMEDIA=ON
+      - -DDIRDUO_BUILD_TESTS=OFF
+      - -DDIRDUO_REQUIRE_LIBARCHIVE=ON
+      - -DDIRDUO_REQUIRE_MULTIMEDIA=ON
     sources:
       - type: dir
         path: ..

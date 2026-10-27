@@ -31,7 +31,7 @@ void setTypes(Theme &t, const char *folder, const char *image, const char *audio
 Theme themeLight()
 {
     Theme t;
-    t.name = QStringLiteral("Linopus Light");
+    t.name = QStringLiteral("DirDuo Light");
     t.window = QColor::fromRgb(0xeef1f5);
     t.base = QColor::fromRgb(0xffffff);
     t.alternate = QColor::fromRgb(0xf5f7fa);
@@ -52,7 +52,7 @@ Theme themeLight()
 Theme themeDark()
 {
     Theme t;
-    t.name = QStringLiteral("Linopus Dark");
+    t.name = QStringLiteral("DirDuo Dark");
     t.dark = true;
     t.window = QColor::fromRgb(0x1b1f27);
     t.base = QColor::fromRgb(0x12151b);
@@ -113,13 +113,13 @@ QString colorName(const QColor &c)
 
 QStringList Theme::builtinNames()
 {
-    return {QStringLiteral("Follow Desktop"), QStringLiteral("Linopus Light"), QStringLiteral("Linopus Dark"),
+    return {QStringLiteral("Follow Desktop"), QStringLiteral("DirDuo Light"), QStringLiteral("DirDuo Dark"),
             QStringLiteral("Workbench")};
 }
 
 Theme Theme::builtin(const QString &name)
 {
-    if (name == QLatin1String("Linopus Dark"))
+    if (name == QLatin1String("DirDuo Dark"))
         return themeDark();
     if (name == QLatin1String("Workbench"))
         return themeWorkbench();
@@ -183,6 +183,9 @@ bool Theme::load(const QString &file, Theme &out)
         if (c.isValid())
             into = c;
     };
+    // Themes saved before the rename ("Linopus Dark (mine)") take the new name.
+    if (t.name.startsWith(QLatin1String("Linopus ")))
+        t.name = QStringLiteral("DirDuo ") + t.name.mid(8);
     color("window", t.window);
     color("base", t.base);
     color("alternate", t.alternate);
@@ -274,8 +277,10 @@ QStringList Style::themeNames() const
     return names;
 }
 
-bool Style::setTheme(const QString &name)
+bool Style::setTheme(const QString &asked)
 {
+    // Settings from before the rename name "Linopus Light", "Linopus Dark".
+    const QString name = asked.startsWith(QLatin1String("Linopus ")) ? QStringLiteral("DirDuo ") + asked.mid(8) : asked;
     if (Theme::builtinNames().contains(name)) {
         setTheme(Theme::builtin(name));
         return true;
@@ -323,7 +328,7 @@ void Style::apply()
         // Follow the desktop, including its own light or dark choice.
         m_theme.dark = m_systemPalette.color(QPalette::Window).lightness() < 128;
         if (m_theme.dark) {
-            const Theme d = Theme::builtin(QStringLiteral("Linopus Dark"));
+            const Theme d = Theme::builtin(QStringLiteral("DirDuo Dark"));
             m_theme.types = d.types;
             m_theme.dimText = d.dimText;
             m_theme.groupHeader = m_systemPalette.color(QPalette::AlternateBase);

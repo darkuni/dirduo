@@ -127,9 +127,9 @@ private Q_SLOTS:
         QByteArray big(100000, '\0');
         for (int i = 0; i < big.size(); ++i)
             big[i] = char(i * 7);
-        QList<Zip::Entry> in{{QStringLiteral("linopus/aliases.ini"), QByteArray("[Aliases]\nroms=/x\n")},
-                             {QStringLiteral("linopus/toolbars/emu.json"), big},
-                             {QStringLiteral("linopus/empty.txt"), QByteArray()}};
+        QList<Zip::Entry> in{{QStringLiteral("dirduo/aliases.ini"), QByteArray("[Aliases]\nroms=/x\n")},
+                             {QStringLiteral("dirduo/toolbars/emu.json"), big},
+                             {QStringLiteral("dirduo/empty.txt"), QByteArray()}};
         QVERIFY(Zip::write(file, in));
         QList<Zip::Entry> out;
         QString err;
@@ -155,7 +155,7 @@ private Q_SLOTS:
         QProcess p;
         p.start(py, {QStringLiteral("-c"),
                      QStringLiteral("import zipfile,sys\nz=zipfile.ZipFile(sys.argv[1],'w',zipfile.ZIP_DEFLATED)\n"
-                                    "z.writestr('linopus/labels.ini','x'*5000)\nz.close()"),
+                                    "z.writestr('dirduo/labels.ini','x'*5000)\nz.close()"),
                      deflated});
         QVERIFY(p.waitForFinished(10000));
         QVERIFY2(Zip::read(deflated, out, &err), qPrintable(err));

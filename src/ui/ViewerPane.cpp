@@ -1,5 +1,5 @@
 #include "ui/ViewerPane.h"
-#ifdef LINOPUS_HAVE_MULTIMEDIA
+#ifdef DIRDUO_HAVE_MULTIMEDIA
 #include <QAudioOutput>
 #include <QMediaFormat>
 #include <QMediaPlayer>
@@ -292,7 +292,7 @@ Preview Preview::load(const QString &path, int maxImageSide)
 
 // ---------------------------------------------------------------- pane
 
-#ifdef LINOPUS_HAVE_MULTIMEDIA
+#ifdef DIRDUO_HAVE_MULTIMEDIA
 // Plays the file in the viewer: a picture for video, the tags for music, and
 // play/pause with a position bar. Nothing starts until Play is pressed, and
 // the player itself is only made the first time something is loaded.
@@ -417,7 +417,7 @@ public:
 
 bool ViewerPane::canPlay()
 {
-#ifdef LINOPUS_HAVE_MULTIMEDIA
+#ifdef DIRDUO_HAVE_MULTIMEDIA
     // A media backend with no decoders (GStreamer without its plugins) can
     // crash when a player is made: check that it can decode something first.
     static const bool usable = !QMediaFormat().supportedFileFormats(QMediaFormat::Decode).isEmpty();

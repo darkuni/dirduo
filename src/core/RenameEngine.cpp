@@ -411,7 +411,7 @@ bool renameAll(const QList<QPair<QString, QString>> &moves, QString *error)
     const QString tag = QString::number(QRandomGenerator::global()->generate(), 16);
     for (int i = 0; i < moves.size(); ++i) {
         const QString from = moves.at(i).first;
-        const QString temp = Location::join(Location::parent(from), QStringLiteral(".linopus-rename-%1-%2").arg(tag).arg(i));
+        const QString temp = Location::join(Location::parent(from), QStringLiteral(".dirduo-rename-%1-%2").arg(tag).arg(i));
         if (!QFile::rename(from, temp) && !QDir().rename(from, temp)) {
             for (auto it = toTemp.crbegin(); it != toTemp.crend(); ++it)
                 QDir().rename(it->first, it->second);

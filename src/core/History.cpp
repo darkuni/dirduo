@@ -59,7 +59,7 @@ void trim()
 
 QString file()
 {
-    return Paths::userDataHome() + QStringLiteral("/linopus/file-log.tsv");
+    return Paths::userDataHome() + QStringLiteral("/dirduo/file-log.tsv");
 }
 
 void append(const QList<Entry> &entries)

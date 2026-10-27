@@ -75,7 +75,7 @@ private Q_SLOTS:
 
     void usesOtherAppsThumbnails()
     {
-        // A video: Linopus cannot make one, but Dolphin may have.
+        // A video: DirDuo cannot make one, but Dolphin may have.
         const QString video = m_dir.filePath(QStringLiteral("files/clip.mkv"));
         QFile f(video);
         QVERIFY(f.open(QIODevice::WriteOnly));

@@ -21,7 +21,8 @@ namespace {
 const char *kTags = "user.xdg.tags";
 const char *kRating = "user.baloo.rating";
 const char *kComment = "user.xdg.comment";
-const char *kLabel = "user.linopus.label";
+const char *kLabel = "user.dirduo.label";
+const char *kOldLabel = "user.linopus.label"; // before the rename: read, and cleared on the next write
 
 QByteArray enc(const QString &p)
 {
@@ -60,7 +61,7 @@ QHash<QString, FileTagData> s_list;
 
 QString listFile()
 {
-    return s_fileOverride.isEmpty() ? Paths::userDataHome() + QStringLiteral("/linopus/tags.json") : s_fileOverride;
+    return s_fileOverride.isEmpty() ? Paths::userDataHome() + QStringLiteral("/dirduo/tags.json") : s_fileOverride;
 }
 
 void loadList()
@@ -92,7 +93,7 @@ void saveList()
 
 QSettings settings()
 {
-    return QSettings(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+    return QSettings(Paths::configFile(QStringLiteral("dirduo.ini")), QSettings::IniFormat);
 }
 
 } // namespace
@@ -144,6 +145,8 @@ FileTagData read(const QString &path)
         d.rating = qBound(0, (QString::fromLatin1(getAttr(path, kRating, nullptr)).toInt() + 1) / 2, 5);
         d.comment = QString::fromUtf8(getAttr(path, kComment, nullptr));
         d.label = QString::fromUtf8(getAttr(path, kLabel, nullptr));
+        if (d.label.isEmpty())
+            d.label = QString::fromUtf8(getAttr(path, kOldLabel, nullptr));
         if (!d.isEmpty())
             return d;
     }
@@ -167,13 +170,15 @@ bool write(const QString &path, const FileTagData &data, QString *error)
     bool onFile = !s_forceFallback && setAttr(path, kTags, data.tags.join(QLatin1Char(',')).toUtf8())
         && setAttr(path, kRating, data.rating > 0 ? QByteArray::number(data.rating * 2) : QByteArray())
         && setAttr(path, kComment, data.comment.toUtf8()) && setAttr(path, kLabel, data.label.toUtf8());
+    if (onFile)
+        setAttr(path, kOldLabel, QByteArray()); // the old name's label goes
     QMutexLocker lock(&s_mutex);
     loadList();
     if (onFile) {
         if (s_list.remove(key) > 0)
             saveList();
     } else {
-        // FAT, exFAT, a read-only place: Linopus's own list.
+        // FAT, exFAT, a read-only place: DirDuo's own list.
         if (!QFileInfo::exists(path)) {
             if (error)
                 *error = QStringLiteral("%1 is not there.").arg(QFileInfo(path).fileName());

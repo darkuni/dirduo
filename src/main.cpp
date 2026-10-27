@@ -1,5 +1,6 @@
 #include "core/AliasManager.h"
-#ifdef LINOPUS_HAVE_KIO
+#include "core/Paths.h"
+#ifdef DIRDUO_HAVE_KIO
 #include "kio/KioBackend.h"
 #endif
 #include "ui/AppContext.h"
@@ -13,14 +14,14 @@
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
-    QApplication::setApplicationName(QStringLiteral("Linopus"));
-    QApplication::setApplicationVersion(QStringLiteral(LINOPUS_VERSION));
-    QApplication::setOrganizationName(QStringLiteral("Linopus"));
-    QApplication::setDesktopFileName(QStringLiteral(LINOPUS_APP_ID));
+    QApplication::setApplicationName(QStringLiteral("DirDuo"));
+    QApplication::setApplicationVersion(QStringLiteral(DIRDUO_VERSION));
+    QApplication::setOrganizationName(QStringLiteral("DirDuo"));
+    QApplication::setDesktopFileName(QStringLiteral(DIRDUO_APP_ID));
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Source and destination file manager.\n"
-                                                    "When Linopus is already running, it gets the folders and commands."));
+                                                    "When DirDuo is already running, it gets the folders and commands."));
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addPositionalArgument(QStringLiteral("locations"),
@@ -29,10 +30,10 @@ int main(int argc, char *argv[])
                                  QStringLiteral("[locations...]"));
     const QCommandLineOption tab(QStringLiteral("tab"), QStringLiteral("Open them in new tabs of the active lister."));
     const QCommandLineOption cmd(QStringList{QStringLiteral("c"), QStringLiteral("cmd")},
-                                 QStringLiteral("Run a Linopus command in the active lister (more than once is fine)."),
+                                 QStringLiteral("Run a DirDuo command in the active lister (more than once is fine)."),
                                  QStringLiteral("command"));
     const QCommandLineOption separate(QStringLiteral("new-instance"),
-                                      QStringLiteral("Start a separate copy even if Linopus is running."));
+                                      QStringLiteral("Start a separate copy even if DirDuo is running."));
     parser.addOptions({tab, cmd, separate});
     parser.process(app);
 
@@ -47,8 +48,9 @@ int main(int argc, char *argv[])
     if (!parser.isSet(separate) && Launch::sendToRunning(request))
         return 0;
 
+    Paths::migrateFromLinopus(); // settings from before the rename, once
     AppContext::setupIconTheme();
-#ifdef LINOPUS_HAVE_KIO
+#ifdef DIRDUO_HAVE_KIO
     KioBackend kio; // servers and archives
 #endif
     AppContext context;

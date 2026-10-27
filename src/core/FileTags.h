@@ -9,8 +9,8 @@
 // Labels, star ratings, tags and descriptions on files, as Opus has them.
 // Kept in the file's extended attributes, the same ones KDE's Dolphin and
 // Baloo use, so both see the same: user.xdg.tags, user.baloo.rating (0-10,
-// two per star), user.xdg.comment; the color label in user.linopus.label.
-// Where a drive cannot keep them (FAT and exFAT cards, servers), Linopus
+// two per star), user.xdg.comment; the color label in user.dirduo.label.
+// Where a drive cannot keep them (FAT and exFAT cards, servers), DirDuo
 // keeps them in its own list (by path). Safe from any thread.
 struct FileTagData
 {
@@ -42,12 +42,12 @@ FileTagData read(const QString &path);
 // when it could be kept neither on the file nor in the list.
 bool write(const QString &path, const FileTagData &data, QString *error = nullptr);
 
-// Kept in the file itself (true) or in Linopus's list (false)?
+// Kept in the file itself (true) or in DirDuo's list (false)?
 bool storedOnFile(const QString &path);
 
-// A file was renamed or moved: its entry in Linopus's list follows.
+// A file was renamed or moved: its entry in DirDuo's list follows.
 void renamed(const QString &from, const QString &to);
-// Copies the extended attributes Linopus and the desktop use (user.*).
+// Copies the extended attributes DirDuo and the desktop use (user.*).
 void copyAttributes(const QString &from, const QString &to);
 
 // The color labels (Preferences > Labels). Defaults: Red, Orange, Yellow,

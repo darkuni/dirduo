@@ -97,7 +97,7 @@ bool writeCached(const QString &path, const QDateTime &modified, int size, const
     QImage img = thumb;
     img.setText(QStringLiteral("Thumb::URI"), uriFor(path));
     img.setText(QStringLiteral("Thumb::MTime"), QString::number(modified.toSecsSinceEpoch()));
-    img.setText(QStringLiteral("Software"), QStringLiteral("Linopus"));
+    img.setText(QStringLiteral("Software"), QStringLiteral("DirDuo"));
     QSaveFile out(file);
     if (!out.open(QIODevice::WriteOnly))
         return false;

@@ -14,7 +14,7 @@ class JobManager;
 
 // Every file operation, kept on disk (the last few thousand), so a file that
 // went missing can be traced: what happened to it, when, and where it went.
-// ~/.local/share/linopus/file-log.tsv, one line per item.
+// ~/.local/share/dirduo/file-log.tsv, one line per item.
 namespace FileLog {
 
 struct Entry

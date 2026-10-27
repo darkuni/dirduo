@@ -683,10 +683,10 @@ private Q_SLOTS:
 
     void themesApplyAndPersist()
     {
-        QVERIFY(w->runCommand(QStringLiteral("Set THEME=\"linopus dark\"")));
-        QCOMPARE(Style::instance()->theme().name, QStringLiteral("Linopus Dark"));
+        QVERIFY(w->runCommand(QStringLiteral("Set THEME=\"dirduo dark\"")));
+        QCOMPARE(Style::instance()->theme().name, QStringLiteral("DirDuo Dark"));
         QVERIFY(QApplication::palette().color(QPalette::Base).lightness() < 100);
-        QCOMPARE(m_app->settings().value(QStringLiteral("Appearance/theme")).toString(), QStringLiteral("Linopus Dark"));
+        QCOMPARE(m_app->settings().value(QStringLiteral("Appearance/theme")).toString(), QStringLiteral("DirDuo Dark"));
         QVERIFY(w->runCommand(QStringLiteral("Set THEME=Workbench")));
         QCOMPARE(Style::instance()->theme().name, QStringLiteral("Workbench"));
         QVERIFY(!runFailing(QStringLiteral("Set THEME=Nope")));
@@ -1132,7 +1132,7 @@ private Q_SLOTS:
         QVERIFY(m_app->aliases().removeUserAlias(QStringLiteral("roms")));
         QVERIFY(m_app->aliases().save());
         QVERIFY(store.remove(id));
-        QVERIFY(w->runCommand(QStringLiteral("Set THEME=\"Linopus Dark\"")));
+        QVERIFY(w->runCommand(QStringLiteral("Set THEME=\"DirDuo Dark\"")));
         QVERIFY(w->runCommand(QStringLiteral("Settings RESTORE=\"%1\" QUIET").arg(zip)));
         QCOMPARE(m_app->aliases().aliasPath(QStringLiteral("roms")), root + QStringLiteral("/b"));
         QVERIFY(store.has(id));
@@ -1731,7 +1731,7 @@ private Q_SLOTS:
             dlg.generalBox(QStringLiteral("counts"))->setChecked(false);
             dlg.generalBox(QStringLiteral("free"))->setChecked(false);
             dlg.terminalBox()->setCurrentIndex(dlg.terminalBox()->findData(QStringLiteral("kitty")));
-            // File types: Linopus's own choices, and back to the desktop's.
+            // File types: DirDuo's own choices, and back to the desktop's.
             QTableWidget *types = dlg.fileTypesTable();
             QCOMPARE(types->rowCount(), 1);
             QCOMPARE(types->item(0, 0)->text(), QStringLiteral("text/plain"));
@@ -1758,7 +1758,7 @@ private Q_SLOTS:
 
     void preferencesWindow()
     {
-        Style::instance()->setTheme(QStringLiteral("Linopus Light"));
+        Style::instance()->setTheme(QStringLiteral("DirDuo Light"));
         {
             PreferencesDialog dlg(*m_app, w, QStringLiteral("theme"));
             QCOMPARE(dlg.currentPage(), QStringLiteral("theme"));
@@ -1772,7 +1772,7 @@ private Q_SLOTS:
             QCOMPARE(Style::instance()->theme().sourceAccent, QColor(Qt::red));
             dlg.reject();
         }
-        QCOMPARE(Style::instance()->theme().name, QStringLiteral("Linopus Light"));
+        QCOMPARE(Style::instance()->theme().name, QStringLiteral("DirDuo Light"));
         QVERIFY(Style::instance()->theme().sourceAccent != QColor(Qt::red));
 
         {
@@ -1780,10 +1780,10 @@ private Q_SLOTS:
             PreferencesDialog dlg(*m_app, w, QStringLiteral("theme"));
             dlg.setThemeColor(QStringLiteral("type:image"), QColor(Qt::green));
             QVERIFY(dlg.saveTheme());
-            QCOMPARE(Style::instance()->theme().name, QStringLiteral("Linopus Light (mine)"));
-            QVERIFY(Style::instance()->themeNames().contains(QStringLiteral("Linopus Light (mine)")));
+            QCOMPARE(Style::instance()->theme().name, QStringLiteral("DirDuo Light (mine)"));
+            QVERIFY(Style::instance()->themeNames().contains(QStringLiteral("DirDuo Light (mine)")));
             QCOMPARE(Style::instance()->theme().typeColor(FileKind::Category::Image), QColor(Qt::green));
-            QCOMPARE(m_app->settings().value(QStringLiteral("Appearance/theme")).toString(), QStringLiteral("Linopus Light (mine)"));
+            QCOMPARE(m_app->settings().value(QStringLiteral("Appearance/theme")).toString(), QStringLiteral("DirDuo Light (mine)"));
 
             // A new name for a fresh one.
             dlg.setThemeName(QStringLiteral("Deck Night"));
@@ -2155,7 +2155,7 @@ private Q_SLOTS:
         // one saved now keeps them as they were.
         const QByteArray now = t->headerState();
         QVERIFY(now.startsWith("LNH1"));
-        const QByteArray old = now.mid(now.indexOf(':') + 1); // no tag: saved by an older Linopus
+        const QByteArray old = now.mid(now.indexOf(':') + 1); // no tag: saved by an older DirDuo
         t->restoreHeaderState(old);
         QVERIFY(!t->isColumnVisible(FileListModel::ArtistColumn));
         QVERIFY(t->isColumnVisible(FileListModel::SizeColumn));
@@ -2687,7 +2687,7 @@ private Q_SLOTS:
         dlg->accept();
         QCOMPARE(ran.value(0), QStringLiteral("gimp"));
         QCOMPARE(Apps::defaultFor(QStringLiteral("text/plain")), QStringLiteral("gimp.desktop"));
-        // Opening the file now uses Linopus's default.
+        // Opening the file now uses DirDuo's default.
         ran.clear();
         w->openFile(file);
         QCOMPARE(ran.value(0), QStringLiteral("gimp"));
@@ -3064,7 +3064,7 @@ private Q_SLOTS:
         const QByteArray oldRuntime = qgetenv("XDG_RUNTIME_DIR");
         qputenv("XDG_RUNTIME_DIR", run.path().toUtf8());
         qunsetenv("FLATPAK_ID");
-        QCOMPARE(Launch::socketPath(), run.path() + QStringLiteral("/linopus.sock"));
+        QCOMPARE(Launch::socketPath(), run.path() + QStringLiteral("/dirduo.sock"));
         // Nobody running yet.
         QVERIFY(!Launch::sendToRunning(Launch::Request(), 300));
 
@@ -3113,7 +3113,7 @@ private Q_SLOTS:
         InstanceServer other;
         QVERIFY(!other.listen());
         server.reset();
-        QFile stale(run.path() + QStringLiteral("/linopus.sock"));
+        QFile stale(run.path() + QStringLiteral("/dirduo.sock"));
         QVERIFY(stale.open(QIODevice::WriteOnly));
         stale.close();
         QVERIFY(other.listen());

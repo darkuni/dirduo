@@ -8,13 +8,14 @@
 // sandbox when there is one). A button function is a script when its first
 // line is a shebang (#!/bin/bash, #!/usr/bin/env python3...). The selected
 // items are its arguments ("$@"), it starts in the source folder, and it gets:
-//   LINOPUS_SOURCE   the source folder
-//   LINOPUS_DEST     the destination folder (empty without one)
-//   LINOPUS_FOCUSED  the item with the keyboard focus
-// Lines starting with "# linopus:" choose how it runs:
-//   # linopus: terminal   in a terminal window (Konsole), kept open at the end
-//   # linopus: output     always show what it printed (otherwise only on failure)
-//   # linopus: norefresh  leave the listings alone afterwards
+//   DIRDUO_SOURCE   the source folder
+//   DIRDUO_DEST     the destination folder (empty without one)
+//   DIRDUO_FOCUSED  the item with the keyboard focus
+// Lines starting with "# dirduo:" ("# linopus:" from before the rename works
+// too) choose how it runs:
+//   # dirduo: terminal   in a terminal window (Konsole), kept open at the end
+//   # dirduo: output     always show what it printed (otherwise only on failure)
+//   # dirduo: norefresh  leave the listings alone afterwards
 struct ScriptOptions
 {
     bool terminal = false;

@@ -158,7 +158,7 @@ bool CommandEngine::run(const QString &script, CommandContext &ctx)
                 out << f;
         } else if (c == QLatin1String("dlgstring")) {
             QString value;
-            if (!ctx.promptText(QStringLiteral("Linopus"), extra.isEmpty() ? QStringLiteral("Enter a value:") : extra, value)) {
+            if (!ctx.promptText(QStringLiteral("DirDuo"), extra.isEmpty() ? QStringLiteral("Enter a value:") : extra, value)) {
                 if (err)
                     *err = kCanceled;
                 return false;
@@ -437,7 +437,7 @@ bool CommandEngine::cmdArchive(const ParsedCommand &cmd, CommandContext &ctx, QS
         return false;
     };
     if (!Archive::available())
-        return fail(QStringLiteral("This build of Linopus was made without archive support."));
+        return fail(QStringLiteral("This build of DirDuo was made without archive support."));
     const QStringList flags = {QStringLiteral("CREATE"), QStringLiteral("EXTRACT"), QStringLiteral("DEST"), QStringLiteral("HERE"), QStringLiteral("ASK"), QStringLiteral("QUICK"), QStringLiteral("TRASH")};
     QStringList sources = sourcesFor(cmd, ctx, flags);
     CollisionAction whenExists = CollisionAction::Rename;
@@ -1408,7 +1408,7 @@ bool CommandEngine::cmdRename(const ParsedCommand &cmd, CommandContext &ctx, QSt
         RemoteBackend *backend = RemoteBackend::instance();
         if (!backend) {
             if (error)
-                *error = QStringLiteral("Remote locations need the KIO build of Linopus.");
+                *error = QStringLiteral("Remote locations need the KIO build of DirDuo.");
             return false;
         }
         newPath = Location::join(Location::parent(from), to);
@@ -1489,7 +1489,7 @@ bool CommandEngine::cmdCreateFolder(const ParsedCommand &cmd, CommandContext &ct
             }
             const QString full = Location::join(parent, name);
             if (!backend) {
-                issues << QStringLiteral("Remote locations need the KIO build of Linopus.");
+                issues << QStringLiteral("Remote locations need the KIO build of DirDuo.");
                 break;
             }
             if (backend->mkdir(full, &why))
@@ -1579,7 +1579,7 @@ bool CommandEngine::pasteAsFile(const QMimeData *mime, bool askName, CommandCont
         return true;
     }
     // A server: write it locally under its name, then upload it like any copy.
-    const QString tmpDir = QDir(QDir::tempPath()).filePath(QStringLiteral("linopus-paste-%1").arg(QDateTime::currentMSecsSinceEpoch()));
+    const QString tmpDir = QDir(QDir::tempPath()).filePath(QStringLiteral("dirduo-paste-%1").arg(QDateTime::currentMSecsSinceEpoch()));
     QDir().mkpath(tmpDir);
     const QString tmp = QDir(tmpDir).filePath(name);
     QFile f(tmp);
@@ -1674,7 +1674,7 @@ bool CommandEngine::cmdClipboard(const ParsedCommand &cmd, CommandContext &ctx, 
         mime->setData(QStringLiteral("x-special/gnome-copied-files"), gnome);
         // Where they were picked: a flat view's items from folders further
         // down ask at paste time whether to keep those folders.
-        mime->setData(QStringLiteral("application/x-linopus-source-folder"), ctx.sourcePath().toUtf8());
+        mime->setData(QStringLiteral("application/x-dirduo-source-folder"), ctx.sourcePath().toUtf8());
         clipboard->setMimeData(mime);
         return true;
     }
@@ -1712,7 +1712,7 @@ bool CommandEngine::cmdClipboard(const ParsedCommand &cmd, CommandContext &ctx, 
             const QByteArray g = mime->data(QStringLiteral("x-special/gnome-copied-files"));
             isCut = g.startsWith("cut");
         }
-        const QString root = QString::fromUtf8(mime->data(QStringLiteral("application/x-linopus-source-folder")));
+        const QString root = QString::fromUtf8(mime->data(QStringLiteral("application/x-dirduo-source-folder")));
         if (fromSubfolders(sources, root)) {
             const QString structure = cmd.value(QStringLiteral("STRUCTURE")).toLower();
             bool ok;

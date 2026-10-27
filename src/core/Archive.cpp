@@ -8,7 +8,7 @@
 #include <QFileInfo>
 #include <QSet>
 
-#ifdef LINOPUS_HAVE_LIBARCHIVE
+#ifdef DIRDUO_HAVE_LIBARCHIVE
 #include <archive.h>
 #include <archive_entry.h>
 #include <fcntl.h>
@@ -48,7 +48,7 @@ const QStringList &extractableSuffixes()
     return s;
 }
 
-#ifdef LINOPUS_HAVE_LIBARCHIVE
+#ifdef DIRDUO_HAVE_LIBARCHIVE
 QString entryName(struct archive_entry *e)
 {
     if (const char *u = archive_entry_pathname_utf8(e))
@@ -100,7 +100,7 @@ struct archive *openReader(const QString &path, const QString &password, int blo
 
 bool available()
 {
-#ifdef LINOPUS_HAVE_LIBARCHIVE
+#ifdef DIRDUO_HAVE_LIBARCHIVE
     return true;
 #else
     return false;
@@ -186,7 +186,7 @@ QString baseName(const QString &path)
 
 bool list(const QString &archivePath, QList<Entry> *entries, QString *error, int max)
 {
-#ifdef LINOPUS_HAVE_LIBARCHIVE
+#ifdef DIRDUO_HAVE_LIBARCHIVE
     struct archive *a = openReader(archivePath, {}, 64 * 1024, error);
     if (!a)
         return false;
@@ -212,7 +212,7 @@ bool list(const QString &archivePath, QList<Entry> *entries, QString *error, int
 #else
     Q_UNUSED(archivePath) Q_UNUSED(entries) Q_UNUSED(max)
     if (error)
-        *error = QStringLiteral("This build of Linopus has no archive support.");
+        *error = QStringLiteral("This build of DirDuo has no archive support.");
     return false;
 #endif
 }
@@ -224,7 +224,7 @@ bool canEncrypt(Format f)
 
 bool isEncrypted(const QString &archivePath)
 {
-#ifdef LINOPUS_HAVE_LIBARCHIVE
+#ifdef DIRDUO_HAVE_LIBARCHIVE
     QString error;
     struct archive *a = openReader(archivePath, {}, 64 * 1024, &error);
     if (!a)
@@ -250,7 +250,7 @@ bool isEncrypted(const QString &archivePath)
 QStringList topLevelNames(const QString &archivePath, QString *error, const QString &password)
 {
     QStringList out;
-#ifdef LINOPUS_HAVE_LIBARCHIVE
+#ifdef DIRDUO_HAVE_LIBARCHIVE
     struct archive *a = openReader(archivePath, password, 64 * 1024, error);
     if (!a)
         return out;
@@ -272,14 +272,14 @@ QStringList topLevelNames(const QString &archivePath, QString *error, const QStr
 #else
     Q_UNUSED(archivePath) Q_UNUSED(password)
     if (error)
-        *error = QStringLiteral("This build of Linopus has no archive support.");
+        *error = QStringLiteral("This build of DirDuo has no archive support.");
 #endif
     return out;
 }
 
 bool pack(const QStringList &sources, const QString &path, Format format, const Hooks &hooks, QString *error)
 {
-#ifdef LINOPUS_HAVE_LIBARCHIVE
+#ifdef DIRDUO_HAVE_LIBARCHIVE
     if (!hooks.password.isEmpty() && !canEncrypt(format)) {
         if (error)
             *error = QStringLiteral("Only zip archives can have a password.");
@@ -411,7 +411,7 @@ bool pack(const QStringList &sources, const QString &path, Format format, const 
 #else
     Q_UNUSED(sources) Q_UNUSED(path) Q_UNUSED(format) Q_UNUSED(hooks)
     if (error)
-        *error = QStringLiteral("This build of Linopus has no archive support.");
+        *error = QStringLiteral("This build of DirDuo has no archive support.");
     return false;
 #endif
 }
@@ -419,7 +419,7 @@ bool pack(const QStringList &sources, const QString &path, Format format, const 
 bool unpack(const QString &archivePath, const QString &destDir, const QMap<QString, QString> &rename, bool replace,
             const Hooks &hooks, QStringList *created, QString *error)
 {
-#ifdef LINOPUS_HAVE_LIBARCHIVE
+#ifdef DIRDUO_HAVE_LIBARCHIVE
     // Encrypted: try the password on the first locked file before writing
     // anything, so a wrong one leaves nothing half-extracted behind.
     {
@@ -563,7 +563,7 @@ bool unpack(const QString &archivePath, const QString &destDir, const QMap<QStri
 #else
     Q_UNUSED(archivePath) Q_UNUSED(destDir) Q_UNUSED(rename) Q_UNUSED(replace) Q_UNUSED(hooks) Q_UNUSED(created)
     if (error)
-        *error = QStringLiteral("This build of Linopus has no archive support.");
+        *error = QStringLiteral("This build of DirDuo has no archive support.");
     return false;
 #endif
 }

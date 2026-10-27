@@ -133,15 +133,15 @@ ButtonEditor::ButtonEditor(const ButtonDef &def, QWidget *parent)
     // Shell scripts: a first line of #!/bin/bash (or any #!) makes it one.
     auto *scriptRow = new QHBoxLayout;
     auto *scriptHelp = new QLabel(QStringLiteral("Start with <b>#!/bin/bash</b> to run a script on the system: the selected items are "
-                                                 "\"$@\", it starts in the source folder, and $LINOPUS_SOURCE, $LINOPUS_DEST and "
-                                                 "$LINOPUS_FOCUSED are set. Add <b># linopus: terminal</b> to run it in Konsole, "
-                                                 "<b># linopus: output</b> to always see what it printed."),
+                                                 "\"$@\", it starts in the source folder, and $DIRDUO_SOURCE, $DIRDUO_DEST and "
+                                                 "$DIRDUO_FOCUSED are set. Add <b># dirduo: terminal</b> to run it in Konsole, "
+                                                 "<b># dirduo: output</b> to always see what it printed."),
                                   m_commands);
     scriptHelp->setWordWrap(true);
     auto *newScript = new QPushButton(QStringLiteral("New Script"), m_commands);
     newScript->setToolTip(QStringLiteral("Put a bash script template in Left-click"));
     connect(newScript, &QPushButton::clicked, this, [this]() {
-        m_left->setPlainText(QStringLiteral("#!/bin/bash\n# linopus: output\n# Selected items: \"$@\"   Source: \"$LINOPUS_SOURCE\"   Destination: \"$LINOPUS_DEST\"\n"
+        m_left->setPlainText(QStringLiteral("#!/bin/bash\n# dirduo: output\n# Selected items: \"$@\"   Source: \"$DIRDUO_SOURCE\"   Destination: \"$DIRDUO_DEST\"\n"
                                             "for f in \"$@\"; do\n    echo \"$f\"\ndone\n"));
         m_left->setFocus();
     });

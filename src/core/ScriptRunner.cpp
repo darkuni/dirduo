@@ -40,7 +40,7 @@ bool ScriptRunner::isScript(const QString &function)
 ScriptOptions ScriptRunner::optionsOf(const QString &script)
 {
     ScriptOptions o;
-    static const QRegularExpression re(QStringLiteral("^\\s*#\\s*linopus:\\s*(\\w+)"), QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression re(QStringLiteral("^\\s*#\\s*(?:dirduo|linopus):\\s*(\\w+)"), QRegularExpression::CaseInsensitiveOption);
     for (const QString &line : script.split(QLatin1Char('\n'))) {
         const QRegularExpressionMatch m = re.match(line);
         if (!m.hasMatch())
@@ -60,7 +60,7 @@ QString ScriptRunner::scriptDir()
 {
     // The cache folder is a real folder on the host too (inside the Flatpak
     // it is ~/.var/app/<id>/cache), so the host can read the file.
-    return Paths::userCacheHome() + QStringLiteral("/linopus/scripts");
+    return Paths::userCacheHome() + QStringLiteral("/dirduo/scripts");
 }
 
 bool ScriptRunner::start(const QString &script, const QStringList &args, const QString &dir, const QString &source,
@@ -80,8 +80,10 @@ bool ScriptRunner::start(const QString &script, const QStringList &args, const Q
         f.write(text.toUtf8() + '\n');
     }
     QFile::setPermissions(m_file, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
-    const QStringList env = {QStringLiteral("LINOPUS_SOURCE=") + source, QStringLiteral("LINOPUS_DEST=") + dest,
-                             QStringLiteral("LINOPUS_FOCUSED=") + focused};
+    // The LINOPUS_ names too, for scripts written before the rename.
+    const QStringList env = {QStringLiteral("DIRDUO_SOURCE=") + source, QStringLiteral("DIRDUO_DEST=") + dest,
+                             QStringLiteral("DIRDUO_FOCUSED=") + focused, QStringLiteral("LINOPUS_SOURCE=") + source,
+                             QStringLiteral("LINOPUS_DEST=") + dest, QStringLiteral("LINOPUS_FOCUSED=") + focused};
 
     if (m_options.terminal) {
         // In a terminal: run it, then wait for Enter so the output stays.

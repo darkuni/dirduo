@@ -16,7 +16,7 @@ class Job;
 }
 
 // KIO asks this when a copy runs into an existing item or a failed one. Rename
-// questions go to Linopus's own collision dialog (through the JobManager);
+// questions go to DirDuo's own collision dialog (through the JobManager);
 // everything else (host keys, certificates, message boxes) keeps KIO's dialogs.
 class CollisionBridge : public KIO::WidgetsAskUserActionHandler
 {

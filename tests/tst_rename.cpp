@@ -185,7 +185,7 @@ private Q_SLOTS:
         QVERIFY2(RenameEngine::undo(done, &err), qPrintable(err));
         QCOMPARE(readAll(d + QStringLiteral("/one.txt")), oneText);
         // No temporary files left behind.
-        QCOMPARE(QDir(d).entryList(QDir::Files | QDir::Hidden).filter(QStringLiteral(".linopus-rename")).size(), 0);
+        QCOMPARE(QDir(d).entryList(QDir::Files | QDir::Hidden).filter(QStringLiteral(".dirduo-rename")).size(), 0);
     }
 
     void presets()

@@ -18,7 +18,7 @@ Prefs::Prefs()
 
 void Prefs::reload()
 {
-    QSettings s(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+    QSettings s(Paths::configFile(QStringLiteral("dirduo.ini")), QSettings::IniFormat);
     s.beginGroup(QStringLiteral("General"));
     Values v;
     v.statusCounts = s.value(QStringLiteral("statusCounts"), true).toBool();
@@ -36,7 +36,7 @@ void Prefs::reload()
 void Prefs::setValues(const Values &v)
 {
     m_values = v;
-    QSettings s(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+    QSettings s(Paths::configFile(QStringLiteral("dirduo.ini")), QSettings::IniFormat);
     s.beginGroup(QStringLiteral("General"));
     s.setValue(QStringLiteral("statusCounts"), v.statusCounts);
     s.setValue(QStringLiteral("statusSelection"), v.statusSelection);

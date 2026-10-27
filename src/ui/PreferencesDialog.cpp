@@ -267,7 +267,7 @@ QWidget *PreferencesDialog::buildFileTypes()
 {
     auto *page = new QWidget;
     auto *layout = new QVBoxLayout(page);
-    auto *intro = new QLabel(QStringLiteral("Applications Linopus uses for these types of file, instead of the desktop's choice. "
+    auto *intro = new QLabel(QStringLiteral("Applications DirDuo uses for these types of file, instead of the desktop's choice. "
                                             "Set one with right-click > Open With > Other Application... and \"Always use\"."),
                              page);
     intro->setWordWrap(true);
@@ -280,7 +280,7 @@ QWidget *PreferencesDialog::buildFileTypes()
     m_fileTypes->verticalHeader()->hide();
     layout->addWidget(m_fileTypes, 1);
     auto *remove = new QPushButton(QStringLiteral("Use the Desktop's Choice"), page);
-    remove->setToolTip(QStringLiteral("Forget Linopus's application for the selected types"));
+    remove->setToolTip(QStringLiteral("Forget DirDuo's application for the selected types"));
     connect(remove, &QPushButton::clicked, this, [this]() {
         QSet<int> rows;
         for (QTableWidgetItem *it : m_fileTypes->selectedItems())

@@ -79,7 +79,7 @@ private Q_SLOTS:
         QVERIFY(QFileInfo(dst + QStringLiteral("/album/latest")).isSymLink());
         QCOMPARE(QFileInfo(dst + QStringLiteral("/album/latest")).symLinkTarget(), dst + QStringLiteral("/album/01.mp3"));
         QVERIFY(QFile::exists(src + QStringLiteral("/album/01.mp3"))); // copy keeps the source
-        QVERIFY(!QFile::exists(dst + QStringLiteral("/album/01.mp3.linopus-part")));
+        QVERIFY(!QFile::exists(dst + QStringLiteral("/album/01.mp3.dirduo-part")));
     }
 
     void refusesCopyThatWillNotFit()
@@ -343,7 +343,7 @@ private Q_SLOTS:
         jm.cancel(first);
         QVERIFY(jm.waitForIdle(5000));
         QCOMPARE(jm.snapshot(first).state, JobState::Canceled);
-        QVERIFY(!QFile::exists(dst + QStringLiteral("/big.bin.linopus-part")));
+        QVERIFY(!QFile::exists(dst + QStringLiteral("/big.bin.dirduo-part")));
     }
 
     void trashAndDelete()

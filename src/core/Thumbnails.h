@@ -14,7 +14,7 @@
 // Thumbnails for the icon and thumbnail views. Shares the freedesktop.org
 // thumbnail cache (~/.cache/thumbnails) with Dolphin, Gwenview and the rest:
 // anything they have already made, videos and documents included, shows up
-// at once, and pictures Linopus makes itself are saved there for them too.
+// at once, and pictures DirDuo makes itself are saved there for them too.
 namespace Thumbnails {
 
 constexpr int kLarge = 256;   // "large" in the spec

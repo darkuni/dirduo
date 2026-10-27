@@ -11,7 +11,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 
-#ifdef LINOPUS_HAVE_LIBARCHIVE
+#ifdef DIRDUO_HAVE_LIBARCHIVE
 #include <archive.h>
 #include <archive_entry.h>
 #endif
@@ -162,14 +162,14 @@ private Q_SLOTS:
         QCOMPARE(readFile(dst + QStringLiteral("/notes (2).txt")), QByteArray("notes"));
     }
 
-#ifdef LINOPUS_HAVE_LIBARCHIVE
+#ifdef DIRDUO_HAVE_LIBARCHIVE
     void refusesToWriteOutside()
     {
         const QString path = m_dir->filePath(QStringLiteral("evil.tar"));
         archive *a = archive_write_new();
         archive_write_set_format_pax_restricted(a);
         QCOMPARE(archive_write_open_filename(a, QFile::encodeName(path).constData()), ARCHIVE_OK);
-        for (const char *name : {"../escaped.txt", "/tmp/linopus-absolute.txt", "fine.txt"}) {
+        for (const char *name : {"../escaped.txt", "/tmp/dirduo-absolute.txt", "fine.txt"}) {
             archive_entry *e = archive_entry_new();
             archive_entry_set_pathname(e, name);
             archive_entry_set_filetype(e, AE_IFREG);
@@ -187,7 +187,7 @@ private Q_SLOTS:
         QString error;
         Archive::unpack(path, into, {}, true, {}, nullptr, &error);
         QVERIFY(!QFile::exists(dst + QStringLiteral("/escaped.txt")));
-        QVERIFY(!QFile::exists(QStringLiteral("/tmp/linopus-absolute.txt")));
+        QVERIFY(!QFile::exists(QStringLiteral("/tmp/dirduo-absolute.txt")));
         QVERIFY(QFile::exists(into + QStringLiteral("/fine.txt")));
     }
 #endif
@@ -253,7 +253,7 @@ private Q_SLOTS:
         QVERIFY(jm.waitForIdle(10000));
         QCOMPARE(jm.snapshot(id).state, JobState::Finished);
         QVERIFY(QFile::exists(dst + QStringLiteral("/Backup.zip")));
-        QVERIFY(!QFile::exists(dst + QStringLiteral("/Backup.zip.linopus-part")));
+        QVERIFY(!QFile::exists(dst + QStringLiteral("/Backup.zip.dirduo-part")));
         QCOMPARE(jm.outcomes(id).value(0).target, dst + QStringLiteral("/Backup.zip"));
         // Taken: a new name, unless told to replace or skip.
         s.whenExists = CollisionAction::Rename;

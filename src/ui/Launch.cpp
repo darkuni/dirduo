@@ -94,10 +94,10 @@ QString socketPath()
     const QString runtime = qEnvironmentVariable("XDG_RUNTIME_DIR");
     const QString appId = qEnvironmentVariable("FLATPAK_ID");
     if (!runtime.isEmpty() && !appId.isEmpty())
-        return runtime + QStringLiteral("/app/") + appId + QStringLiteral("/linopus.sock");
+        return runtime + QStringLiteral("/app/") + appId + QStringLiteral("/dirduo.sock");
     if (!runtime.isEmpty())
-        return runtime + QStringLiteral("/linopus.sock");
-    return QDir::tempPath() + QStringLiteral("/linopus-%1.sock").arg(::getuid());
+        return runtime + QStringLiteral("/dirduo.sock");
+    return QDir::tempPath() + QStringLiteral("/dirduo-%1.sock").arg(::getuid());
 }
 
 bool sendToRunning(const Request &request, int timeoutMs)

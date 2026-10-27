@@ -40,7 +40,7 @@ bool &loaded()
 
 QSettings settings()
 {
-    return QSettings(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+    return QSettings(Paths::configFile(QStringLiteral("dirduo.ini")), QSettings::IniFormat);
 }
 
 // The desktop's own default (mimeapps.list) for a type, if any.

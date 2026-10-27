@@ -1,6 +1,9 @@
 #include "core/Paths.h"
 
 #include <QDir>
+#include <QDirIterator>
+#include <QFile>
+#include <QFileInfo>
 
 namespace {
 QString g_configOverride;
@@ -47,10 +50,53 @@ QString userCacheHome()
 QString configDir()
 {
     const QString dir = g_configOverride.isEmpty()
-        ? userConfigHome() + QStringLiteral("/linopus")
+        ? userConfigHome() + QStringLiteral("/dirduo")
         : g_configOverride;
     QDir().mkpath(dir);
     return dir;
+}
+
+namespace {
+bool copyTree(const QString &from, const QString &to)
+{
+    bool any = false;
+    QDirIterator it(from, QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        const QString src = it.next();
+        QString rel = src.mid(from.size() + 1);
+        if (rel == QLatin1String("linopus.ini"))
+            rel = QStringLiteral("dirduo.ini");
+        const QString dst = to + QLatin1Char('/') + rel;
+        const QFileInfo fi(src);
+        if (fi.isDir() && !fi.isSymLink()) {
+            QDir().mkpath(dst);
+        } else if (!QFileInfo::exists(dst)) {
+            QDir().mkpath(QFileInfo(dst).absolutePath());
+            any = QFile::copy(src, dst) || any;
+        }
+    }
+    return any;
+}
+} // namespace
+
+bool migrateFromLinopus()
+{
+    if (!g_configOverride.isEmpty())
+        return false; // tests
+    bool any = false;
+    const QString oldConfig = userConfigHome() + QStringLiteral("/linopus");
+    const QString newConfig = userConfigHome() + QStringLiteral("/dirduo");
+    if (QFileInfo(oldConfig).isDir() && !QFileInfo::exists(newConfig + QStringLiteral("/dirduo.ini"))) {
+        QDir().mkpath(newConfig);
+        any = copyTree(oldConfig, newConfig) || any;
+    }
+    const QString oldData = userDataHome() + QStringLiteral("/linopus");
+    const QString newData = userDataHome() + QStringLiteral("/dirduo");
+    if (QFileInfo(oldData).isDir() && !QFileInfo(newData).isDir()) {
+        QDir().mkpath(newData);
+        any = copyTree(oldData, newData) || any;
+    }
+    return any;
 }
 
 QString configFile(const QString &name)

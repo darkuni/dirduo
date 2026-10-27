@@ -21,7 +21,7 @@
 namespace {
 
 constexpr qint64 kChunk = 1024 * 1024;
-const QString kPartSuffix = QStringLiteral(".linopus-part");
+const QString kPartSuffix = QStringLiteral(".dirduo-part");
 
 QString errnoText()
 {
@@ -879,7 +879,7 @@ void Job::runPack()
     setState(JobState::Running);
     // Written beside it under another name, swapped in when complete: a
     // canceled or failed archive never looks like a finished one.
-    const QString part = target + QStringLiteral(".linopus-part");
+    const QString part = target + QStringLiteral(".dirduo-part");
     Archive::Hooks hooks;
     hooks.keepGoing = [this]() { return checkpoint(); };
     hooks.current = [this](const QString &item, qint64 size) {
@@ -987,7 +987,7 @@ void Job::runSplit()
             const QString target = pieceName(i);
             const qint64 bytes = qMin(m_spec.pieceSize, size - (i - 1) * m_spec.pieceSize);
             setCurrent(QFileInfo(target).fileName(), bytes);
-            const QString part = target + QStringLiteral(".linopus-part");
+            const QString part = target + QStringLiteral(".dirduo-part");
             QFile out(part);
             if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
                 addError(QStringLiteral("%1: %2").arg(target, out.errorString()));
@@ -1057,7 +1057,7 @@ void Job::runJoin()
             target = dest + QLatin1Char('/') + FileOps::uniqueName(dest, m_spec.joinName);
     }
     setState(JobState::Running);
-    const QString part = target + QStringLiteral(".linopus-part");
+    const QString part = target + QStringLiteral(".dirduo-part");
     QFile out(part);
     if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         addError(QStringLiteral("%1: %2").arg(target, out.errorString()));

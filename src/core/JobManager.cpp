@@ -37,7 +37,7 @@ public:
                              ? QStringLiteral("Splitting and joining work in local folders (SD cards and drives too); copy it here first.")
                          : (m_spec.type == JobType::Pack || m_spec.type == JobType::Unpack)
                              ? QStringLiteral("Archives are made and extracted in local folders (SD cards and drives too); copy it here first.")
-                             : QStringLiteral("Remote locations need the KIO build of Linopus."));
+                             : QStringLiteral("Remote locations need the KIO build of DirDuo."));
         return s;
     }
     void pause() override {}

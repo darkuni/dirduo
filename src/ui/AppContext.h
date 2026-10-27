@@ -39,7 +39,7 @@ public:
     QSettings &settings() { return *m_settings; }
     ToolbarStore &toolbars() { return *m_toolbars; }
 
-    // Every file under ~/.config/linopus in one zip, and back. Restoring
+    // Every file under ~/.config/dirduo in one zip, and back. Restoring
     // reloads aliases, toolbars, themes, labels and folder formats at once.
     bool backupSettings(const QString &zipFile, QString *error);
 

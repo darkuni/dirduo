@@ -9,7 +9,7 @@ class QLineEdit;
 class QListWidget;
 
 // Choose an application for files: those that say they open the type first,
-// then every other one; search by name. "Always use" makes it Linopus's
+// then every other one; search by name. "Always use" makes it DirDuo's
 // default for the type.
 class OpenWithDialog : public QDialog
 {

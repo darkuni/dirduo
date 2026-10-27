@@ -60,6 +60,43 @@ private Q_SLOTS:
         touch(m_dir->filePath(QStringLiteral("a.txt")));
     }
 
+    void labelFromBeforeTheRename()
+    {
+        const QString f = m_dir->filePath(QStringLiteral("a.txt"));
+        if (!FileTags::storedOnFile(f))
+            QSKIP("This filesystem keeps no extended attributes");
+        const QByteArray old("Blue");
+        QCOMPARE(::setxattr(QFile::encodeName(f).constData(), "user.linopus.label", old.constData(), size_t(old.size()), 0), 0);
+        QCOMPARE(FileTags::read(f).label, QStringLiteral("Blue")); // read under the old name
+        FileTagData d = FileTags::read(f);
+        d.label = QStringLiteral("Green");
+        QVERIFY(FileTags::write(f, d, nullptr));
+        QCOMPARE(FileTags::read(f).label, QStringLiteral("Green"));
+        char buf[32];
+        QVERIFY(::getxattr(QFile::encodeName(f).constData(), "user.linopus.label", buf, sizeof buf) < 0); // the old one is gone
+    }
+
+    void settingsMoveOverFromLinopus()
+    {
+        const QString home = m_dir->filePath(QStringLiteral("home"));
+        qputenv("XDG_CONFIG_HOME", (home + QStringLiteral("/.config")).toUtf8());
+        Paths::setConfigDirOverride(QString());
+        Paths::setDataHomeOverride(home + QStringLiteral("/.local/share"));
+        QDir().mkpath(home + QStringLiteral("/.config/linopus/toolbars"));
+        touch(home + QStringLiteral("/.config/linopus/linopus.ini"));
+        touch(home + QStringLiteral("/.config/linopus/toolbars/work.json"));
+        QDir().mkpath(home + QStringLiteral("/.local/share/linopus"));
+        touch(home + QStringLiteral("/.local/share/linopus/file-log.tsv"));
+        QVERIFY(Paths::migrateFromLinopus());
+        QVERIFY(QFile::exists(home + QStringLiteral("/.config/dirduo/dirduo.ini")));
+        QVERIFY(QFile::exists(home + QStringLiteral("/.config/dirduo/toolbars/work.json")));
+        QVERIFY(QFile::exists(home + QStringLiteral("/.local/share/dirduo/file-log.tsv")));
+        QVERIFY(QFile::exists(home + QStringLiteral("/.config/linopus/linopus.ini"))); // the old ones stay
+        QVERIFY(!Paths::migrateFromLinopus()); // only once
+        qunsetenv("XDG_CONFIG_HOME");
+        Paths::setConfigDirOverride(m_dir->filePath(QStringLiteral("cfg")));
+    }
+
     void onTheFileLikeDolphin()
     {
         const QString f = m_dir->filePath(QStringLiteral("a.txt"));

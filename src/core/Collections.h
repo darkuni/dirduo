@@ -7,7 +7,7 @@
 // any drive. A collection shows as a folder at coll:/<name>; what is in it
 // are the real items, so opening, copying from and renaming them act on the
 // real files, while Delete only takes them out of the collection.
-// Each one is a plain text file in ~/.config/linopus/collections, one path
+// Each one is a plain text file in ~/.config/dirduo/collections, one path
 // per line.
 class Collections : public QObject
 {

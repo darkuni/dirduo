@@ -108,7 +108,7 @@ jobs:
           # readable without access to the raw job log.
           if ! flatpak-builder --arch="$ARCH" --repo=repo --disable-rofiles-fuse \
                  --install-deps-from=flathub --force-clean --ccache \
-                 build-dir flatpak/com.monroeworld.Linopus.yml > build.log 2>&1; then
+                 build-dir flatpak/com.monroeworld.DirDuo.yml > build.log 2>&1; then
             # Annotations are cut at about 4 KB: send the error lines and the
             # end of the log in several pieces.
             set +e +o pipefail # bash stops at a grep that finds nothing otherwise
@@ -124,8 +124,8 @@ jobs:
           tail -n 20 build.log
           flatpak build-bundle --arch="$ARCH" \
             --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
-            repo linopus-"$ARCH".flatpak com.monroeworld.Linopus
+            repo dirduo-"$ARCH".flatpak com.monroeworld.DirDuo
       - uses: actions/upload-artifact@v4
         with:
-          name: linopus-${{ matrix.variant.arch }}.flatpak
-          path: linopus-${{ matrix.variant.arch }}.flatpak
+          name: dirduo-${{ matrix.variant.arch }}.flatpak
+          path: dirduo-${{ matrix.variant.arch }}.flatpak

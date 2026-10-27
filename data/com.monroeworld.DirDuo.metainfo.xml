@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>com.monroeworld.Linopus</id>
-  <name>Linopus</name>
+  <id>com.monroeworld.DirDuo</id>
+  <name>Directory Duo</name>
   <summary>Source and destination file manager</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>LicenseRef-proprietary</project_license>
@@ -16,7 +16,7 @@
       buttons that run commands.
     </p>
   </description>
-  <launchable type="desktop-id">com.monroeworld.Linopus.desktop</launchable>
+  <launchable type="desktop-id">com.monroeworld.DirDuo.desktop</launchable>
   <content_rating type="oars-1.1"/>
   <releases>
     <release version="0.1.0" date="2026-10-21">

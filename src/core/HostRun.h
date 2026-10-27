@@ -6,7 +6,7 @@
 #include <functional>
 
 // Starts programs on the real system, outside the Flatpak sandbox when
-// Linopus runs in one (through flatpak-spawn --host), detached.
+// DirDuo runs in one (through flatpak-spawn --host), detached.
 namespace HostRun {
 
 bool inFlatpak();

@@ -8,7 +8,7 @@
 class AliasManager;
 class QLocalServer;
 
-// Starting Linopus from outside: a folder or file on the command line (or a
+// Starting DirDuo from outside: a folder or file on the command line (or a
 // file:// link from the desktop, "Show in folder" from a browser or Steam),
 // and handing that to the copy already running instead of starting another.
 namespace Launch {

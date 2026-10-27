@@ -1,6 +1,6 @@
 // Showcase screenshots: a Steam Deck's home folder full of believable things,
 // shown off in every theme and the main layouts, at the Deck's 1280 x 800.
-//   QT_QPA_PLATFORM=offscreen ./linopus_sizzle out-dir
+//   QT_QPA_PLATFORM=offscreen ./dirduo_sizzle out-dir
 // Big files (Steam games, disc images) are sparse, so this takes no space.
 // Builds the Deck at /home/deck and /run/media/deck (like the real thing) and
 // removes them again; run it in a throwaway container, not on a real Deck.
@@ -376,7 +376,7 @@ void buildDeck(const QString &r, const QString &media)
     sparse(r + QStringLiteral("/Documents/Retirement checklist.md"), 3100, 5);
     sparse(r + QStringLiteral("/Documents/Budget 2026.ods"), 48000, 30);
     sparse(r + QStringLiteral("/Documents/VCF Southwest notes.md"), 2400, 120);
-    sparse(r + QStringLiteral("/Downloads/Linopus-x86_64.flatpak"), 41 * 1024 * 1024, 0);
+    sparse(r + QStringLiteral("/Downloads/DirDuo-x86_64.flatpak"), 41 * 1024 * 1024, 0);
     sparse(r + QStringLiteral("/Downloads/RetroDeck-cooker.AppImage"), 980 * 1024 * 1024, 0);
     sparse(r + QStringLiteral("/Downloads/hvsc-82.zip"), 87 * 1024 * 1024, 1);
     sparse(r + QStringLiteral("/Downloads/kickstart-roms.zip"), 1200000, 1);
@@ -402,7 +402,7 @@ void buildDeck(const QString &r, const QString &media)
         sparse(d + QStringLiteral("/data.pak"), g.gb10 * 1024LL * 1024 * 1024 / 10, 10 + int(g.gb10 % 90));
         sparse(d + QStringLiteral("/game.exe"), 90LL * 1024 * 1024, 10);
     }
-    for (const char *f : {"Linopus settings 2026-10-20.zip", "Deck saves 2026-10-01.tar.gz", "Screenshots 2026-09.zip"})
+    for (const char *f : {"DirDuo settings 2026-10-20.zip", "Deck saves 2026-10-01.tar.gz", "Screenshots 2026-09.zip"})
         sparse(media + QStringLiteral("/KINGSTON/Backups/") + QLatin1String(f), 40LL * 1024 * 1024 + qstrlen(f) * 100000, 3 + int(qstrlen(f)));
     sparse(media + QStringLiteral("/Games/roms/c64/Paradroid.d64"), 174848, 10);
     sparse(media + QStringLiteral("/Games/roms/amiga/Turrican II.adf"), 901120, 10);
@@ -563,7 +563,7 @@ int main(int argc, char *argv[])
 
     // 1. The hero: dark, dual, shared tree; ROMs on the left, the Steam
     // library on the SD card on the right with live folder sizes.
-    run(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet DUAL=vertical\nSet TREE=shared\nSet VIEW=details"));
+    run(QStringLiteral("Set THEME=\"DirDuo Dark\"\nSet DUAL=vertical\nSet TREE=shared\nSet VIEW=details"));
     treeDrives();
     go(r + QStringLiteral("/Emulation/roms"), media + QStringLiteral("/Games/steamapps/common"));
     source(1);
@@ -576,8 +576,8 @@ int main(int argc, char *argv[])
     left->selectPaths({r + QStringLiteral("/Emulation/roms/amiga")});
     shot(w, QStringLiteral("01-dark-dual-steam-library-sizes"), 900);
 
-    // 2. Screenshots as thumbnails in Linopus Light, the viewer on the right.
-    run(QStringLiteral("Set FOLDERSIZES=off\nSet TREE=off\nSet DUAL=off\nSet THEME=\"Linopus Light\""));
+    // 2. Screenshots as thumbnails in DirDuo Light, the viewer on the right.
+    run(QStringLiteral("Set FOLDERSIZES=off\nSet TREE=off\nSet DUAL=off\nSet THEME=\"DirDuo Light\""));
     go(r + QStringLiteral("/Pictures/Screenshots"), QString());
     run(QStringLiteral("Set VIEW=thumbnails\nSet VIEWER=on\nSet VIEWERPOS=right"));
     {
@@ -596,18 +596,18 @@ int main(int argc, char *argv[])
     shot(w, QStringLiteral("03-workbench-sids-by-composer"), 900);
     run(QStringLiteral("Set GROUPBY=none\nSet COLUMNSTOGGLE=modified\nSet COLUMNSTOGGLE=type\nSet COLUMNSTOGGLE=title\nSet COLUMNSTOGGLE=year"));
 
-    // 4. Downloads by date in Linopus Dark at Larger text for arm's length.
-    run(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet DUAL=off\nSet SIZE=larger"));
+    // 4. Downloads by date in DirDuo Dark at Larger text for arm's length.
+    run(QStringLiteral("Set THEME=\"DirDuo Dark\"\nSet DUAL=off\nSet SIZE=larger"));
     go(r + QStringLiteral("/Downloads"), QString());
     run(QStringLiteral("Set GROUPBY=modified"));
-    left->selectPaths({r + QStringLiteral("/Downloads/Linopus-x86_64.flatpak")});
+    left->selectPaths({r + QStringLiteral("/Downloads/DirDuo-x86_64.flatpak")});
     shot(w, QStringLiteral("04-dark-larger-text-downloads-by-date"), 900);
     run(QStringLiteral("Set GROUPBY=none\nSet SIZE=normal"));
 
-    // 5. Linopus Light, stacked displays: every disc and disk image under
+    // 5. DirDuo Light, stacked displays: every disc and disk image under
     // Emulation in one flat list, grouped by system and filtered; the SD
     // card's ROMs below.
-    run(QStringLiteral("Set THEME=\"Linopus Light\"\nSet DUAL=horizontal"));
+    run(QStringLiteral("Set THEME=\"DirDuo Light\"\nSet DUAL=horizontal"));
     go(r + QStringLiteral("/Emulation"), media + QStringLiteral("/Games/roms"));
     source(0);
     run(QStringLiteral("Set FLATVIEW=grouped\nSet FILTER=*.d64;*.adf;*.sfc;*.chd"));
@@ -635,8 +635,8 @@ int main(int argc, char *argv[])
     shot(w, QStringLiteral("06-workbench-separate-trees"), 900);
     run(QStringLiteral("Set TREE=off"));
 
-    // 7. Find results as a collection, in Linopus Dark.
-    run(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet DUAL=vertical"));
+    // 7. Find results as a collection, in DirDuo Dark.
+    run(QStringLiteral("Set THEME=\"DirDuo Dark\"\nSet DUAL=vertical"));
     go(r, media + QStringLiteral("/Games/roms"));
     source(0);
     run(QStringLiteral("Find NAME=*.d64;*.adf;*.crt;*.lha IN=\"%1\" RUN").arg(r));
@@ -645,7 +645,7 @@ int main(int argc, char *argv[])
     shot(w, QStringLiteral("07-dark-find-results"), 1000);
 
     // 8. Synchronize, over the window.
-    run(QStringLiteral("Set THEME=\"Linopus Dark\""));
+    run(QStringLiteral("Set THEME=\"DirDuo Dark\""));
     go(r + QStringLiteral("/Emulation/roms"), media + QStringLiteral("/Games/roms"));
     {
         SyncOptions o;
@@ -660,8 +660,8 @@ int main(int argc, char *argv[])
         dlg.hide();
     }
 
-    // 9. Advanced Rename over the screenshots, Linopus Light.
-    run(QStringLiteral("Set THEME=\"Linopus Light\"\nSet DUAL=off\nSet VIEW=details"));
+    // 9. Advanced Rename over the screenshots, DirDuo Light.
+    run(QStringLiteral("Set THEME=\"DirDuo Light\"\nSet DUAL=off\nSet VIEW=details"));
     go(r + QStringLiteral("/Pictures/Screenshots"), QString());
     {
         QStringList paths;
@@ -698,8 +698,8 @@ int main(int argc, char *argv[])
         shotWithDialog(w, &dlg, QStringLiteral("10-workbench-convert-images"));
     }
 
-    // 11. Customize mode and the command console, Linopus Dark.
-    run(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet VIEW=details\nSet DUAL=vertical"));
+    // 11. Customize mode and the command console, DirDuo Dark.
+    run(QStringLiteral("Set THEME=\"DirDuo Dark\"\nSet VIEW=details\nSet DUAL=vertical"));
     go(r + QStringLiteral("/Emulation/roms/snes"), media + QStringLiteral("/Games/roms/snes"));
     w->showConsole();
     if (CommandConsole *c = w->console()) {
@@ -713,7 +713,7 @@ int main(int argc, char *argv[])
     run(QStringLiteral("Set COLUMNSTOGGLE=extension"));
 
     // 12b. Thumbnails both sides, dark.
-    run(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet DUAL=vertical\nSet TREE=off"));
+    run(QStringLiteral("Set THEME=\"DirDuo Dark\"\nSet DUAL=vertical\nSet TREE=off"));
     go(r + QStringLiteral("/Pictures/Screenshots"), r + QStringLiteral("/Pictures/Wallpapers"));
     run(QStringLiteral("Set VIEW=thumbnails"));
     source(1);
@@ -727,15 +727,15 @@ int main(int argc, char *argv[])
     run(QStringLiteral("Set VIEW=details"));
 
     // 14. Zoomed to 160% (Shift+wheel): readable from the couch.
-    run(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet DUAL=vertical\nSet TREE=off\nSet VIEW=details"));
+    run(QStringLiteral("Set THEME=\"DirDuo Dark\"\nSet DUAL=vertical\nSet TREE=off\nSet VIEW=details"));
     go(r + QStringLiteral("/Emulation/roms/snes"), media + QStringLiteral("/Games/steamapps/common"));
     run(QStringLiteral("Set ZOOM=160"));
     left->selectPaths({r + QStringLiteral("/Emulation/roms/snes/Super Metroid.sfc")});
     shot(w, QStringLiteral("14-dark-zoom-160"), 900);
     run(QStringLiteral("Set ZOOM=reset"));
 
-    // 15. Folders opened in place (the triangles), Linopus Light.
-    run(QStringLiteral("Set THEME=\"Linopus Light\"\nSet DUAL=vertical\nSet TREE=off\nSet VIEW=details"));
+    // 15. Folders opened in place (the triangles), DirDuo Light.
+    run(QStringLiteral("Set THEME=\"DirDuo Light\"\nSet DUAL=vertical\nSet TREE=off\nSet VIEW=details"));
     go(r + QStringLiteral("/Emulation/roms"), r + QStringLiteral("/Music"));
     left->expandFolder(r + QStringLiteral("/Emulation/roms/amiga"));
     left->expandFolder(r + QStringLiteral("/Emulation/roms/c64"));
@@ -747,7 +747,7 @@ int main(int argc, char *argv[])
     right->collapseAllFolders();
 
     // 16. Find-as-you-type in a big ROM folder, dark.
-    run(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet DUAL=vertical\nSet VIEW=details"));
+    run(QStringLiteral("Set THEME=\"DirDuo Dark\"\nSet DUAL=vertical\nSet VIEW=details"));
     go(r + QStringLiteral("/Emulation/roms/amiga"), media + QStringLiteral("/Games/roms/amiga"));
     source(0);
     left->focusView();
@@ -757,7 +757,7 @@ int main(int argc, char *argv[])
     left->closeTypeAhead();
 
     // 17. Select by comparing, with the Select window, light.
-    run(QStringLiteral("Set THEME=\"Linopus Light\""));
+    run(QStringLiteral("Set THEME=\"DirDuo Light\""));
     go(r + QStringLiteral("/Emulation/roms/c64"), media + QStringLiteral("/Games/roms/c64"));
     source(0);
     run(QStringLiteral("Select COMPARE=newerormissing"));
@@ -784,7 +784,7 @@ int main(int argc, char *argv[])
         shotWithDialog(w, &dlg, QStringLiteral("19-workbench-file-log"));
     }
 
-    // 20. The Metadata pane over podcast episodes, Linopus Dark.
+    // 20. The Metadata pane over podcast episodes, DirDuo Dark.
     {
         const QString pod = r + QStringLiteral("/Music/Podcasts");
         QDir().mkpath(pod);
@@ -816,7 +816,7 @@ int main(int argc, char *argv[])
             QString err;
             Metadata::write(f, e, &err);
         }
-        run(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet DUAL=off\nSet VIEW=details\nSet VIEWER=off"));
+        run(QStringLiteral("Set THEME=\"DirDuo Dark\"\nSet DUAL=off\nSet VIEW=details\nSet VIEWER=off"));
         go(pod, QString());
         run(QStringLiteral("Set COLUMNSTOGGLE=modified\nSet COLUMNSTOGGLE=title\nSet COLUMNSTOGGLE=track\nSet COLUMNSTOGGLE=length"));
         run(QStringLiteral("Select PATTERN=*.wav"));
@@ -835,7 +835,7 @@ int main(int argc, char *argv[])
         Prefs::Values pv = Prefs::instance()->values();
         pv.statusDefinition = StatusFormat::samples().at(1).second; // Opus style
         Prefs::instance()->setValues(pv);
-        run(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet DUAL=horizontal\nSet TREE=shared\nSet VIEW=details\nToolbar ARRANGE=opus"));
+        run(QStringLiteral("Set THEME=\"DirDuo Dark\"\nSet DUAL=horizontal\nSet TREE=shared\nSet VIEW=details\nToolbar ARRANGE=opus"));
         treeDrives();
         const QString c64 = r + QStringLiteral("/Emulation/roms/c64");
         go(c64, r + QStringLiteral("/Pictures/Screenshots"));
@@ -861,9 +861,9 @@ int main(int argc, char *argv[])
             w->sharedTree()->setPath(c64);
         shot(w, QStringLiteral("21-dark-horizontal-opus-toolbars-labels"), 2500);
 
-        // Grouped by label in Linopus Light, the SD card's SNES set below
+        // Grouped by label in DirDuo Light, the SD card's SNES set below
         // with MD5 checksums worked out in the background.
-        run(QStringLiteral("Set THEME=\"Linopus Light\"\nSet GROUPBY=label"));
+        run(QStringLiteral("Set THEME=\"DirDuo Light\"\nSet GROUPBY=label"));
         treeDrives();
         source(1);
         run(QStringLiteral("Set VIEW=details"));
@@ -906,7 +906,7 @@ int main(int argc, char *argv[])
         source(0);
         pv.statusDefinition.clear();
         Prefs::instance()->setValues(pv);
-        run(QStringLiteral("Set DUAL=vertical\nSet THEME=\"Linopus Dark\""));
+        run(QStringLiteral("Set DUAL=vertical\nSet THEME=\"DirDuo Dark\""));
     }
 
     // 12. One view, four themes.
@@ -915,7 +915,7 @@ int main(int argc, char *argv[])
     treeDrives();
     go(r + QStringLiteral("/Emulation/roms/c64"), r + QStringLiteral("/Music"));
     left->selectPaths({r + QStringLiteral("/Emulation/roms/c64/Paradroid.d64"), r + QStringLiteral("/Emulation/roms/c64/Elite.d64")});
-    for (const QString &t : {QStringLiteral("Linopus Light"), QStringLiteral("Linopus Dark"), QStringLiteral("Workbench"),
+    for (const QString &t : {QStringLiteral("DirDuo Light"), QStringLiteral("DirDuo Dark"), QStringLiteral("Workbench"),
                              QStringLiteral("Follow Desktop")}) {
         run(QStringLiteral("Set THEME=\"%1\"").arg(t));
         treeDrives();
@@ -924,15 +924,15 @@ int main(int argc, char *argv[])
         themeShots << g_made.last();
         themeNames << t;
     }
-    montage(themeShots, themeNames, QStringLiteral("00-four-themes"), QStringLiteral("Linopus - one lister, four themes"));
+    montage(themeShots, themeNames, QStringLiteral("00-four-themes"), QStringLiteral("DirDuo - one lister, four themes"));
 
     // The highlights on one sheet.
     montage({g_made.at(0), g_made.at(1), g_made.at(2), g_made.at(4)},
-            {QStringLiteral("Linopus Dark: Steam library on the SD card, live folder sizes"),
-             QStringLiteral("Linopus Light: screenshots as thumbnails, viewer pane"),
+            {QStringLiteral("DirDuo Dark: Steam library on the SD card, live folder sizes"),
+             QStringLiteral("DirDuo Light: screenshots as thumbnails, viewer pane"),
              QStringLiteral("Workbench: C64 SIDs grouped by composer"),
              QStringLiteral("Stacked displays: flat view of every disk image")},
-            QStringLiteral("00-highlights"), QStringLiteral("Linopus on the Steam Deck"));
+            QStringLiteral("00-highlights"), QStringLiteral("DirDuo on the Steam Deck"));
 
     for (const QString &f : std::as_const(g_made))
         printf("%s\n", qPrintable(f));

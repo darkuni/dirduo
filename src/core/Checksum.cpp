@@ -260,7 +260,7 @@ QString format(const QList<Entry> &entries, Algo a)
 {
     QString out;
     if (a == Algo::Crc32) {
-        out += QStringLiteral("; Made by Linopus\n");
+        out += QStringLiteral("; Made by DirDuo\n");
         for (const Entry &e : entries)
             out += e.name + QLatin1Char(' ') + e.hash.toUpper() + QLatin1Char('\n');
         return out;

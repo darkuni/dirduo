@@ -21,7 +21,7 @@ QString defaultDefinition(bool counts, bool selection, bool free)
 QList<QPair<QString, QString>> samples()
 {
     return {
-        {QStringLiteral("Linopus standard"), defaultDefinition()},
+        {QStringLiteral("DirDuo standard"), defaultDefinition()},
         {QStringLiteral("Opus style"),
          QStringLiteral("{i:folder} {sd} / {td} {|} {i:file} {sf} / {tf} [{|} <#e04040><b>{hidden} hidden</b></#>] {|} {sb} / {tb}"
                         "{right}<b>{role}</b> {|} {i:drive} {df} {bar}")},

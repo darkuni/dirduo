@@ -232,15 +232,15 @@ private Q_SLOTS:
         writeFile(ctx.source + QStringLiteral("/a b.txt"), "a");
         writeFile(ctx.source + QStringLiteral("/c.txt"), "c");
         ctx.selection = {ctx.source + QStringLiteral("/a b.txt"), ctx.source + QStringLiteral("/c.txt")};
-        const QString script = QStringLiteral("#!/bin/bash\n# linopus: output\nout=\"$LINOPUS_DEST/out.txt\"\n"
-                                              "pwd > \"$out\"\necho \"$LINOPUS_SOURCE\" >> \"$out\"\n"
+        const QString script = QStringLiteral("#!/bin/bash\n# dirduo: output\nout=\"$DIRDUO_DEST/out.txt\"\n"
+                                              "pwd > \"$out\"\necho \"$DIRDUO_SOURCE\" >> \"$out\"\n"
                                               "for f in \"$@\"; do basename \"$f\" >> \"$out\"; done\necho done\n");
         QVERIFY(ScriptRunner::isScript(script));
         QVERIFY(!ScriptRunner::isScript(QStringLiteral("Copy")));
         QVERIFY(ScriptRunner::optionsOf(script).showOutput);
         QVERIFY(!ScriptRunner::optionsOf(script).terminal);
-        QVERIFY(ScriptRunner::optionsOf(QStringLiteral("#!/bin/sh\n# linopus: terminal\n# Linopus: NoRefresh")).terminal);
-        QVERIFY(!ScriptRunner::optionsOf(QStringLiteral("#!/bin/sh\n#linopus:norefresh")).refresh);
+        QVERIFY(ScriptRunner::optionsOf(QStringLiteral("#!/bin/sh\n# dirduo: terminal\n# DirDuo: NoRefresh")).terminal);
+        QVERIFY(!ScriptRunner::optionsOf(QStringLiteral("#!/bin/sh\n#dirduo:norefresh")).refresh);
 
         QVERIFY(m_engine->run(script, ctx));
         QTRY_VERIFY(m_engine->runningScripts().isEmpty() || m_engine->runningScripts().first()->waitForFinished(10000));

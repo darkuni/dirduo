@@ -563,14 +563,14 @@ void FileDisplay::applyStyle()
 
 QString FileDisplay::homeFolder()
 {
-    QSettings s(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+    QSettings s(Paths::configFile(QStringLiteral("dirduo.ini")), QSettings::IniFormat);
     const QString p = s.value(QStringLiteral("Location/home")).toString();
     return p.isEmpty() ? QDir::homePath() : p;
 }
 
 void FileDisplay::setHomeFolder(const QString &path)
 {
-    QSettings s(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+    QSettings s(Paths::configFile(QStringLiteral("dirduo.ini")), QSettings::IniFormat);
     if (path.isEmpty() || path == QDir::homePath())
         s.remove(QStringLiteral("Location/home"));
     else
@@ -603,7 +603,7 @@ static QStringList &visitList()
     static bool loaded = false;
     if (!loaded) {
         loaded = true;
-        QSettings st(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+        QSettings st(Paths::configFile(QStringLiteral("dirduo.ini")), QSettings::IniFormat);
         list = st.value(QStringLiteral("Location/history")).toStringList();
     }
     return list;
@@ -620,7 +620,7 @@ void FileDisplay::recordVisit(const QString &path)
     list.prepend(path);
     while (list.size() > 40)
         list.removeLast();
-    QSettings st(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+    QSettings st(Paths::configFile(QStringLiteral("dirduo.ini")), QSettings::IniFormat);
     st.setValue(QStringLiteral("Location/history"), list);
 }
 
@@ -682,7 +682,7 @@ void FileDisplay::fillRecentMenu(QMenu *menu)
         menu->addSeparator();
         connect(menu->addAction(QStringLiteral("Clear History")), &QAction::triggered, this, []() {
             visitList().clear();
-            QSettings st(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+            QSettings st(Paths::configFile(QStringLiteral("dirduo.ini")), QSettings::IniFormat);
             st.remove(QStringLiteral("Location/history"));
         });
     }

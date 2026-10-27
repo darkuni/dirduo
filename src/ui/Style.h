@@ -13,7 +13,7 @@
 
 // A look for the whole application: window colors, the SOURCE and DEST
 // accents, and a color per file type. Built-in themes plus any .ini file in
-// ~/.config/linopus/themes/ (same keys as save() writes, so a theme can be
+// ~/.config/dirduo/themes/ (same keys as save() writes, so a theme can be
 // copied, edited and shared).
 struct Theme
 {
@@ -57,7 +57,7 @@ public:
     const Theme &theme() const { return m_theme; }
     const LabelRules &labels() const { return m_labels; }
 
-    // Built-in names, then themes found in ~/.config/linopus/themes.
+    // Built-in names, then themes found in ~/.config/dirduo/themes.
     QStringList themeNames() const;
     bool setTheme(const QString &name);
     void setTheme(const Theme &theme);

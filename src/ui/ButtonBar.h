@@ -54,7 +54,7 @@ struct ButtonDef
 
 struct ToolbarDef
 {
-    QString id;   // file name in ~/.config/linopus/toolbars, without .json
+    QString id;   // file name in ~/.config/dirduo/toolbars, without .json
     QString name; // title shown on the toolbar and in menus
     QList<ButtonDef> buttons;
     // How its buttons show: auto (icon and label, label alone without an
@@ -198,7 +198,7 @@ public:
     // The button that takes files dropped at pos (bar coordinates).
     ThreeButton *fileTargetAt(const QPoint &pos) const;
 
-    static constexpr const char *kMime = "application/x-linopus-button";
+    static constexpr const char *kMime = "application/x-dirduo-button";
 
 Q_SIGNALS:
     void commandTriggered(const QString &command);

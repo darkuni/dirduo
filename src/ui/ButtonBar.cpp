@@ -639,7 +639,7 @@ QList<ButtonDef> ToolbarStore::defaultButtons()
         b("Group", "view-group", "Group by type (right-click: no grouping)", "Set GROUPBY=type", "Set GROUPBY=none"),
         b("Filter", "view-filter", "Filter the list as you type (Ctrl+F)", "Set FILTERBAR=toggle"),
         b("Sizes", "folder-stats", "Calculate the size of every folder", "Set FOLDERSIZES=toggle"),
-        b("Theme", "color-management", "Next theme (Linopus Light, Dark, Workbench...)", "Set THEME=next"),
+        b("Theme", "color-management", "Next theme (DirDuo Light, Dark, Workbench...)", "Set THEME=next"),
     };
     // Grayed out when there is nothing to act on; pressed while switched on.
     const QHash<QString, QPair<QString, QString>> states = {
@@ -1166,8 +1166,8 @@ void ButtonBar::rebuild()
         }
     }
     // Between the displays, a bar with a spacer takes the rest of its row.
-    const bool hadSpacer = property("linopusFill").toBool();
-    setProperty("linopusFill", spacer);
+    const bool hadSpacer = property("dirduoFill").toBool();
+    setProperty("dirduoFill", spacer);
     if (hadSpacer != spacer)
         Q_EMIT fillChanged();
     updateStates();
@@ -1181,7 +1181,7 @@ QLineEdit *ButtonBar::fieldAt(int index) const
 
 bool ButtonBar::hasSpacer() const
 {
-    return property("linopusFill").toBool();
+    return property("dirduoFill").toBool();
 }
 
 void ButtonBar::setEditMode(bool on)

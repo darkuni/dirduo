@@ -7,7 +7,7 @@
 // How a folder looks: columns and their order and widths, the sort, the
 // grouping and the view mode. Saved for a folder (optionally with all its
 // subfolders) or as the default for folders without their own, in
-// ~/.config/linopus/formats.ini.
+// ~/.config/dirduo/formats.ini.
 struct FolderFormat
 {
     QString path;          // empty for the default format

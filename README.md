@@ -1,6 +1,6 @@
-# Linopus
+# Directory Duo
 
-A source/destination file manager for Linux in the spirit of Windows Directory Opus. Two displays, one SOURCE and one DEST, and every command acts from one to the other.
+Directory Duo (DirDuo for short) is a source/destination file manager for Linux in the spirit of Windows Directory Opus. Two displays, one SOURCE and one DEST, and every command acts from one to the other.
 
 Targets: SteamOS Desktop Mode on the Steam Deck (x86_64) and Steam Frame (aarch64), and any Linux desktop after that. Qt 6 Widgets, C++20, shipped as a Flatpak on the KDE runtime.
 
@@ -35,7 +35,7 @@ Servers and archives (KIO):
 
 ## Phase 2
 
-- Themes: Follow Desktop, Linopus Light, Linopus Dark and Workbench (Amiga blue, white and orange), from the Theme button, View > Theme or `Set THEME=`. File types have their own colors; SOURCE, DEST and a locked DEST each have an accent edge. Themes are `.ini` files: drop your own in `~/.config/linopus/themes`
+- Themes: Follow Desktop, DirDuo Light, DirDuo Dark and Workbench (Amiga blue, white and orange), from the Theme button, View > Theme or `Set THEME=`. File types have their own colors; SOURCE, DEST and a locked DEST each have an accent edge. Themes are `.ini` files: drop your own in `~/.config/dirduo/themes`
 - Labels: color, bold or italic by wildcard (`labels.ini`)
 - Folder trees: one shared tree that follows the source, or one per display. The tree starts from Home, Root, each SD card, USB stick and disk, and your aliases
 - Columns: drag any column's edge to size it, the name column too (it fills the leftover room until you drag it; double-click its edge to make it fill again). Right-click the column header for Created, Accessed, Extension, Permissions, Owner and Group, Group By, and folder sizes
@@ -47,11 +47,11 @@ Servers and archives (KIO):
 - Properties (Alt+Enter, or right-click > Properties...): location, type, size (folders are counted in the background), where a link points, owner, dates and permissions. Change the modified and accessed dates and the permissions for one item or many, optionally for everything inside folders
 - Links: right-click > Make Link Here ("Name (link)") or Make Link in Destination. `MakeLink RELATIVE` makes links that keep working when both move together (an SD card in another machine). Undo removes them
 - Location bar laid out as in Opus: Back, Forward, Up, Refresh, Home (a "best favorite": middle-click it, or right-click > Set to This Folder, to make the current folder Home), a Favorites star (pick one, add this folder, organize), the folder's icon (drag it to copy, move or link the folder), the path, a list of recent folders, and (with two displays) Open This Folder in the Other Display and Swap Folders. The bar takes the display's role color (source, destination, locked destination)
-- Shell script buttons: a button whose function starts with `#!/bin/bash` (or any `#!`) runs as a script on the real system (outside the Flatpak). The selected items are `"$@"`, it starts in the source folder, and `$LINOPUS_SOURCE`, `$LINOPUS_DEST` and `$LINOPUS_FOCUSED` are set. `# linopus: terminal` runs it in Konsole, `# linopus: output` always shows what it printed (otherwise only when it fails), `# linopus: norefresh` leaves the listings alone. The button editor's New Script puts in a template
-- Open With: right-click > Open With lists the applications for the file's type (from the system's .desktop files, Flatpak apps included), plus Other Application... to pick any app, search by name, and Always use it for that type. Linopus's choice wins over the desktop's when opening files. `OpenWith APP=Kate DEFAULT`
+- Shell script buttons: a button whose function starts with `#!/bin/bash` (or any `#!`) runs as a script on the real system (outside the Flatpak). The selected items are `"$@"`, it starts in the source folder, and `$DIRDUO_SOURCE`, `$DIRDUO_DEST` and `$DIRDUO_FOCUSED` are set. `# dirduo: terminal` runs it in Konsole, `# dirduo: output` always shows what it printed (otherwise only when it fails), `# dirduo: norefresh` leaves the listings alone. The button editor's New Script puts in a template
+- Open With: right-click > Open With lists the applications for the file's type (from the system's .desktop files, Flatpak apps included), plus Other Application... to pick any app, search by name, and Always use it for that type. DirDuo's choice wins over the desktop's when opening files. `OpenWith APP=Kate DEFAULT`
 - Viewer pane: pictures, text (NFO/DIZ in code page 437), hex, what is inside any archive (zip, 7z, RAR, tar, ISO...), and music and video with Play, a position bar and the time; nothing plays until asked, and closing the pane or moving on stops it
 - Picture viewer (right-click > View, or the `Show` command): one picture at a time in its own window, stepping through the folder (or the selected pictures) with the arrows, Home/End, the wheel to zoom (Ctrl+wheel to step), 0 to fit, 1 for 100%, R/L to turn, F or a double-click for full screen, Esc to close
-- Preferences > General: what the status line shows (counts, selection, free space), whether copies ask Retry / Skip / Abort, and which terminal Open Konsole Here uses. Preferences > File Types: the applications Linopus uses per type, and back to the desktop's choice
+- Preferences > General: what the status line shows (counts, selection, free space), whether copies ask Retry / Skip / Abort, and which terminal Open Konsole Here uses. Preferences > File Types: the applications DirDuo uses per type, and back to the desktop's choice
 - Help > About shows which build this is
 - Right-click empty space > Open Konsole in This Folder (also Tools > Open Konsole Here, Shift+F4, and the `Terminal` command). Uses Konsole, or the first other terminal installed; from the Flatpak it opens on the real system
 - Free space: the status line shows how much room is left on the drive or card (in red when it is nearly full), and a copy that will not fit stops before writing anything
@@ -85,7 +85,7 @@ Servers and archives (KIO):
 - Text and icon size (View > Text and Icon Size): Large and Larger for the Deck's screen
 - Synchronize (Tools > Synchronize): compare the source and destination (or any two folders) by date, size or contents; see every difference with what will happen to it, change any of them, then copy. Update the right, mirror to it (extras go to the trash), or both ways. Allows for the 2-second timestamps of FAT SD cards. `Sync ... RUN` does it from a button without asking
 - Find (Tools > Find, Ctrl+Shift+F): by name (text, wildcards or a regular expression), text inside files, size, modified date, files or folders, under any folders. Results open in a tab as the Find Results collection, where every command works on them; searches can be saved and run again. `Find NAME=*.d64 NEWER=30 RUN` from a button
-- Collections (Go > Collections, `/collections`): virtual folders of links to files anywhere. Edit > Add to Collection, or copy into a collection shown in the other display; Delete there only takes the link out; renaming the real file keeps the link. Each is a text file in `~/.config/linopus/collections`
+- Collections (Go > Collections, `/collections`): virtual folders of links to files anywhere. Edit > Add to Collection, or copy into a collection shown in the other display; Delete there only takes the link out; renaming the real file keeps the link. Each is a text file in `~/.config/dirduo/collections`
 - Viewer pane (F3, View > Viewer Pane): shows the file in focus beside or below the displays. Pictures fit the pane (click for actual size, photos the right way up), text and code as text, `.nfo` and `.diz` in the DOS code page with their box drawing, other files as hex (the Hex button shows any file's bytes), zips as a list of what is inside, folders as a count. Arrowing through a folder only loads where you stop
 - Layouts (Window > Layouts): save a lister's whole arrangement (single or dual, trees, toolbars and where they sit, viewer pane, views) under a name and switch to it in one click; with or without its folders. `Layout LOAD="ROM sorting"` from a button
 - Preferences (File > Preferences, Ctrl+,): a search box over every setting; Appearance (theme, size); a Theme Editor for every color, the SOURCE/DEST accents and each file type, live, saved as your own theme (a built-in is never overwritten: edits become "Name (mine)"); Labels; Aliases; Folder Formats; Toolbars. Cancel undoes what you previewed
@@ -93,17 +93,17 @@ Servers and archives (KIO):
 - Self-filling toolbar menus: a button can be a menu of your Favorites, Frequent folders, Aliases or Collections that stays up to date (customize mode, Commands > Favorites)
 - Find Duplicates (Tools > Find Duplicates): identical files by contents (renamed copies too), by name and size, or by name, across several folders; check all but the newest, oldest or shortest path in each group and send the rest to the trash
 - Convert Images (Tools > Convert Images): PNG, JPEG, WebP, BMP and whatever else the image plugins write; resize by percentage, to fit, by width or height, or exactly; turn and flip; save next to each picture or in another folder. A row per picture shows its new name and size before anything is written. The format, quality and size are remembered
-- Starting from outside: `linopus <folders, files, aliases, file:// links or server addresses>` opens each in a new lister; a file opens its folder with the file selected ("Show in folder"); `--tab` opens them as tabs in the active lister; `--cmd "Go /sdcard"` runs commands there (DOpusRT-style). When Linopus is already running, a new launch hands everything to it and quits; `--new-instance` starts a separate copy
+- Starting from outside: `dirduo <folders, files, aliases, file:// links or server addresses>` opens each in a new lister; a file opens its folder with the file selected ("Show in folder"); `--tab` opens them as tabs in the active lister; `--cmd "Go /sdcard"` runs commands there (DOpusRT-style). When DirDuo is already running, a new launch hands everything to it and quits; `--new-instance` starts a separate copy
 - Find-as-you-type: start typing in a list and a field opens under it. Plain text jumps to the first name that starts with it (or contains it), Up/Down for the next match, Enter opens it; wildcards (`*.d64`) select every match; `>` runs a command (Tab completes); `/alias` or `~/path` goes there; Ctrl+F turns the text into the filter bar; Esc closes
 - Select by comparing (Edit > Select by Comparing, Edit > Select... Ctrl+Shift+S): what is newer here or not in the other display (what an update would copy), only here, newer, older, the same in both (optionally selected on both sides) or a different size; combine with name, kind, size and age, and add to or take out of the selection. Dates within 2 seconds count as the same, for FAT-formatted SD cards
 - Undo (Ctrl+Z, Edit > Undo List, `Undo`): copies, moves, new folders and pasted files, sending to the trash, and renames. Copies come out by going to the trash; a copy that replaced a file stays (the old file cannot come back); things moved come back where they were, folders made again if needed; trashed items come back out of the trash. Undoing is itself on the list, so it can be redone. Copying into a folder that was already there undoes only what the copy added
-- File log (Tools > File Log, `Undo LOG FIND=name`): every copy, move, trash, delete, rename and undo with its time and where things went, the last 5000 kept in ~/.local/share/linopus/file-log.tsv; filter by name or path to trace a file that went missing, copy or save it
+- File log (Tools > File Log, `Undo LOG FIND=name`): every copy, move, trash, delete, rename and undo with its time and where things went, the last 5000 kept in ~/.local/share/dirduo/file-log.tsv; filter by name or path to trace a file that went missing, copy or save it
 - Expandable folders (Details view): click a folder's triangle, press Right, or `Set EXPAND=toggle` and its contents open under it, indented, as deep as you like; Left closes it or jumps to the folder an item is in. Opened folders keep up with changes on disk, stay in place through sorting and grouping, and work on servers too
 - Zoom per file display, as in Opus: Shift+scroll wheel over a list (or a pinch on the Deck's screen or a touchpad) makes that list's text, icons, thumbnails and columns bigger or smaller, from 50% to 300%, on top of the app-wide text size; Ctrl+= / Ctrl+- / Ctrl+0 zoom the source. Each display keeps its own zoom, also in saved layouts; a shared folder tree follows the source
-- Thumbnails view (View > Thumbnails, Ctrl+4; folders that are mostly pictures open in it): pictures as themselves, read in the background. Shares the standard ~/.cache/thumbnails with Dolphin and Gwenview, so videos and documents they have already done show too, and what Linopus makes they reuse. Icons view shows thumbnails at its smaller size
+- Thumbnails view (View > Thumbnails, Ctrl+4; folders that are mostly pictures open in it): pictures as themselves, read in the background. Shares the standard ~/.cache/thumbnails with Dolphin and Gwenview, so videos and documents they have already done show too, and what DirDuo makes they reuse. Icons view shows thumbnails at its smaller size
 - Editing tags: the Metadata pane (View > Metadata Pane, Shift+Alt+Enter) shows the selection's tags; with several files, shared values show and differing ones say "(several values)", and a field you type in is written to all of them on Apply (untouched fields stay). Music: title, artist, album artist, album, track, disc, year, genre, comment (MP3, FLAC, Ogg, Opus, M4A, WAV, AIFF, WMA...). Photos: date taken, description, artist, copyright (JPEG, PNG, WebP, TIFF). Edit > Tags: Copy Tags and Paste Tags (artist, album, genre, year, comment; Paste All adds titles, tracks and dates) for podcast episodes, Number Tracks in list order, and moving photo dates an hour either way for a camera clock left on the wrong time. All of it can be undone
 - Music and photo columns (right-click a column header > Music or Pictures): Title, Artist, Album, Track, Year, Genre, Length and Bitrate from music tags (TagLib); Dimensions, Date Taken and Camera from photos (Exiv2). C64 SID tunes show their name, composer and release line. Read in the background as you browse, then sortable and groupable (Group By > Artist, Album, Genre, Year, Camera, Date Taken). The viewer pane shows the full tags, and the camera line under a photo. Column layouts saved before these columns existed keep them hidden
-- Labels, ratings, tags and descriptions (right-click > Label, Rating, Tags and Description...; Edit > Labels and Tags; Alt+1..5 rates, Alt+0 clears; Ctrl+Shift+T): a colored label (the row takes its color), 0 to 5 stars, any number of tags and a description, for one item or many at once (a field left alone stays as each item had it). Stored in the same extended attributes Dolphin uses, so they show in both and travel with copies; where a drive cannot hold them (FAT SD cards), Linopus keeps them in ~/.local/share/linopus/tags.json. Columns (right-click a column header > Labels and Tags), Group By Label or Rating, `Select LABEL=Red RATING=4 TAG=cart`, and Undo
+- Labels, ratings, tags and descriptions (right-click > Label, Rating, Tags and Description...; Edit > Labels and Tags; Alt+1..5 rates, Alt+0 clears; Ctrl+Shift+T): a colored label (the row takes its color), 0 to 5 stars, any number of tags and a description, for one item or many at once (a field left alone stays as each item had it). Stored in the same extended attributes Dolphin uses, so they show in both and travel with copies; where a drive cannot hold them (FAT SD cards), DirDuo keeps them in ~/.local/share/dirduo/tags.json. Columns (right-click a column header > Labels and Tags), Group By Label or Rating, `Select LABEL=Red RATING=4 TAG=cart`, and Undo
 - Checksums (right-click > Checksums, Tools > Checksums...): CRC32, MD5, SHA-1 or SHA-256 of the selection, folders walked, worked out in the background with a Stop button; copy them or save an .sfv, .md5, .sha1 or .sha256 list. Select a list and run it (or right-click > Verify Checksums) to check every file in it: OK, does not match, or missing. Columns too (right-click a column header > Checksums), made while they show
 - Junk: .DS_Store, ._ files, Thumbs.db, desktop.ini and __MACOSX count as hidden files (Show Hidden Files reveals them; Preferences > General turns this off). Tools > Clean Junk Files trashes them under the source or the selected folders, with Undo
 - Split and join (Tools > Split File..., Join Pieces): cut a file into name.001, name.002... of any size (`fat32` for the 4 GB a FAT32 card allows), and put them back together; selecting the first piece finds the rest. Run as file operations, with progress, pause and Undo
@@ -164,9 +164,9 @@ Copy TO=/music/incoming WHENEXISTS=newer
 
 A path starting with `/name` resolves through the alias table when `name` is an alias. Real top-level folders always win: `/usr` is `/usr`. Alias names that would shadow something in `/` are refused.
 
-Built-in: `desktop`, `documents`, `downloads`, `music`, `pictures`, `videos`, `templates`, `config`, `linopus`, `trash`, `steam`, `temp`, `sdcard` (the mounted microSD card), `removable` (`/run/media/<user>`).
+Built-in: `desktop`, `documents`, `downloads`, `music`, `pictures`, `videos`, `templates`, `config`, `dirduo`, `trash`, `steam`, `temp`, `sdcard` (the mounted microSD card), `removable` (`/run/media/<user>`).
 
-Your own aliases live in `~/.config/linopus/aliases.ini`:
+Your own aliases live in `~/.config/dirduo/aliases.ini`:
 
 ```ini
 [Aliases]
@@ -214,7 +214,7 @@ pods=/downloads/podcasts
 
 ## Toolbar files
 
-Each toolbar is `~/.config/linopus/toolbars/<id>.json`. Customize mode writes them; they are plain JSON to copy or hand-edit. The standard toolbar has no file until you change it, so new standard buttons keep arriving until then.
+Each toolbar is `~/.config/dirduo/toolbars/<id>.json`. Customize mode writes them; they are plain JSON to copy or hand-edit. The standard toolbar has no file until you change it, so new standard buttons keep arriving until then.
 
 ```json
 {
@@ -240,19 +240,19 @@ A button with `"dynamic": "favorites"` (or `frequent`, `aliases`, `collections`)
 
 ## Files
 
-- `~/.config/linopus/linopus.ini`: session and window layout
-- `~/.config/linopus/aliases.ini`: your aliases
-- `~/.config/linopus/toolbars/`: button bars
-- `~/.config/linopus/themes/`: your themes
-- `~/.config/linopus/labels.ini`: wildcard labels
-- `~/.config/linopus/formats.ini`: folder formats
-- `~/.config/linopus/rename.ini`: Advanced Rename presets
-- `~/.config/linopus/find.ini`: saved searches
-- `~/.config/linopus/collections/`: collections, one path per line
-- `~/.config/linopus/favorites.json`, `frequent.ini`: favorites and folder visit counts
-- `~/.config/linopus/layouts/`: saved layouts
+- `~/.config/dirduo/dirduo.ini`: session and window layout
+- `~/.config/dirduo/aliases.ini`: your aliases
+- `~/.config/dirduo/toolbars/`: button bars
+- `~/.config/dirduo/themes/`: your themes
+- `~/.config/dirduo/labels.ini`: wildcard labels
+- `~/.config/dirduo/formats.ini`: folder formats
+- `~/.config/dirduo/rename.ini`: Advanced Rename presets
+- `~/.config/dirduo/find.ini`: saved searches
+- `~/.config/dirduo/collections/`: collections, one path per line
+- `~/.config/dirduo/favorites.json`, `frequent.ini`: favorites and folder visit counts
+- `~/.config/dirduo/layouts/`: saved layouts
 
-Inside the Flatpak these are still the real `~/.config/linopus`, so the configuration copies straight to another machine.
+Inside the Flatpak these are still the real `~/.config/dirduo`, so the configuration copies straight to another machine.
 
 ## Building
 
@@ -261,14 +261,14 @@ Inside the Flatpak these are still the real `~/.config/linopus`, so the configur
 SteamOS's system partition is read-only, so development happens in a container. Distrobox ships with SteamOS.
 
 ```sh
-distrobox create --name linopus-dev --image archlinux:latest
-distrobox enter linopus-dev
+distrobox create --name dirduo-dev --image archlinux:latest
+distrobox enter dirduo-dev
 sudo pacman -Syu --needed base-devel cmake ninja git qt6-base qt6-svg breeze-icons
-git clone <repo url> && cd linopus
+git clone <repo url> && cd dirduo
 cmake -S . -B build -G Ninja
 cmake --build build
 ctest --test-dir build
-./build/linopus
+./build/dirduo
 ```
 
 ### Flatpak on the Deck
@@ -281,12 +281,12 @@ Two ways to get a test build.
 sh scripts/build-flatpak-on-deck.sh
 ```
 
-It installs Flathub's own Flatpak builder and the KDE 6.10 SDK as user Flatpaks (nothing touches the read-only system), builds Linopus, and installs it. The first run downloads about 1 GB. Linopus then appears in the application menu; it also runs as `flatpak run com.monroeworld.Linopus`.
+It installs Flathub's own Flatpak builder and the KDE 6.10 SDK as user Flatpaks (nothing touches the read-only system), builds DirDuo, and installs it. The first run downloads about 1 GB. DirDuo then appears in the application menu; it also runs as `flatpak run com.monroeworld.DirDuo`.
 
-**From CI.** Every push to GitHub builds `linopus-x86_64.flatpak` and `linopus-aarch64.flatpak` (Actions > the run > Artifacts). Download the x86_64 one on the Deck, unzip it, then:
+**From CI.** Every push to GitHub builds `dirduo-x86_64.flatpak` and `dirduo-aarch64.flatpak` (Actions > the run > Artifacts). Download the x86_64 one on the Deck, unzip it, then:
 
 ```sh
-flatpak install --user linopus-x86_64.flatpak
+flatpak install --user dirduo-x86_64.flatpak
 ```
 
 ### Tests and screenshots
@@ -294,16 +294,20 @@ flatpak install --user linopus-x86_64.flatpak
 ```sh
 ctest --test-dir build --output-on-failure
 tests/remote/run-remote-tests.sh build   # starts an FTP and SSH server on localhost, needs KIO
-QT_QPA_PLATFORM=offscreen ./build/linopus_snapshot /tmp/linopus-shots
+QT_QPA_PLATFORM=offscreen ./build/dirduo_snapshot /tmp/dirduo-shots
 ```
 
-`linopus_snapshot` builds a sample folder tree, drives the lister through a few commands and saves a PNG at each step.
+`dirduo_snapshot` builds a sample folder tree, drives the lister through a few commands and saves a PNG at each step.
 
-`linopus_sizzle out-dir` makes the showcase screenshots: a made-up Deck (at `/home/deck` and `/run/media/deck`, removed afterwards, so run it in a throwaway container) shown in every theme and the main layouts, plus two contact sheets.
+`dirduo_sizzle out-dir` makes the showcase screenshots: a made-up Deck (at `/home/deck` and `/run/media/deck`, removed afterwards, so run it in a throwaway container) shown in every theme and the main layouts, plus two contact sheets.
+
+## Renamed from Linopus
+
+Directory Duo was called Linopus until October 2026. The first time DirDuo starts, it copies the old settings (`~/.config/linopus`, with `linopus.ini` becoming `dirduo.ini`) and data (`~/.local/share/linopus`: the file log and labels kept for cards) to its own folders; the old folders are left alone. Old settings backups restore, old scripts' `# linopus:` lines and `$LINOPUS_SOURCE`-style variables still work, and color labels set under the old name are read and moved to the new attribute when next changed. The Flatpak has a new ID, so remove the old one: `flatpak uninstall --user com.monroeworld.Linopus`, and pick Directory Duo again as the default file manager if it was.
 
 ## Known gaps
 
-- **Local copies run on Linopus's own engine, remote ones on KIO.** Local copies have per-file progress and the folder-merge rules described above; remote copies follow KIO's rules (a folder copied onto an existing folder merges into it).
+- **Local copies run on DirDuo's own engine, remote ones on KIO.** Local copies have per-file progress and the folder-merge rules described above; remote copies follow KIO's rules (a folder copied onto an existing folder merges into it).
 
 - **Retry / Skip / Abort** is asked for local copies and moves and when a server connection drops during a copy (Retry copies again, skipping what already arrived in full); other server errors follow KIO's own rules.
 - **A single display uses the most recently used other lister as its destination**, as in Opus; with only one lister open, Copy asks for a folder.

@@ -80,7 +80,7 @@ private Q_SLOTS:
         QVERIFY(ids.contains(QStringLiteral("org.kde.kate.desktop")));
         QVERIFY(ids.contains(QStringLiteral("org.flatpak.App.desktop")));
         QVERIFY(!ids.contains(QStringLiteral("vice.desktop")));
-        // Linopus's own default comes first and is what Open uses.
+        // DirDuo's own default comes first and is what Open uses.
         Apps::setDefaultFor(QStringLiteral("text/plain"), QStringLiteral("org.flatpak.App.desktop"));
         QCOMPARE(Apps::forFile(txt).first().id, QStringLiteral("org.flatpak.App.desktop"));
         QCOMPARE(Apps::defaults().value(QStringLiteral("text/plain")), QStringLiteral("org.flatpak.App.desktop"));

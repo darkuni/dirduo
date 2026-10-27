@@ -42,7 +42,7 @@ OpenWithDialog::OpenWithDialog(const QStringList &files, QWidget *parent)
     m_list = new QListWidget(this);
     m_list->setIconSize(QSize(fontMetrics().height() * 3 / 2, fontMetrics().height() * 3 / 2));
     layout->addWidget(m_list, 1);
-    m_always = new QCheckBox(QStringLiteral("Always use it for %1 files (in Linopus)").arg(mt.comment()), this);
+    m_always = new QCheckBox(QStringLiteral("Always use it for %1 files (in DirDuo)").arg(mt.comment()), this);
     layout->addWidget(m_always);
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Open | QDialogButtonBox::Cancel, this);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);

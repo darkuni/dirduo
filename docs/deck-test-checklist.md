@@ -5,14 +5,15 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 
 ## Install
 
-- [ ] Actions > newest green run > Artifacts > `linopus-x86_64.flatpak`. Unzip it.
-- [ ] `flatpak install --user --reinstall linopus-x86_64.flatpak`
-- [ ] Linopus is in the application menu and opens.
+- [ ] Actions > newest green run > Artifacts > `dirduo-x86_64.flatpak`. Unzip it.
+- [ ] `flatpak install --user --reinstall dirduo-x86_64.flatpak`
+- [ ] DirDuo is in the application menu and opens.
+- [ ] Coming from Linopus: `flatpak uninstall --user com.monroeworld.Linopus`. Directory Duo opens with your old toolbars, favorites, theme and labels.
 
 ## Look
 
-- [ ] Toolbar Theme button cycles Follow Desktop, Linopus Light, Linopus Dark, Workbench. Colors change everywhere (lists, menus, dialogs).
-- [ ] In Linopus Dark the toolbar and file icons stay visible.
+- [ ] Toolbar Theme button cycles Follow Desktop, DirDuo Light, DirDuo Dark, Workbench. Colors change everywhere (lists, menus, dialogs).
+- [ ] In DirDuo Dark the toolbar and file icons stay visible.
 - [ ] Quit and reopen: the theme is the one you left.
 - [ ] SOURCE and DEST each have a colored edge; Lock Dest changes the DEST color.
 
@@ -38,7 +39,7 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Middle-click the Home button in a folder; go elsewhere; click Home: back in that folder (in either display). Right-click Home > Reset.
 - [ ] Network button on the drives bar: your Windows/Samba machines show up. Open a share, sign in, copy both ways.
 - [ ] Network arrow > Add Server...: add your NAS (SFTP or SMB). It appears in the arrow menu, Go > Network and Servers, and the tree's Network group. Manage Servers... edits and removes.
-- [ ] Customize a toolbar, add a button, New Script; select some files and click it: the output window lists them. Try `# linopus: terminal`, and a script that fails (`exit 1`).
+- [ ] Customize a toolbar, add a button, New Script; select some files and click it: the output window lists them. Try `# dirduo: terminal`, and a script that fails (`exit 1`).
 - [ ] Right-click a ROM or a text file > Open With: your apps (Flatpak ones too) are listed with icons. Other Application...: tick Always use; double-clicking the file now opens it there.
 - [ ] F3 viewer: an MP3 shows its tags and Play; it plays, the bar moves. Arrow to another file: it stops. A 7z or RAR lists what is inside.
 - [ ] Right-click a screenshot > View: arrows step through the folder, F for full screen, the wheel zooms, Esc closes.
@@ -73,8 +74,8 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 ## Newer things (quick)
 
 - [ ] View > Text and Icon Size > Larger: everything readable from arm's length; back to Normal.
-- [ ] With Linopus open, start it again from the application menu: no second copy; the open one comes to the front. In Konsole: `flatpak run com.monroeworld.Linopus --tab ~/Downloads` opens a tab in it.
-- [ ] In Steam, a game's Browse Local Files (or Firefox's Show in Folder) opens in Linopus if it is the default file manager (System Settings > Default Applications).
+- [ ] With DirDuo open, start it again from the application menu: no second copy; the open one comes to the front. In Konsole: `flatpak run com.monroeworld.DirDuo --tab ~/Downloads` opens a tab in it.
+- [ ] In Steam, a game's Browse Local Files (or Firefox's Show in Folder) opens in DirDuo if it is the default file manager (System Settings > Default Applications).
 - [ ] In a big ROM folder, type a few letters of a game: it jumps there; Enter opens it. Type `>Set VIEW=icons` and Enter. Type `/sdcard` and Enter.
 - [ ] ROMs on internal storage on one side, the SD card's ROMs on the other: Edit > Select by Comparing > Newer Here, or Not There selects what the card is missing.
 - [ ] Copy something to the SD card, then Ctrl+Z: the copy goes (to the SD card's trash). Trash a file, Ctrl+Z: it is back. Tools > File Log shows both.
@@ -97,7 +98,7 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] A folder of phone or camera photos: Pictures > Date Taken and Camera fill in; Group By > Date Taken.
 - [ ] Select a few Steam screenshots, Tools > Convert Images: JPEG, Width 1280, Destination; Convert. The JPEGs land in the other display.
 - [ ] Right-click a few files > Label > Green: their names turn green. Alt+4 gives them four stars. Right-click a column header > Labels and Tags > Rating and Label. Group By > Label.
-- [ ] Ctrl+Shift+T on two files: add the tag `demo`, a description, OK. Open the same folder in Dolphin: the tags and stars are there too. Copy one to the SD card: in Linopus it keeps them.
+- [ ] Ctrl+Shift+T on two files: add the tag `demo`, a description, OK. Open the same folder in Dolphin: the tags and stars are there too. Copy one to the SD card: in DirDuo it keeps them.
 - [ ] Ctrl+Shift+P, `Select TAG=demo`: both are selected. Ctrl+Z undoes the last label change.
 - [ ] Right-click a big file > Checksums > SHA-256...: the window works it out with a progress bar; Save List. Select the .sha256 file it made and right-click > Verify Checksums: all OK.
 - [ ] Right-click the column header > Checksums > MD5: it fills in for each file.

@@ -1,12 +1,12 @@
 [Desktop Entry]
 Type=Application
-Name=Linopus
+Name=Directory Duo
 GenericName=File Manager
 Comment=Source and destination file manager
-Exec=linopus %U
-Icon=com.monroeworld.Linopus
+Exec=dirduo %U
+Icon=com.monroeworld.DirDuo
 Terminal=false
 Categories=Qt;KDE;System;FileTools;FileManager;
 MimeType=inode/directory;
-Keywords=files;folders;file manager;opus;dual pane;
-StartupWMClass=linopus
+Keywords=files;folders;file manager;dirduo;directory duo;dual pane;two pane;
+StartupWMClass=dirduo

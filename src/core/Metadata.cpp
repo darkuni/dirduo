@@ -14,7 +14,7 @@
 #include <cmath>
 #include <mutex>
 
-#ifdef LINOPUS_HAVE_TAGLIB
+#ifdef DIRDUO_HAVE_TAGLIB
 #include <taglib/audioproperties.h>
 #include <taglib/fileref.h>
 #include <taglib/tag.h>
@@ -22,7 +22,7 @@
 #include <taglib/tstring.h>
 #endif
 
-#ifdef LINOPUS_HAVE_EXIV2
+#ifdef DIRDUO_HAVE_EXIV2
 #include <exiv2/exiv2.hpp>
 #endif
 
@@ -131,7 +131,7 @@ const QSet<QString> &imageExtensions()
     return s;
 }
 
-#ifdef LINOPUS_HAVE_TAGLIB
+#ifdef DIRDUO_HAVE_TAGLIB
 QString qs(const TagLib::String &s)
 {
     return QString::fromUtf8(s.toCString(true)).trimmed();
@@ -170,7 +170,7 @@ void readTagLib(const QString &path, MediaInfo &info)
 }
 #endif
 
-#ifdef LINOPUS_HAVE_EXIV2
+#ifdef DIRDUO_HAVE_EXIV2
 void readExiv2(const QString &path, MediaInfo &info)
 {
     static std::once_flag once;
@@ -252,7 +252,7 @@ MediaInfo::Kind kindFor(const QString &name)
 
 bool haveTagLib()
 {
-#ifdef LINOPUS_HAVE_TAGLIB
+#ifdef DIRDUO_HAVE_TAGLIB
     return true;
 #else
     return false;
@@ -261,7 +261,7 @@ bool haveTagLib()
 
 bool haveExiv2()
 {
-#ifdef LINOPUS_HAVE_EXIV2
+#ifdef DIRDUO_HAVE_EXIV2
     return true;
 #else
     return false;
@@ -308,13 +308,13 @@ MediaInfo read(const QString &path)
         const QString ext = FileKind::extensionOf(path);
         if (ext == QLatin1String("sid") || ext == QLatin1String("psid"))
             return readSid(path);
-#ifdef LINOPUS_HAVE_TAGLIB
+#ifdef DIRDUO_HAVE_TAGLIB
         readTagLib(path, info);
 #endif
         break;
     }
     case MediaInfo::Kind::Video:
-#ifdef LINOPUS_HAVE_TAGLIB
+#ifdef DIRDUO_HAVE_TAGLIB
         readTagLib(path, info); // MP4 and friends: length, title
 #endif
         break;
@@ -328,7 +328,7 @@ MediaInfo read(const QString &path)
             info.width = size.width();
             info.height = size.height();
         }
-#ifdef LINOPUS_HAVE_EXIV2
+#ifdef DIRDUO_HAVE_EXIV2
         readExiv2(path, info);
 #endif
         break;
@@ -452,7 +452,7 @@ bool writableImage(const QString &ext)
     return s.contains(ext);
 }
 
-#ifdef LINOPUS_HAVE_TAGLIB
+#ifdef DIRDUO_HAVE_TAGLIB
 TagLib::String ts(const QString &s)
 {
     return TagLib::String(s.toStdString(), TagLib::String::UTF8);
@@ -497,7 +497,7 @@ bool writeTagLib(const QString &path, const MediaEdit &e, QString *error)
 }
 #endif
 
-#ifdef LINOPUS_HAVE_EXIV2
+#ifdef DIRDUO_HAVE_EXIV2
 bool writeExiv2(const QString &path, const MediaEdit &e, QString *error)
 {
     try {
@@ -541,11 +541,11 @@ bool writeExiv2(const QString &path, const MediaEdit &e, QString *error)
 bool canWrite(const QString &path)
 {
     const QString ext = FileKind::extensionOf(path);
-#ifdef LINOPUS_HAVE_TAGLIB
+#ifdef DIRDUO_HAVE_TAGLIB
     if (writableAudio(ext))
         return true;
 #endif
-#ifdef LINOPUS_HAVE_EXIV2
+#ifdef DIRDUO_HAVE_EXIV2
     if (writableImage(ext))
         return true;
 #endif
@@ -561,11 +561,11 @@ bool write(const QString &path, const MediaEdit &e, QString *error)
             *error = QStringLiteral("tags cannot be written to this kind of file");
         return false;
     }
-#ifdef LINOPUS_HAVE_TAGLIB
+#ifdef DIRDUO_HAVE_TAGLIB
     if (writableAudio(ext))
         return writeTagLib(path, e, error);
 #endif
-#ifdef LINOPUS_HAVE_EXIV2
+#ifdef DIRDUO_HAVE_EXIV2
     if (writableImage(ext))
         return writeExiv2(path, e, error);
 #endif

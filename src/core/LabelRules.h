@@ -6,7 +6,7 @@
 #include <QString>
 
 // Labels by wildcard, Opus style: "*.mp3" in green, "TODO*" bold red.
-// The first matching rule wins. Kept in ~/.config/linopus/labels.ini:
+// The first matching rule wins. Kept in ~/.config/dirduo/labels.ini:
 //
 //   [1]
 //   pattern=*.d64;*.d81
@@ -35,7 +35,7 @@ private:
 class LabelRules
 {
 public:
-    // file empty means ~/.config/linopus/labels.ini
+    // file empty means ~/.config/dirduo/labels.ini
     explicit LabelRules(const QString &file = {});
 
     void load();

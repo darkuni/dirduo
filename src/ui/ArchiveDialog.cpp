@@ -20,7 +20,7 @@ namespace {
 
 QSettings settings()
 {
-    return QSettings(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+    return QSettings(Paths::configFile(QStringLiteral("dirduo.ini")), QSettings::IniFormat);
 }
 
 QString quoted(const QString &s)

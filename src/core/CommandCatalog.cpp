@@ -44,7 +44,7 @@ QList<CommandInfo> buildCommands()
                      QStringLiteral("Server GO=NAS")};
     c << CommandInfo{QStringLiteral("OpenWith"), QStringLiteral("Open the selected files with an application"),
                      {arg("APP=", {}, "The application: its name (Kate) or desktop file (org.kde.kate.desktop); asks when left out"),
-                      arg("DEFAULT", {}, "Also make it Linopus's default for this type of file"),
+                      arg("DEFAULT", {}, "Also make it DirDuo's default for this type of file"),
                       arg("FILE=", {}, "What to open instead of the selection")},
                      QStringLiteral("OpenWith APP=Kate")};
     c << CommandInfo{QStringLiteral("Checksum"), QStringLiteral("CRC32, MD5, SHA-1 or SHA-256 of the selection (folders walked), to copy or save as a list; or check files against .md5, .sha1, .sha256 and .sfv lists"),
@@ -483,7 +483,7 @@ QList<ConditionInfo> buildConditions()
         c("groupby", {QStringLiteral("none"), QStringLiteral("type"), QStringLiteral("name"), QStringLiteral("size"), QStringLiteral("modified"), QStringLiteral("extension"), QStringLiteral("folder"), QStringLiteral("artist"), QStringLiteral("album"), QStringLiteral("genre"), QStringLiteral("year"), QStringLiteral("camera"), QStringLiteral("taken")},
           "What the list is grouped by"),
         c("treemode", {QStringLiteral("off"), QStringLiteral("shared"), QStringLiteral("separate")}, "Which folder tree is showing"),
-        c("theme", {}, "The theme, by name (spaces removed, for example linopusdark)"),
+        c("theme", {}, "The theme, by name (spaces removed, for example dirduodark)"),
     };
 }
 

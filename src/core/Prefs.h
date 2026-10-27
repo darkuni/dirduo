@@ -4,7 +4,7 @@
 #include <QString>
 
 // General settings read often (the status line, copies, the terminal):
-// kept in memory, saved to linopus.ini, changed() when they change.
+// kept in memory, saved to dirduo.ini, changed() when they change.
 class Prefs : public QObject
 {
     Q_OBJECT

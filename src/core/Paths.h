@@ -2,9 +2,9 @@
 
 #include <QString>
 
-// Where Linopus keeps its files. Inside a Flatpak the XDG variables point into
+// Where DirDuo keeps its files. Inside a Flatpak the XDG variables point into
 // ~/.var/app/<id>/, so these resolve against the real home directory instead:
-// the spec keeps config portable in ~/.config/linopus and the trash must be the
+// the spec keeps config portable in ~/.config/dirduo and the trash must be the
 // one every other file manager on the machine uses.
 namespace Paths {
 
@@ -20,8 +20,14 @@ QString userDataHome();
 // cache lives in its thumbnails folder.
 QString userCacheHome();
 
-// ~/.config/linopus, created on demand.
+// ~/.config/dirduo, created on demand.
 QString configDir();
+
+// The program was called Linopus before: its settings (~/.config/linopus,
+// linopus.ini) and data (~/.local/share/linopus) are copied over once, the
+// first time DirDuo starts without settings of its own. The old folders are
+// left as they were. True when something was copied.
+bool migrateFromLinopus();
 
 // Full path of a file inside configDir().
 QString configFile(const QString &name);

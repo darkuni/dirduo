@@ -13,11 +13,11 @@
 // avoid the standard root directories, and user aliases that collide with
 // something in "/" are refused when they are defined.
 //
-// User aliases live in ~/.config/linopus/aliases.ini and override built-ins.
+// User aliases live in ~/.config/dirduo/aliases.ini and override built-ins.
 class AliasManager
 {
 public:
-    // configFile empty means ~/.config/linopus/aliases.ini.
+    // configFile empty means ~/.config/dirduo/aliases.ini.
     explicit AliasManager(const QString &configFile = {});
 
     void load();

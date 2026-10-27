@@ -1,6 +1,6 @@
 // Builds a lister over a sample folder tree, drives a few commands, and saves
 // a PNG of the window at each step. Lets the UI be checked without a desktop:
-//   QT_QPA_PLATFORM=offscreen ./linopus_snapshot out-dir
+//   QT_QPA_PLATFORM=offscreen ./dirduo_snapshot out-dir
 
 #include "core/AliasManager.h"
 #include "core/Collections.h"
@@ -30,7 +30,7 @@
 #include "ui/ListerWindow.h"
 #include "ui/ProgressWindow.h"
 #include "ui/Style.h"
-#ifdef LINOPUS_HAVE_KIO
+#ifdef DIRDUO_HAVE_KIO
 #include "kio/KioBackend.h"
 #endif
 
@@ -86,7 +86,7 @@ int main(int argc, char *argv[])
     QDir().mkpath(root + QStringLiteral("/Emulation/roms/c64"));
     QDir().mkpath(root + QStringLiteral("/Backup"));
 
-#ifdef LINOPUS_HAVE_KIO
+#ifdef DIRDUO_HAVE_KIO
     KioBackend kio;
 #endif
     AppContext context;
@@ -199,7 +199,7 @@ int main(int argc, char *argv[])
     writeFile(root + QStringLiteral("/Emulation/emulators.tar.gz"), 3400000);
     writeFile(root + QStringLiteral("/Documents/Budget 2026.ods"), 40000);
     writeFile(root + QStringLiteral("/Documents/backup-old.zip"), 900000);
-    writeFile(root + QStringLiteral("/Documents/linopus.cpp"), 30000);
+    writeFile(root + QStringLiteral("/Documents/dirduo.cpp"), 30000);
     writeFile(root + QStringLiteral("/Pictures/IMG0003.JPG"), 2700000);
     writeFile(root + QStringLiteral("/Pictures/IMG0004.png"), 900000);
     LabelRule star;
@@ -212,7 +212,7 @@ int main(int argc, char *argv[])
     old.italic = true;
     Style::instance()->setLabels({star, old});
 
-    w->runCommand(QStringLiteral("Toolbar NAME=buttons PLACE=top\nSet DUAL=vertical\nSet HIDDEN=off\nSet THEME=\"Linopus Light\"\nSet TREE=shared"));
+    w->runCommand(QStringLiteral("Toolbar NAME=buttons PLACE=top\nSet DUAL=vertical\nSet HIDDEN=off\nSet THEME=\"DirDuo Light\"\nSet TREE=shared"));
     w->sharedTree()->setDrivesForTesting(drives);
     w->display(0)->currentTab()->navigate(root);
     w->display(1)->currentTab()->navigate(root + QStringLiteral("/Music"));
@@ -221,7 +221,7 @@ int main(int argc, char *argv[])
     QTest::qWait(1200);
     shot(w, out, QStringLiteral("12-light-tree-grouped-sizes"));
 
-    w->runCommand(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet FOLDERSIZES=off\nSet GROUPBY=none\nSet FLATVIEW=grouped"));
+    w->runCommand(QStringLiteral("Set THEME=\"DirDuo Dark\"\nSet FOLDERSIZES=off\nSet GROUPBY=none\nSet FLATVIEW=grouped"));
     QTest::qWait(1200);
     shot(w, out, QStringLiteral("13-dark-flat-grouped"));
     w->runCommand(QStringLiteral("Set FILTER=*.mp3;*.d64"));
@@ -239,12 +239,12 @@ int main(int argc, char *argv[])
     QTest::qWait(500);
     shot(w, out, QStringLiteral("15-workbench-separate-trees"));
 
-    w->runCommand(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet TREE=off\nSet CHECKBOXES=off"));
+    w->runCommand(QStringLiteral("Set THEME=\"DirDuo Dark\"\nSet TREE=off\nSet CHECKBOXES=off"));
     w->display(0)->currentTab()->navigate(root + QStringLiteral("/Pictures"));
     QTest::qWait(800);
     shot(w, out, QStringLiteral("16-dark-pictures-auto-icons"));
     // Grouped by type, all folded but the first group.
-    w->runCommand(QStringLiteral("Set THEME=\"Linopus Light\"\nSet TREE=shared"));
+    w->runCommand(QStringLiteral("Set THEME=\"DirDuo Light\"\nSet TREE=shared"));
     w->sharedTree()->setDrivesForTesting(drives);
     w->display(0)->currentTab()->navigate(root);
     QTest::qWait(300);
@@ -371,7 +371,7 @@ int main(int argc, char *argv[])
 
     // Find: every disk image under the deck, results as a collection in a tab.
     {
-        w->runCommand(QStringLiteral("Set DUAL=vertical\nSet VIEW=details\nSet THEME=\"Linopus Dark\""));
+        w->runCommand(QStringLiteral("Set DUAL=vertical\nSet VIEW=details\nSet THEME=\"DirDuo Dark\""));
         w->display(0)->currentTab()->navigate(root);
         QTest::qWait(300);
         w->runCommand(QStringLiteral("Find NAME=*.d64;*.adf IN=\"%1\" RUN").arg(root));
@@ -379,7 +379,7 @@ int main(int argc, char *argv[])
             QTest::qWait(100);
         QTest::qWait(600);
         shot(w, out, QStringLiteral("24-find-results-collection"));
-        w->runCommand(QStringLiteral("Set THEME=\"Linopus Light\""));
+        w->runCommand(QStringLiteral("Set THEME=\"DirDuo Light\""));
     }
 
     // Preferences: the theme editor and the labels page.
@@ -417,7 +417,7 @@ int main(int argc, char *argv[])
                       "\xBA \xB0\xB1\xB2\xDB Tombstone BBS \xDB\xB2\xB1\xB0 \xBA\r\n"
                       "\xC8\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBC\r\n");
         nfo.close();
-        w->runCommand(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet DUAL=vertical\nSet VIEWER=on\nSet VIEWERPOS=right"));
+        w->runCommand(QStringLiteral("Set THEME=\"DirDuo Dark\"\nSet DUAL=vertical\nSet VIEWER=on\nSet VIEWERPOS=right"));
         w->display(0)->currentTab()->navigate(root + QStringLiteral("/Pictures"));
         QTest::qWait(500);
         w->runCommand(QStringLiteral("Set VIEW=details"));
@@ -430,7 +430,7 @@ int main(int argc, char *argv[])
         w->display(0)->currentTab()->selectPaths({root + QStringLiteral("/Documents/DUD-1994.nfo")});
         QTest::qWait(900);
         shot(w, out, QStringLiteral("28-viewer-nfo"));
-        w->runCommand(QStringLiteral("Set VIEWER=off\nSet THEME=\"Linopus Light\""));
+        w->runCommand(QStringLiteral("Set VIEWER=off\nSet THEME=\"DirDuo Light\""));
     }
 
     // Convert Images: screenshots going to JPEG at 1280 wide.
@@ -497,13 +497,13 @@ int main(int argc, char *argv[])
         tab->selectPaths({sids + QStringLiteral("/Last_Ninja.sid")});
         QTest::qWait(900);
         shot(w, out, QStringLiteral("30-music-columns-sid"));
-        w->runCommand(QStringLiteral("Set GROUPBY=none\nSet VIEWER=off\nSet THEME=\"Linopus Light\"\nSet DUAL=vertical"));
+        w->runCommand(QStringLiteral("Set GROUPBY=none\nSet VIEWER=off\nSet THEME=\"DirDuo Light\"\nSet DUAL=vertical"));
     }
 
-#ifdef LINOPUS_HAVE_KIO
+#ifdef DIRDUO_HAVE_KIO
     // Servers and archives, when run through tests/remote/run-remote-tests.sh.
-    const QString ftp = qEnvironmentVariable("LINOPUS_TEST_FTP");
-    const QString ftpDir = qEnvironmentVariable("LINOPUS_TEST_FTP_DIR");
+    const QString ftp = qEnvironmentVariable("DIRDUO_TEST_FTP");
+    const QString ftpDir = qEnvironmentVariable("DIRDUO_TEST_FTP_DIR");
     if (!ftp.isEmpty()) {
         writeFile(ftpDir + QStringLiteral("/pub/podcasts/Passenger Seat Radio 101.mp3"), 3 * 1024 * 1024);
         writeFile(ftpDir + QStringLiteral("/pub/podcasts/Passenger Seat Radio 102.mp3"), 3 * 1024 * 1024);
@@ -581,7 +581,7 @@ int main(int argc, char *argv[])
                                  item("Thumbs", "view-preview", "Set VIEW=thumbnails")});
         store.setStyle(views, QStringLiteral("icons"), 0);
         QTest::qWait(200);
-        w->runCommand(QStringLiteral("Set THEME=\"Linopus Dark\"\nSet DUAL=horizontal\nToolbar NAME=buttons PLACE=between\n"
+        w->runCommand(QStringLiteral("Set THEME=\"DirDuo Dark\"\nSet DUAL=horizontal\nToolbar NAME=buttons PLACE=between\n"
                                      "Toolbar NAME=drives PLACE=between\nToolbar NAME=work PLACE=between SAMEROW\n"
                                      "Toolbar NAME=views PLACE=menubar"));
         QTest::qWait(500);

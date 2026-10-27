@@ -1,6 +1,6 @@
 // Remote locations through KIO, against real servers on localhost.
 // Run through tests/remote/run-remote-tests.sh, which starts an FTP server and
-// an SSH server and sets the LINOPUS_TEST_* variables. Without them every
+// an SSH server and sets the DIRDUO_TEST_* variables. Without them every
 // test is skipped.
 
 #include "core/AliasManager.h"
@@ -64,10 +64,10 @@ class TestRemote : public QObject
 private Q_SLOTS:
     void initTestCase()
     {
-        ftp = qEnvironmentVariable("LINOPUS_TEST_FTP");
-        ftpDir = qEnvironmentVariable("LINOPUS_TEST_FTP_DIR");
-        sftp = qEnvironmentVariable("LINOPUS_TEST_SFTP");
-        sftpDir = qEnvironmentVariable("LINOPUS_TEST_SFTP_DIR");
+        ftp = qEnvironmentVariable("DIRDUO_TEST_FTP");
+        ftpDir = qEnvironmentVariable("DIRDUO_TEST_FTP_DIR");
+        sftp = qEnvironmentVariable("DIRDUO_TEST_SFTP");
+        sftpDir = qEnvironmentVariable("DIRDUO_TEST_SFTP_DIR");
         if (ftp.isEmpty() || sftp.isEmpty())
             QSKIP("No test servers; run tests/remote/run-remote-tests.sh");
         QVERIFY(m_local.isValid());

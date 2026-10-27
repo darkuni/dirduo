@@ -5,7 +5,7 @@
 #include <QSaveFile>
 #include <QtEndian>
 
-#ifdef LINOPUS_HAVE_ZLIB
+#ifdef DIRDUO_HAVE_ZLIB
 #include <zlib.h>
 #endif
 
@@ -43,7 +43,7 @@ void dosTime(const QDateTime &dt, quint16 &time, quint16 &date)
     date = quint16(((qMax(1980, d.year()) - 1980) << 9) | (d.month() << 5) | d.day());
 }
 
-#ifdef LINOPUS_HAVE_ZLIB
+#ifdef DIRDUO_HAVE_ZLIB
 QByteArray inflateRaw(const QByteArray &raw, quint32 size, bool *ok)
 {
     QByteArray out(qsizetype(size), Qt::Uninitialized);
@@ -196,7 +196,7 @@ bool read(const QString &file, QList<Entry> &entries, QString *error)
         if (method == 0) {
             data = raw;
         } else if (method == 8) {
-#ifdef LINOPUS_HAVE_ZLIB
+#ifdef DIRDUO_HAVE_ZLIB
             bool ok = false;
             data = inflateRaw(raw, usize, &ok);
             if (!ok)
@@ -205,7 +205,7 @@ bool read(const QString &file, QList<Entry> &entries, QString *error)
             return fail(QStringLiteral("%1 is compressed; this build reads only uncompressed zips.").arg(name));
 #endif
         } else {
-            return fail(QStringLiteral("%1 uses a compression method Linopus cannot read.").arg(name));
+            return fail(QStringLiteral("%1 uses a compression method DirDuo cannot read.").arg(name));
         }
         if (crc32(data) != crc)
             return fail(QStringLiteral("%1 is damaged (checksum mismatch).").arg(name));

@@ -40,7 +40,7 @@ public:
     bool isConverting() const { return m_busy; }
     QList<ImageResult> results() const { return m_results; }
 
-    // The last options used, kept in linopus.ini.
+    // The last options used, kept in dirduo.ini.
     static ImageOptions savedOptions();
     static void saveOptions(const ImageOptions &o);
 

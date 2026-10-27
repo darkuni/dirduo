@@ -8,12 +8,12 @@
 #include <QTemporaryDir>
 #include <QTest>
 
-#ifdef LINOPUS_HAVE_TAGLIB
+#ifdef DIRDUO_HAVE_TAGLIB
 #include <taglib/fileref.h>
 #include <taglib/tag.h>
 #include <taglib/tpropertymap.h>
 #endif
-#ifdef LINOPUS_HAVE_EXIV2
+#ifdef DIRDUO_HAVE_EXIV2
 #include <exiv2/exiv2.hpp>
 #endif
 
@@ -147,7 +147,7 @@ private Q_SLOTS:
 
     void musicTags()
     {
-#ifndef LINOPUS_HAVE_TAGLIB
+#ifndef DIRDUO_HAVE_TAGLIB
         QSKIP("Built without TagLib");
 #else
         QTemporaryDir dir;
@@ -186,7 +186,7 @@ private Q_SLOTS:
 
     void photoDetails()
     {
-#ifndef LINOPUS_HAVE_EXIV2
+#ifndef DIRDUO_HAVE_EXIV2
         QSKIP("Built without Exiv2");
 #else
         QTemporaryDir dir;
@@ -233,7 +233,7 @@ private Q_SLOTS:
 
     void writeMusic()
     {
-#ifndef LINOPUS_HAVE_TAGLIB
+#ifndef DIRDUO_HAVE_TAGLIB
         QSKIP("Built without TagLib");
 #else
         QTemporaryDir dir;
@@ -281,7 +281,7 @@ private Q_SLOTS:
 
     void writePhoto()
     {
-#ifndef LINOPUS_HAVE_EXIV2
+#ifndef DIRDUO_HAVE_EXIV2
         QSKIP("Built without Exiv2");
 #else
         QTemporaryDir dir;

@@ -106,7 +106,7 @@ ListerWindow::ListerWindow(AppContext &app, QWidget *parent)
     , m_split(new QSplitter(m_outer))
 {
     setAttribute(Qt::WA_DeleteOnClose);
-    setWindowIcon(QIcon::fromTheme(QStringLiteral(LINOPUS_APP_ID), QIcon::fromTheme(QStringLiteral("system-file-manager"))));
+    setWindowIcon(QIcon::fromTheme(QStringLiteral(DIRDUO_APP_ID), QIcon::fromTheme(QStringLiteral("system-file-manager"))));
     resize(1100, 680);
 
     for (int i = 0; i < 2; ++i) {
@@ -612,12 +612,12 @@ void ListerWindow::buildMenus()
     menuBar()->setCornerWidget(m_menuCorner, Qt::TopRightCorner);
     m_menuCorner->hide();
     QMenu *help = menuBar()->addMenu(QStringLiteral("&Help"));
-    QAction *about = help->addAction(QStringLiteral("About Linopus"));
+    QAction *about = help->addAction(QStringLiteral("About Directory Duo"));
     connect(about, &QAction::triggered, this, [this]() {
-        QMessageBox::about(this, QStringLiteral("About Linopus"),
-                           QStringLiteral("<b>Linopus %1</b><p>Build %2</p><p>A source and destination file manager for Linux.</p>"
+        QMessageBox::about(this, QStringLiteral("About Directory Duo"),
+                           QStringLiteral("<b>Directory Duo %1</b> (DirDuo)<p>Build %2</p><p>A source and destination file manager for Linux.</p>"
                                           "<p>Configuration: %3</p>")
-                               .arg(QStringLiteral(LINOPUS_VERSION), QStringLiteral(LINOPUS_BUILD_ID).toHtmlEscaped(),
+                               .arg(QStringLiteral(DIRDUO_VERSION), QStringLiteral(DIRDUO_BUILD_ID).toHtmlEscaped(),
                                     Paths::configDir().toHtmlEscaped()));
     });
 }
@@ -638,7 +638,7 @@ void ListerWindow::buildToolbar()
     connect(m_drives, &DrivesBar::commandTriggered, this, [this](const QString &cmd) { runCommand(cmd); });
     m_drives->setNetworkMenuProvider([this](QMenu *menu) { fillDynamicMenu(menu, QStringLiteral("servers")); });
     setupToolbarMenu(m_drives);
-    // Opus puts the drives between the displays; so does Linopus by default.
+    // Opus puts the drives between the displays; so does DirDuo by default.
     placeToolbar(m_drives, ToolbarPlace::Between);
 }
 
@@ -1312,7 +1312,7 @@ void ListerWindow::setTreeMode(TreeMode mode)
 void ListerWindow::updateTitle()
 {
     FolderTab *t = sourceTab();
-    setWindowTitle(t ? QStringLiteral("%1 - Linopus").arg(t->title()) : QStringLiteral("Linopus"));
+    setWindowTitle(t ? QStringLiteral("%1 - DirDuo").arg(t->title()) : QStringLiteral("DirDuo"));
 }
 
 void ListerWindow::syncViewActions()
@@ -2281,10 +2281,10 @@ void ListerWindow::openFile(const QString &path)
         if (RemoteBackend *backend = RemoteBackend::instance())
             backend->openFile(path);
         else
-            showError(QStringLiteral("Open"), QStringLiteral("Remote files need the KIO build of Linopus."));
+            showError(QStringLiteral("Open"), QStringLiteral("Remote files need the KIO build of DirDuo."));
         return;
     }
-    // Linopus's own default for the type first, then the desktop's.
+    // DirDuo's own default for the type first, then the desktop's.
     QString why;
     if (Apps::openWithDefault(path, &why))
         return;
@@ -2580,7 +2580,7 @@ bool ListerWindow::settings(const ParsedCommand &cmd, QString *error)
         QString file = cmd.value(QStringLiteral("BACKUP"));
         if (file.isEmpty() || file.compare(QLatin1String("ask"), Qt::CaseInsensitive) == 0) {
             const QString suggested = QDir(QDir::homePath())
-                                          .filePath(QStringLiteral("Linopus settings %1.zip").arg(QDate::currentDate().toString(Qt::ISODate)));
+                                          .filePath(QStringLiteral("DirDuo settings %1.zip").arg(QDate::currentDate().toString(Qt::ISODate)));
             file = QFileDialog::getSaveFileName(this, QStringLiteral("Back Up Settings"), suggested, zipFilter);
             if (file.isEmpty())
                 return fail(CommandEngine::kCanceled);

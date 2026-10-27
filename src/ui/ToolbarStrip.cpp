@@ -223,7 +223,7 @@ void ToolbarStrip::relayout()
             bar->setOrientation(side ? Qt::Vertical : Qt::Horizontal);
             // A bar with a spacer in it takes the rest of the line, so what
             // follows the spacer sits at the far end.
-            const bool fill = bar->property("linopusFill").toBool();
+            const bool fill = bar->property("dirduoFill").toBool();
             filled = filled || fill;
             box->addWidget(bar, fill ? 1 : 0);
         }

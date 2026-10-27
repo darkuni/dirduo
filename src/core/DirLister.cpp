@@ -135,7 +135,7 @@ void DirLister::openRemote(bool isRefresh)
 {
     RemoteBackend *backend = RemoteBackend::instance();
     if (!backend) {
-        Q_EMIT failed(m_path, QStringLiteral("Remote folders need the KIO build of Linopus."));
+        Q_EMIT failed(m_path, QStringLiteral("Remote folders need the KIO build of DirDuo."));
         return;
     }
     if (!m_remote) {

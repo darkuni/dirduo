@@ -102,13 +102,13 @@ int percentOf(qint64 done, qint64 total)
 
 bool ProgressWindow::closeWhenDoneDefault()
 {
-    QSettings s(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+    QSettings s(Paths::configFile(QStringLiteral("dirduo.ini")), QSettings::IniFormat);
     return s.value(QStringLiteral("Jobs/closeWhenDone"), true).toBool();
 }
 
 void ProgressWindow::setCloseWhenDoneDefault(bool on)
 {
-    QSettings s(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+    QSettings s(Paths::configFile(QStringLiteral("dirduo.ini")), QSettings::IniFormat);
     s.setValue(QStringLiteral("Jobs/closeWhenDone"), on);
 }
 
@@ -251,8 +251,8 @@ void ProgressWindow::refresh()
 
     // Percent in the title so it reads from the taskbar.
     const int pct = m_totalBar->maximum() > 0 ? m_totalBar->value() / 10 : 0;
-    setWindowTitle(s.isDone() ? QStringLiteral("%1 - Linopus").arg(stateText(s.state).chopped(1))
-                              : QStringLiteral("%1% %2 - Linopus").arg(pct).arg(verb(s.type)));
+    setWindowTitle(s.isDone() ? QStringLiteral("%1 - DirDuo").arg(stateText(s.state).chopped(1))
+                              : QStringLiteral("%1% %2 - DirDuo").arg(pct).arg(verb(s.type)));
 
     m_now->setVisible(s.state == JobState::Queued);
     m_pause->setVisible(!s.isDone());

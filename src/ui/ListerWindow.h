@@ -77,7 +77,7 @@ public:
     FolderTab *sourceTabForTesting() const { return sourceTab(); }
     // The file display's right-click menu (onItem: clicked on a file).
     void fillContextMenu(QMenu &menu, FileDisplay *d, bool onItem);
-    // Opens a file: Linopus's default app for its type, else the desktop's.
+    // Opens a file: DirDuo's default app for its type, else the desktop's.
     void openFile(const QString &path);
     bool isDual() const { return m_dual; }
 

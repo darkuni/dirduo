@@ -397,7 +397,7 @@ void ImageConvertDialog::startConvert()
 
 ImageOptions ImageConvertDialog::savedOptions()
 {
-    QSettings s(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+    QSettings s(Paths::configFile(QStringLiteral("dirduo.ini")), QSettings::IniFormat);
     s.beginGroup(QStringLiteral("ImageConvert"));
     ImageOptions o;
     o.format = s.value(QStringLiteral("format"), QStringLiteral("jpg")).toString();
@@ -416,7 +416,7 @@ ImageOptions ImageConvertDialog::savedOptions()
 
 void ImageConvertDialog::saveOptions(const ImageOptions &o)
 {
-    QSettings s(Paths::configFile(QStringLiteral("linopus.ini")), QSettings::IniFormat);
+    QSettings s(Paths::configFile(QStringLiteral("dirduo.ini")), QSettings::IniFormat);
     s.beginGroup(QStringLiteral("ImageConvert"));
     s.setValue(QStringLiteral("format"), o.format);
     s.setValue(QStringLiteral("quality"), o.quality);
