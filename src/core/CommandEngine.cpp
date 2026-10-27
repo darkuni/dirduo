@@ -9,6 +9,7 @@
 #include "core/FileTags.h"
 #include "core/Checksum.h"
 #include "core/SteamShortcut.h"
+#include "core/Scripting.h"
 #include "core/Prefs.h"
 #include "core/Collections.h"
 #include "core/FileOps.h"
@@ -105,7 +106,7 @@ QStringList CommandEngine::commandNames()
             QStringLiteral("Delete"), QStringLiteral("Duplicates"), QStringLiteral("Favorite"), QStringLiteral("Find"), QStringLiteral("Go"),
             QStringLiteral("Image"), QStringLiteral("Join"),
             QStringLiteral("Layout"), QStringLiteral("MakeLink"), QStringLiteral("Metadata"), QStringLiteral("Move"), QStringLiteral("OpenWith"), QStringLiteral("Print"),
-            QStringLiteral("Properties"), QStringLiteral("Rename"), QStringLiteral("Select"), QStringLiteral("Server"), QStringLiteral("Set"), QStringLiteral("SetAttr"), QStringLiteral("Settings"), QStringLiteral("Show"),
+            QStringLiteral("Properties"), QStringLiteral("Rename"), QStringLiteral("Script"), QStringLiteral("Select"), QStringLiteral("Server"), QStringLiteral("Set"), QStringLiteral("SetAttr"), QStringLiteral("Settings"), QStringLiteral("Show"),
             QStringLiteral("Split"), QStringLiteral("Steam"), QStringLiteral("Sync"), QStringLiteral("Tag"), QStringLiteral("Terminal"), QStringLiteral("Toolbar"), QStringLiteral("Undo")};
 }
 
@@ -261,6 +262,8 @@ bool CommandEngine::execute(const ParsedCommand &cmd, CommandContext &ctx, QStri
     if (cmd.is(QStringLiteral("Sync")) || cmd.is(QStringLiteral("Duplicates")) || cmd.is(QStringLiteral("Find"))
         || cmd.is(QStringLiteral("Favorite")) || cmd.is(QStringLiteral("Layout")) || cmd.is(QStringLiteral("Image")))
         return ctx.tool(cmd, error);
+    if (m_scripts && m_scripts->handles(cmd.name))
+        return m_scripts->runCommand(cmd, ctx, error);
     if (error)
         *error = QStringLiteral("Unknown command \"%1\".").arg(cmd.name);
     return false;

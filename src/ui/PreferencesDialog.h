@@ -13,6 +13,7 @@ class QCheckBox;
 class QComboBox;
 class QLabel;
 class QPlainTextEdit;
+class QTreeWidget;
 class StatusLine;
 class QLineEdit;
 class QListWidget;
@@ -69,6 +70,7 @@ public:
     // General and file types, for tests.
     QCheckBox *generalBox(const QString &key) const; // counts, selection, free, ask
     QPlainTextEdit *statusDefinitionEdit() const { return m_statusDef; }
+    QTreeWidget *scriptList() const { return m_scriptList; }
     QComboBox *terminalBox() const { return m_terminal; }
     QTableWidget *fileTypesTable() const { return m_fileTypes; }
 
@@ -91,6 +93,8 @@ private:
     QWidget *buildFormats();
     QWidget *buildToolbars();
     QWidget *buildStatusBar();
+    QWidget *buildScripts();
+    QTreeWidget *m_scriptList = nullptr;
     QPlainTextEdit *m_statusDef = nullptr;
     StatusLine *m_statusPreview = nullptr;
     QLabel *m_statusError = nullptr;

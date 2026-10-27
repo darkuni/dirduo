@@ -12,7 +12,7 @@ endif()
 
 set(DIRDUO_APP_ID "com.monroeworld.DirDuo")
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Concurrent Network)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Concurrent Network Qml)
 
 # KIO adds servers (SFTP, FTP, SMB, WebDAV...) and archives as folders. Without
 # it DirDuo still builds and handles local files.
@@ -87,6 +87,7 @@ add_library(dirduo_core STATIC
     src/core/Checksum.cpp
     src/core/StatusFormat.cpp
     src/core/SteamShortcut.cpp
+    src/core/Scripting.cpp
     src/core/Metadata.cpp
     src/core/Thumbnails.cpp
     src/core/History.cpp
@@ -102,7 +103,7 @@ add_library(dirduo_core STATIC
     src/core/RemoteBackend.h
 )
 target_include_directories(dirduo_core PUBLIC src)
-target_link_libraries(dirduo_core PUBLIC Qt6::Core Qt6::Gui Qt6::Concurrent)
+target_link_libraries(dirduo_core PUBLIC Qt6::Core Qt6::Gui Qt6::Concurrent Qt6::Qml)
 find_package(ZLIB QUIET)
 if(ZLIB_FOUND)
     target_link_libraries(dirduo_core PRIVATE ZLIB::ZLIB)
@@ -233,7 +234,7 @@ endif()
 if(DIRDUO_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS Test)
     enable_testing()
-    foreach(t aliases commandparser fileops trash jobmanager commandengine drives location listing condition rename foldersync find imageconvert metadata thumbnails history selectrules archive attributes apps filetags checksum statusformat)
+    foreach(t aliases commandparser fileops trash jobmanager commandengine drives location listing condition rename foldersync find imageconvert metadata thumbnails history selectrules archive attributes apps filetags checksum statusformat scripting)
         add_executable(tst_${t} tests/tst_${t}.cpp)
         target_link_libraries(tst_${t} PRIVATE dirduo_core Qt6::Test)
         add_test(NAME ${t} COMMAND tst_${t})

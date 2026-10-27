@@ -20,6 +20,8 @@ class ToolbarStore;
 
 // Application-wide services shared by every lister: aliases, the job queue,
 // the command engine, and the session.
+class ScriptHost;
+
 class AppContext : public QObject
 {
     Q_OBJECT
@@ -38,6 +40,7 @@ public:
     CommandEngine &engine() { return *m_engine; }
     QSettings &settings() { return *m_settings; }
     ToolbarStore &toolbars() { return *m_toolbars; }
+    ScriptHost &scripts() { return *m_scripts; }
 
     // Every file under ~/.config/dirduo in one zip, and back. Restoring
     // reloads aliases, toolbars, themes, labels and folder formats at once.
@@ -78,6 +81,7 @@ private:
 
     std::unique_ptr<QSettings> m_settings;
     std::unique_ptr<ToolbarStore> m_toolbars;
+    std::unique_ptr<ScriptHost> m_scripts;
     std::unique_ptr<AliasManager> m_aliases;
     std::unique_ptr<JobManager> m_jobs;
     std::unique_ptr<CommandEngine> m_engine;

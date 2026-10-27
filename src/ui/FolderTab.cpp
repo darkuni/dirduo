@@ -1,6 +1,7 @@
 #include "ui/FolderTab.h"
 #include "core/Prefs.h"
 #include "core/StatusFormat.h"
+#include "core/Scripting.h"
 #include "core/CommandCatalog.h"
 
 #include "core/Collections.h"
@@ -1243,6 +1244,11 @@ void FolderTab::showHeaderMenu(const QPoint &globalPos)
     QMenu *tagMenu = menu.addMenu(QIcon::fromTheme(QStringLiteral("tag")), QStringLiteral("Labels and Tags"));
     for (int c : {M::RatingColumn, M::LabelColumn, M::TagsColumn, M::DescriptionColumn})
         addColumn(tagMenu, c);
+    if (ScriptHost *scripts = ScriptHost::instance(); scripts && !scripts->columns().isEmpty()) {
+        QMenu *sm = menu.addMenu(QIcon::fromTheme(QStringLiteral("text-x-script")), QStringLiteral("Scripts"));
+        for (const ScriptColumnDef &d : scripts->columns())
+            addColumn(sm, M::ScriptColumn0 + d.slot);
+    }
     QMenu *sums = menu.addMenu(QIcon::fromTheme(QStringLiteral("document-encrypt")), QStringLiteral("Checksums"));
     for (int c : {M::Crc32Column, M::Md5Column, M::Sha1Column, M::Sha256Column})
         addColumn(sums, c);

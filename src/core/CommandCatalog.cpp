@@ -251,6 +251,12 @@ QList<CommandInfo> buildCommands()
                       arg("TRIM", {}, "No leading, trailing or doubled spaces"),
                       arg("PRESET=", {}, "Start from a saved preset")},
                      QStringLiteral("Rename OLDNAME=*.jpg NEWNAME=\"Holiday ###.jpg\"")};
+    c << CommandInfo{QStringLiteral("Script"), QStringLiteral("JavaScript scripts in ~/.config/dirduo/scripts: they add commands, columns and event handlers"),
+                     {arg("RELOAD", {}, "Load every script again (saving one does this by itself)"),
+                      arg("NEW=", {}, "Make a new script from the template and open it"),
+                      arg("EXAMPLES", {}, "Add the example scripts (ROM Region, Playlists, Recent Folders)"),
+                      arg("FOLDER", {}, "Open the scripts folder")},
+                     QStringLiteral("Script NEW=\"ROM tools\"")};
     c << CommandInfo{QStringLiteral("Select"), QStringLiteral("Change the selection"),
                      {arg("ALL", {}, "Select everything"), arg("NONE", {}, "Select nothing"),
                       arg("INVERT", {}, "Swap selected and unselected"),
@@ -308,7 +314,7 @@ QList<CommandInfo> buildCommands()
                       arg("RESTORE=", {QStringLiteral("ask")}, "Put back settings from a backup zip"),
                       arg("QUIET", {}, "Restore without asking first"),
                       arg("PAGE=", {QStringLiteral("appearance"), QStringLiteral("theme"), QStringLiteral("labels"), QStringLiteral("aliases"),
-                                    QStringLiteral("formats"), QStringLiteral("toolbars"), QStringLiteral("filetypes"), QStringLiteral("statusbar")},
+                                    QStringLiteral("formats"), QStringLiteral("toolbars"), QStringLiteral("filetypes"), QStringLiteral("statusbar"), QStringLiteral("scripts")},
                           "Open Preferences on this page (no arguments: Preferences)")},
                      QStringLiteral("Settings PAGE=theme")};
     c << CommandInfo{QStringLiteral("Sync"), QStringLiteral("Compare two folders and make them match"),
@@ -497,9 +503,31 @@ const QList<CommandInfo> &commands()
     return list;
 }
 
+namespace {
+QList<CommandInfo> &scriptList()
+{
+    static QList<CommandInfo> list;
+    return list;
+}
+} // namespace
+
+void setScriptCommands(const QList<CommandInfo> &list)
+{
+    scriptList() = list;
+}
+
+const QList<CommandInfo> &scriptCommands()
+{
+    return scriptList();
+}
+
 const CommandInfo *find(const QString &name)
 {
     for (const CommandInfo &c : commands()) {
+        if (c.name.compare(name, Qt::CaseInsensitive) == 0)
+            return &c;
+    }
+    for (const CommandInfo &c : scriptList()) {
         if (c.name.compare(name, Qt::CaseInsensitive) == 0)
             return &c;
     }
@@ -557,7 +585,7 @@ QStringList complete(const QString &line)
     const QString head = line.left(lastSpace + 1);
     QStringList out;
     if (lastSpace < 0) {
-        for (const CommandInfo &c : commands()) {
+        for (const CommandInfo &c : commands() + scriptList()) {
             if (c.name.startsWith(word, Qt::CaseInsensitive))
                 out << c.name;
         }

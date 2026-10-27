@@ -147,6 +147,8 @@ public:
     // Scripts still running (tests wait on them).
     QList<ScriptRunner *> runningScripts() const;
     bool execute(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
+    // Scripts: commands the engine does not know go here.
+    void setScripts(class ScriptHost *host) { m_scripts = host; }
 
     // Shared with drag and drop and paste. Return the job id, or 0.
     int copyItems(const QStringList &sources, const QString &destDir, bool move,
@@ -213,6 +215,7 @@ private:
     bool cmdServer(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool runScript(const QString &script, CommandContext &ctx);
     bool cmdOpenWith(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
+    class ScriptHost *m_scripts = nullptr;
     bool cmdClean(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool cmdSteam(const ParsedCommand &cmd, CommandContext &ctx, QString *error);
     bool cmdSplitJoin(const ParsedCommand &cmd, CommandContext &ctx, QString *error);

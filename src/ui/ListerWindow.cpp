@@ -19,6 +19,7 @@
 #include "ui/ChecksumDialog.h"
 #include "core/Checksum.h"
 #include "core/SteamShortcut.h"
+#include "core/Scripting.h"
 #include "core/FileTags.h"
 #include "ui/ImageViewer.h"
 #include "ui/OpenWithDialog.h"
@@ -132,6 +133,13 @@ ListerWindow::ListerWindow(AppContext &app, QWidget *parent)
                 m_drives->setActivePath(now);
             if (m_sharedTree && from == sourceDisplay())
                 m_sharedTree->setPath(now);
+            if (!now.isEmpty() && now != before) {
+                QVariantMap e;
+                e.insert(QStringLiteral("path"), now);
+                e.insert(QStringLiteral("display"), i);
+                e.insert(QStringLiteral("source"), from == sourceDisplay());
+                m_app.scripts().fire(QStringLiteral("folderOpened"), e, this);
+            }
         });
         connect(d, &FileDisplay::navigateRequested, this, &ListerWindow::onNavigateRequested);
         connect(d, &FileDisplay::renameRequested, this, &ListerWindow::onRenameRequested);
@@ -568,6 +576,11 @@ void ListerWindow::buildMenus()
     tools->addAction(commandAction(QStringLiteral("Split File..."), QStringLiteral("Split"), {}, QStringLiteral("split")));
     tools->addAction(commandAction(QStringLiteral("Join Pieces"), QStringLiteral("Join"), {}, QStringLiteral("merge")));
     tools->addAction(commandAction(QStringLiteral("Clean Junk Files..."), QStringLiteral("Clean"), {}, QStringLiteral("edit-clear")));
+    QMenu *scripts = tools->addMenu(QIcon::fromTheme(QStringLiteral("text-x-script")), QStringLiteral("Scripts"));
+    scripts->addAction(commandAction(QStringLiteral("Manage Scripts..."), QStringLiteral("Settings PAGE=scripts")));
+    scripts->addAction(commandAction(QStringLiteral("New Script..."), QStringLiteral("Script NEW={dlgstring|Name of the new script:}")));
+    scripts->addAction(commandAction(QStringLiteral("Open Scripts Folder"), QStringLiteral("Script FOLDER")));
+    scripts->addAction(commandAction(QStringLiteral("Reload Scripts"), QStringLiteral("Script RELOAD")));
     tools->addAction(commandAction(QStringLiteral("File Log..."), QStringLiteral("Undo LOG"), {}, QStringLiteral("view-history")));
     tools->addAction(commandAction(QStringLiteral("Advanced Rename..."), QStringLiteral("Rename ADVANCED"), {}, QStringLiteral("edit-rename")));
 

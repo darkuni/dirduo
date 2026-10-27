@@ -1,4 +1,8 @@
 #include "ui/PreferencesDialog.h"
+#include <QUrl>
+#include <QDesktopServices>
+#include <QInputDialog>
+#include "core/Scripting.h"
 #include <QTextCursor>
 #include <QToolButton>
 #include <QPlainTextEdit>
@@ -145,7 +149,7 @@ QString safeFileName(QString name)
 QStringList PreferencesDialog::pageNames()
 {
     return {QStringLiteral("general"), QStringLiteral("appearance"), QStringLiteral("theme"), QStringLiteral("labels"),
-            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("filetypes"), QStringLiteral("toolbars"), QStringLiteral("statusbar")};
+            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("filetypes"), QStringLiteral("toolbars"), QStringLiteral("statusbar"), QStringLiteral("scripts")};
 }
 
 PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, const QString &page)
@@ -201,6 +205,9 @@ PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, cons
             {QStringLiteral("open with"), QStringLiteral("application"), QStringLiteral("default"), QStringLiteral("program")});
     addPage(QStringLiteral("toolbars"), QStringLiteral("Toolbars"), QStringLiteral("configure-toolbars"), buildToolbars(),
             {QStringLiteral("button"), QStringLiteral("customize"), QStringLiteral("customize")});
+    addPage(QStringLiteral("scripts"), QStringLiteral("Scripts"), QStringLiteral("text-x-script"), buildScripts(),
+            {QStringLiteral("javascript"), QStringLiteral("script"), QStringLiteral("command"), QStringLiteral("column"),
+             QStringLiteral("event"), QStringLiteral("automation")});
     addPage(QStringLiteral("statusbar"), QStringLiteral("Status Bar"), QStringLiteral("view-list-details"), buildStatusBar(),
             {QStringLiteral("status"), QStringLiteral("free space"), QStringLiteral("codes"), QStringLiteral("definition"),
              QStringLiteral("bar graph"), QStringLiteral("selected"), QStringLiteral("count")});
@@ -311,6 +318,125 @@ void PreferencesDialog::refreshFileTypes()
         m_fileTypes->setItem(r, 2, new QTableWidgetItem(app.isValid() ? app.name : it.value() + QStringLiteral(" (not installed)")));
     }
     m_fileTypes->resizeColumnsToContents();
+}
+
+QWidget *PreferencesDialog::buildScripts()
+{
+    auto *page = new QWidget;
+    auto *layout = new QVBoxLayout(page);
+    ScriptHost &host = m_app.scripts();
+    auto *intro = new QLabel(QStringLiteral("JavaScript files in %1. Each can add commands (for buttons, menus and the console), "
+                                            "columns (right-click a column header > Scripts) and handlers for events. "
+                                            "Saving a script loads it again at once.")
+                                 .arg(host.folder().toHtmlEscaped()),
+                             page);
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+    m_scriptList = new QTreeWidget(page);
+    m_scriptList->setObjectName(QStringLiteral("script-list"));
+    m_scriptList->setRootIsDecorated(false);
+    m_scriptList->setHeaderLabels({QStringLiteral("Script"), QStringLiteral("Version"), QStringLiteral("Adds"), QStringLiteral("Status")});
+    m_scriptList->header()->resizeSection(0, 180);
+    m_scriptList->header()->resizeSection(2, 260);
+    layout->addWidget(m_scriptList, 1);
+    auto *detail = new QLabel(page);
+    detail->setWordWrap(true);
+    layout->addWidget(detail);
+    auto *row = new QHBoxLayout;
+    auto *newBtn = new QPushButton(QIcon::fromTheme(QStringLiteral("document-new")), QStringLiteral("New Script..."), page);
+    auto *editBtn = new QPushButton(QIcon::fromTheme(QStringLiteral("document-edit")), QStringLiteral("Edit"), page);
+    auto *examples = new QPushButton(QStringLiteral("Add Examples"), page);
+    auto *folderBtn = new QPushButton(QIcon::fromTheme(QStringLiteral("folder-open")), QStringLiteral("Open Folder"), page);
+    auto *reloadBtn = new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), QStringLiteral("Reload"), page);
+    for (QPushButton *b : {newBtn, editBtn, examples, folderBtn, reloadBtn})
+        row->addWidget(b);
+    row->addStretch(1);
+    layout->addLayout(row);
+    layout->addWidget(new QLabel(QStringLiteral("Log (dirduo.log and errors):"), page));
+    auto *log = new QPlainTextEdit(page);
+    log->setObjectName(QStringLiteral("script-log"));
+    log->setReadOnly(true);
+    log->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    log->setMaximumHeight(fontMetrics().height() * 7);
+    log->setPlainText(host.log().join(QLatin1Char('\n')));
+    layout->addWidget(log);
+
+    auto fill = [this, &host, editBtn]() {
+        const QSignalBlocker block(m_scriptList);
+        const QString keep = m_scriptList->currentItem() ? m_scriptList->currentItem()->data(0, Qt::UserRole).toString() : QString();
+        m_scriptList->clear();
+        for (const ScriptInfo &i : host.scripts()) {
+            QStringList adds;
+            if (!i.commands.isEmpty())
+                adds << QStringLiteral("commands: ") + i.commands.join(QStringLiteral(", "));
+            if (!i.columns.isEmpty())
+                adds << QStringLiteral("columns: ") + i.columns.join(QStringLiteral(", "));
+            if (!i.events.isEmpty())
+                adds << QStringLiteral("events: ") + i.events.join(QStringLiteral(", "));
+            auto *it = new QTreeWidgetItem(m_scriptList, {i.name, i.version, adds.join(QStringLiteral("; ")),
+                                                          !i.enabled ? QStringLiteral("Off") : i.error.isEmpty() ? QStringLiteral("OK") : i.error});
+            it->setFlags(it->flags() | Qt::ItemIsUserCheckable);
+            it->setCheckState(0, i.enabled ? Qt::Checked : Qt::Unchecked);
+            it->setData(0, Qt::UserRole, i.id);
+            it->setData(0, Qt::UserRole + 1, i.file);
+            it->setToolTip(0, i.file);
+            it->setToolTip(3, i.error);
+            if (!i.error.isEmpty())
+                it->setForeground(3, QColor(0xd0, 0x40, 0x30));
+            if (i.id == keep)
+                m_scriptList->setCurrentItem(it);
+        }
+        editBtn->setEnabled(m_scriptList->currentItem());
+    };
+    fill();
+    connect(&host, &ScriptHost::scriptsChanged, page, fill);
+    connect(&host, &ScriptHost::logged, log, [log](const QString &line) { log->appendPlainText(line); });
+    connect(m_scriptList, &QTreeWidget::itemChanged, this, [&host](QTreeWidgetItem *it, int col) {
+        if (col == 0)
+            host.setEnabled(it->data(0, Qt::UserRole).toString(), it->checkState(0) == Qt::Checked);
+    });
+    connect(m_scriptList, &QTreeWidget::currentItemChanged, this, [&host, detail, editBtn](QTreeWidgetItem *it) {
+        editBtn->setEnabled(it);
+        if (!it) {
+            detail->clear();
+            return;
+        }
+        for (const ScriptInfo &i : host.scripts()) {
+            if (i.id == it->data(0, Qt::UserRole).toString())
+                detail->setText(i.description.isEmpty() ? i.file : i.description + (i.author.isEmpty() ? QString() : QStringLiteral(" (") + i.author + QLatin1Char(')')));
+        }
+    });
+    auto openFile = [](const QString &path) { QDesktopServices::openUrl(QUrl::fromLocalFile(path)); };
+    connect(newBtn, &QPushButton::clicked, this, [this, &host, openFile]() {
+        bool ok = false;
+        const QString name = QInputDialog::getText(this, QStringLiteral("New Script"), QStringLiteral("Name:"), QLineEdit::Normal,
+                                                   QStringLiteral("My Tools"), &ok);
+        if (!ok)
+            return;
+        QString err;
+        const QString path = host.newScript(name, &err);
+        if (path.isEmpty())
+            QMessageBox::warning(this, QStringLiteral("New Script"), err);
+        else
+            openFile(path);
+    });
+    connect(editBtn, &QPushButton::clicked, this, [this, openFile]() {
+        if (QTreeWidgetItem *it = m_scriptList->currentItem())
+            openFile(it->data(0, Qt::UserRole + 1).toString());
+    });
+    connect(m_scriptList, &QTreeWidget::itemDoubleClicked, this, [openFile](QTreeWidgetItem *it) {
+        openFile(it->data(0, Qt::UserRole + 1).toString());
+    });
+    connect(examples, &QPushButton::clicked, this, [&host]() {
+        host.addExamples();
+        host.reload();
+    });
+    connect(folderBtn, &QPushButton::clicked, this, [this]() {
+        if (m_lister)
+            m_lister->runCommand(QStringLiteral("Script FOLDER"));
+    });
+    connect(reloadBtn, &QPushButton::clicked, &host, &ScriptHost::reload);
+    return page;
 }
 
 QWidget *PreferencesDialog::buildStatusBar()

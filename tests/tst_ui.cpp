@@ -21,6 +21,8 @@
 #include "core/Favorites.h"
 #include "ui/FavoritesDialog.h"
 #include "ui/PreferencesDialog.h"
+#include "core/Scripting.h"
+#include <QTreeWidget>
 #include "ui/ViewerPane.h"
 #include "ui/SyncDialog.h"
 #include "ui/CommandConsole.h"
@@ -1717,6 +1719,70 @@ private Q_SLOTS:
         }
         QVERIFY(Prefs::instance()->values().statusDefinition.isEmpty());
         QTRY_VERIFY(t->statusText().contains(QStringLiteral("folder")));
+    }
+
+    void scriptsInTheApp()
+    {
+        ScriptHost &host = m_app->scripts();
+        QDir().mkpath(host.folder());
+        {
+            QFile f(host.folder() + QStringLiteral("/ui-test.js"));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(R"(dirduo.info({name: "UI Test", version: "2"});
+let opened = [];
+dirduo.command({name: "UiTestCount", run(ctx) { dirduo.log("items " + ctx.selected.length); dirduo.save("n", ctx.selected.length); }});
+dirduo.column({name: "Shout", label: "Shout", value(item) { return item.name.toUpperCase(); }});
+dirduo.on("folderOpened", e => { opened.push(e.path); dirduo.save("last", e.path); });
+)");
+        }
+        host.reload();
+        QVERIFY(m_app->engine().commandNames().contains(QStringLiteral("Script")));
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("scripts"));
+            QCOMPARE(dlg.currentPage(), QStringLiteral("scripts"));
+            QVERIFY(dlg.search(QStringLiteral("javascript")).contains(QStringLiteral("scripts")));
+            QTreeWidget *list = dlg.scriptList();
+            QTreeWidgetItem *mine = nullptr;
+            for (int i = 0; i < list->topLevelItemCount(); ++i)
+                if (list->topLevelItem(i)->text(0) == QStringLiteral("UI Test"))
+                    mine = list->topLevelItem(i);
+            QVERIFY(mine);
+            QVERIFY(mine->text(2).contains(QStringLiteral("UiTestCount")));
+            QCOMPARE(mine->text(3), QStringLiteral("OK"));
+        }
+        QTemporaryDir dir;
+        const QString d = dir.path();
+        touch(d + QStringLiteral("/alpha.txt"));
+        touch(d + QStringLiteral("/beta.txt"));
+        FolderTab *t = w->display(0)->currentTab();
+        const QString back = t->path();
+        t->navigate(d);
+        waitListed(t, 2);
+        // The event saw the folder.
+        QTRY_VERIFY(QFile::exists(Paths::configDir() + QStringLiteral("/scripts/data/ui-test.json")));
+        // The command runs from a button or the console like a built-in one.
+        t->selectAll();
+        QVERIFY(w->runCommand(QStringLiteral("UiTestCount")));
+        QVERIFY(host.log().last().contains(QStringLiteral("items 2")));
+        // The column fills in.
+        QVERIFY(host.columns().size() >= 1);
+        const int col = FileListModel::ScriptColumn0 + host.columns().first().slot;
+        QCOMPARE(t->fileModel()->headerData(col, Qt::Horizontal, Qt::DisplayRole).toString(), QStringLiteral("Shout"));
+        t->setColumnVisible(col, true);
+        auto *model = t->fileModel();
+        QTRY_VERIFY([&] {
+            const int r = model->rowForPath(d + QStringLiteral("/alpha.txt"));
+            return r >= 0 && model->data(model->index(r, col), Qt::DisplayRole).toString() == QStringLiteral("ALPHA.TXT");
+        }());
+        t->setColumnVisible(col, false);
+        // Off: the command is gone.
+        host.setEnabled(QStringLiteral("ui-test"), false);
+        QVERIFY(!runFailing(QStringLiteral("UiTestCount")));
+        host.setEnabled(QStringLiteral("ui-test"), true);
+        QFile::remove(host.folder() + QStringLiteral("/ui-test.js"));
+        host.reload();
+        t->navigate(back);
+        waitListed(t, QDir(back).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
     }
 
     void preferencesGeneralAndFileTypes()

@@ -160,6 +160,56 @@ Select PATTERN=*.mp3
 Copy TO=/music/incoming WHENEXISTS=newer
 ```
 
+## Scripts
+
+Scripts are JavaScript files in `~/.config/dirduo/scripts` (Tools > Scripts, or Preferences > Scripts). Each one can add commands, columns and event handlers. A script is loaded again as soon as it is saved; errors show on the Scripts page with the line number. Tools > Scripts > New Script makes one from a template, and Add Examples writes three working examples (a Region column for ROM sets, a playlist maker, and a list of recently opened folders to jump back to).
+
+```js
+dirduo.info({name: "ROM Tools", version: "1.0", description: "Region column and select-by-region", author: "me"});
+
+dirduo.command({
+    name: "SelectRegion",            // used in buttons, menus, keys and the console
+    summary: "Selects ROMs by region",
+    args: ["REGION="],               // SelectRegion REGION=Japan
+    run(ctx) {
+        const want = ctx.args.REGION || ctx.ask("Region:", "USA");
+        if (want === null) return;   // canceled
+        ctx.select(dirduo.list(ctx.source).filter(i => i.name.includes("(" + want)).map(i => i.path));
+    }
+});
+
+dirduo.column({name: "Region", label: "Region", value(item) {
+    const m = item.name.match(/\((USA|Europe|Japan|World)/);
+    return m ? m[1] : "";
+}});
+
+dirduo.on("folderOpened", e => dirduo.log("Opened " + e.path));
+```
+
+**`dirduo`**
+
+- `info({name, version, description, author})`
+- `command({name, summary, args, run(ctx)})`: `args` lists the arguments it takes (`"NAME="` for one with a value, `"QUIET"` for a switch), which the console completes. `run` returning `false` counts as a failure, which stops the rest of a button's lines. A built-in command's name can't be used.
+- `column({name, label, numeric, value(item)})`: the value is worked out in the background and kept until the file changes. Show it from a column header's right-click menu > Scripts. Up to six script columns.
+- `on(event, fn)`: `folderOpened` {path, display, source}, `jobFinished` {title, kind, ok, canceled, errors, destination, items, bytes}, `started` {}.
+- `log(text)`: shows in the log on the Scripts page.
+- `load(key, fallback)`, `save(key, value)`: values kept between runs (in `scripts/data/<script>.json`).
+- Files: `readText(path)` (null when it can't be read), `readBytes(path, offset, length)` (an array of byte values, up to 1 MB), `writeText(path, text)`, `exists`, `isFolder`, `makeFolder`, `stat(path)` (an item), `list(folder)` (items), `join`, `parentOf`, `nameOf`.
+- `system(program, args, timeoutMs)`: runs a program and waits; returns {code, out, err}.
+
+**`ctx`** (in commands and events)
+
+- `source`, `dest`: the source and destination folders (`dest` is empty with no destination).
+- `selected`: the selected items in the source; `focused`: the item with the focus, or null.
+- `args`: the command's arguments by name (`ctx.args.REGION`); `words`: the words after the command name that aren't arguments.
+- `has(word)`: whether a switch was given (`MakePlaylist QUIET`).
+- `run(lines)`: runs DirDuo commands with the same source and destination; returns whether they worked.
+- `message(text)`, `ask(label, initial)` (null when canceled), `confirm(text)`, `choose(text, choices)` (the index of the choice picked, -1 when canceled), `select(paths)` (reads the lists again and selects these).
+
+An item is {path, name, ext, folder, size, modified (a Date), isFolder}.
+
+Scripts run on the app's own thread: a command or event that takes over 8 seconds, or a column value over 0.4 seconds, is stopped and the error shown. `Script RELOAD`, `Script NEW=<name>`, `Script EXAMPLES` and `Script FOLDER` are commands too. The older shell-script buttons (`# dirduo:` lines and `$DIRDUO_SOURCE` variables) still work alongside these.
+
 ## Aliases
 
 A path starting with `/name` resolves through the alias table when `name` is an alias. Real top-level folders always win: `/usr` is `/usr`. Alias names that would shadow something in `/` are refused.
@@ -251,6 +301,7 @@ A button with `"dynamic": "favorites"` (or `frequent`, `aliases`, `collections`)
 - `~/.config/dirduo/collections/`: collections, one path per line
 - `~/.config/dirduo/favorites.json`, `frequent.ini`: favorites and folder visit counts
 - `~/.config/dirduo/layouts/`: saved layouts
+- `~/.config/dirduo/scripts/`: scripts, with their saved values in `scripts/data/`
 
 Inside the Flatpak these are still the real `~/.config/dirduo`, so the configuration copies straight to another machine.
 

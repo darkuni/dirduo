@@ -6,6 +6,7 @@
 #include "core/Location.h"
 #include "core/Metadata.h"
 #include "core/Checksum.h"
+#include "core/Scripting.h"
 #include "core/Thumbnails.h"
 #include "ui/Style.h"
 
@@ -32,6 +33,14 @@ FileListModel::FileListModel(QObject *parent)
     connect(FolderSizes::instance(), &FolderSizes::ready, this, &FileListModel::onFolderSizeReady);
     connect(MetadataCache::instance(), &MetadataCache::ready, this, &FileListModel::onMetadataReady);
     connect(ChecksumCache::instance(), &ChecksumCache::ready, this, &FileListModel::onMetadataReady);
+    if (ScriptHost *scripts = ScriptHost::instance()) {
+        connect(scripts, &ScriptHost::columnValueReady, this, &FileListModel::onMetadataReady);
+        connect(scripts, &ScriptHost::scriptsChanged, this, [this]() {
+            Q_EMIT headerDataChanged(Qt::Horizontal, ScriptColumn0, ScriptColumn5);
+            if (!m_items.isEmpty())
+                Q_EMIT dataChanged(index(0, ScriptColumn0), index(int(m_items.size()) - 1, ScriptColumn5));
+        });
+    }
     connect(ThumbnailCache::instance(), &ThumbnailCache::ready, this, &FileListModel::onThumbnailReady);
     connect(Style::instance(), &Style::changed, this, [this]() {
         if (!m_items.isEmpty())
@@ -102,6 +111,11 @@ QString FileListModel::columnName(int column)
         return QStringLiteral("SHA-1");
     case Sha256Column:
         return QStringLiteral("SHA-256");
+    }
+    if (isScriptColumn(column)) {
+        const ScriptHost *scripts = ScriptHost::instance();
+        const ScriptColumnDef d = scripts ? scripts->columnForSlot(column - ScriptColumn0) : ScriptColumnDef();
+        return d.slot >= 0 ? d.label : QStringLiteral("Script %1").arg(column - ScriptColumn0 + 1);
     }
     return {};
 }
@@ -562,6 +576,23 @@ QVariant FileListModel::checksumValue(int row, int column) const
     return QStringLiteral("\u2026");
 }
 
+QVariant FileListModel::scriptValue(int row, int column, bool forSorting) const
+{
+    ScriptHost *scripts = ScriptHost::instance();
+    if (!scripts || row < 0 || row >= m_items.size() || !Location::isLocal(m_items.at(row).path))
+        return forSorting ? QVariant(QString()) : QVariant();
+    QVariant v;
+    if (!scripts->columnValue(column - ScriptColumn0, m_items.at(row), &v))
+        return forSorting ? QVariant(QString()) : QVariant(QStringLiteral("\u2026"));
+    if (forSorting)
+        return v.isValid() ? v : QVariant(QString());
+    if (v.typeId() == QMetaType::Double) {
+        const double d = v.toDouble();
+        return d == qint64(d) ? QString::number(qint64(d)) : QLocale().toString(d, 'f', 2);
+    }
+    return v;
+}
+
 void FileListModel::rebuildIndex()
 {
     m_rowByPath.clear();
@@ -1012,6 +1043,8 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
                 return metadataValue(index.row(), col, false);
             if (isChecksumColumn(col))
                 return checksumValue(index.row(), col);
+            if (isScriptColumn(col))
+                return scriptValue(index.row(), col, false);
         }
         break;
     case Qt::EditRole:
@@ -1096,6 +1129,8 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
     case Qt::TextAlignmentRole:
         if (col == SizeColumn || col == TrackColumn || col == YearColumn || col == DurationColumn || col == BitrateColumn)
             return QVariant(Qt::AlignRight | Qt::AlignVCenter);
+        if (isScriptColumn(col) && ScriptHost::instance() && ScriptHost::instance()->columnForSlot(col - ScriptColumn0).numeric)
+            return QVariant(Qt::AlignRight | Qt::AlignVCenter);
         break;
     case PathRole:
         return it.path;
@@ -1160,6 +1195,8 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
                 return metadataValue(index.row(), col, true);
             if (isChecksumColumn(col))
                 return checksumValue(index.row(), col).toString();
+            if (isScriptColumn(col))
+                return scriptValue(index.row(), col, true);
             return it.name;
         }
     }

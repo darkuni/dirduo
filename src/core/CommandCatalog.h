@@ -45,7 +45,10 @@ struct ConditionInfo
 namespace CommandCatalog {
 
 const QList<CommandInfo> &commands();
-const CommandInfo *find(const QString &name); // case-insensitive
+const CommandInfo *find(const QString &name); // case-insensitive; script commands too
+// Commands that scripts add (ScriptHost sets them on every reload).
+void setScriptCommands(const QList<CommandInfo> &commands);
+const QList<CommandInfo> &scriptCommands();
 const QList<CatalogButton> &buttons();
 const QList<ConditionInfo> &conditions();
 QStringList conditionNames();

@@ -17,6 +17,7 @@
 #include "ui/AdvancedRenameDialog.h"
 #include "ui/ButtonBar.h"
 #include "ui/PreferencesDialog.h"
+#include "core/Scripting.h"
 #include "ui/ViewerPane.h"
 #include "ui/ImageConvertDialog.h"
 #include "ui/DuplicatesDialog.h"
@@ -614,6 +615,17 @@ int main(int argc, char *argv[])
             prefs.grab().save(out + QStringLiteral("/45-status-preferences.png"));
             v.statusDefinition.clear();
             Prefs::instance()->setValues(v);
+        }
+        {
+            context.scripts().addExamples();
+            context.scripts().reload();
+            w->display(0)->currentTab()->navigate(root + QStringLiteral("/Emulation/roms/c64"));
+            QTest::qWait(400);
+            PreferencesDialog prefs(context, w, QStringLiteral("scripts"));
+            prefs.resize(860, 620);
+            prefs.show();
+            QTest::qWait(400);
+            prefs.grab().save(out + QStringLiteral("/47-scripts-preferences.png"));
         }
         // Opus-style tree: branch lines and the path to the current folder.
         w->runCommand(QStringLiteral("Set DUAL=vertical\nSet TREE=separate"));

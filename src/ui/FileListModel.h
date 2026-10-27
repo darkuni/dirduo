@@ -50,6 +50,13 @@ public:
         Md5Column,
         Sha1Column,
         Sha256Column,
+        // Columns scripts add (ScriptHost); unused slots stay out of menus.
+        ScriptColumn0,
+        ScriptColumn1,
+        ScriptColumn2,
+        ScriptColumn3,
+        ScriptColumn4,
+        ScriptColumn5,
         ColumnCount
     };
     // Saved column layouts from before the metadata columns had this many.
@@ -57,6 +64,7 @@ public:
     static bool isMetadataColumn(int column) { return column >= TitleColumn && column <= CameraColumn; }
     static bool isTagColumn(int column) { return column >= RatingColumn && column <= DescriptionColumn; }
     static bool isChecksumColumn(int column) { return column >= Crc32Column && column <= Sha256Column; }
+    static bool isScriptColumn(int column) { return column >= ScriptColumn0 && column <= ScriptColumn5; }
     enum Role {
         PathRole = Qt::UserRole + 1,
         IsDirRole,
@@ -153,6 +161,7 @@ private:
     QVariant thumbnailFor(int row) const;
     QVariant metadataValue(int row, int column, bool forSorting) const;
     QVariant checksumValue(int row, int column) const;
+    QVariant scriptValue(int row, int column, bool forSorting) const;
     QPair<QString, QString> groupFor(int row) const;
     QString folderSizeText(int row) const;
     QIcon iconFor(int row) const;

@@ -1,5 +1,6 @@
 #include "core/AliasManager.h"
 #include "core/Paths.h"
+#include "core/Scripting.h"
 #ifdef DIRDUO_HAVE_KIO
 #include "kio/KioBackend.h"
 #endif
@@ -64,5 +65,6 @@ int main(int argc, char *argv[])
         context.restoreSession();
     else
         context.handleLaunch(request);
+    context.scripts().fire(QStringLiteral("started"), {}, context.activeLister());
     return app.exec();
 }

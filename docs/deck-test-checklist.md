@@ -112,6 +112,15 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Turn on the trees (Set TREE=separate): dotted lines, + / - boxes, and a blue line (green in the destination) from the top down to the folder you are in.
 - [ ] With Steam running, right-click a Windows .exe (or an AppImage) > Add to Steam: Steam adds it to the library (on the Deck it shows in Game Mode too). A text file has no Add to Steam.
 
+## Scripts
+
+- [ ] Tools > Scripts > Manage Scripts..., Add Examples: three scripts show as OK, with what each adds.
+- [ ] Open a ROM folder, right-click a column header > Scripts > Region: (USA), (Europe), (Japan) fill in. Ctrl+Shift+P, `SelectRegion REGION=Japan`: the Japanese ones are selected.
+- [ ] Select some MP3s, `MakePlaylist`: a .m3u appears with them in it.
+- [ ] Open a few folders, then `RecentFolders`: it lists them; pick one and it opens. Quit and reopen: the list is still there.
+- [ ] Tools > Scripts > New Script..., name it `Hello`: it opens in the editor. Save it as is: `Hello` runs from the console and lists the selection. Add a typo and save: the Scripts page shows the error and its line; fix it and save: OK again.
+- [ ] Untick a script on the Scripts page: its command and column go away; tick it: they are back.
+
 ## Report back
 
 For anything that fails: what you clicked, what happened, and a screenshot if it is visual.

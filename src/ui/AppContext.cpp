@@ -1,4 +1,7 @@
 #include "ui/AppContext.h"
+#include "core/Scripting.h"
+#include <QDesktopServices>
+#include <QUrl>
 #include "core/Location.h"
 #include <QPushButton>
 #include "ui/FolderTab.h"
@@ -53,10 +56,33 @@ AppContext::AppContext(QObject *parent)
     if (size > 0)
         Style::instance()->setSizeLevel(size);
     connect(m_jobs.get(), &JobManager::collisionRequested, this, &AppContext::onCollision);
+
+    // Scripts: their commands run through the engine, ctx.run() with it.
+    m_scripts = std::make_unique<ScriptHost>();
+    m_scripts->setEngine(m_engine.get());
+    m_engine->setScripts(m_scripts.get());
+    m_scripts->setOpener([](const QString &path) { QDesktopServices::openUrl(QUrl::fromLocalFile(path)); });
+    m_scripts->reload();
+    connect(m_jobs.get(), &JobManager::jobFinished, this, [this](int id) {
+        const JobSnapshot snap = m_jobs->snapshot(id);
+        static const QStringList kinds = {QStringLiteral("copy"), QStringLiteral("move"), QStringLiteral("trash"), QStringLiteral("delete"),
+                                          QStringLiteral("pack"), QStringLiteral("unpack"), QStringLiteral("split"), QStringLiteral("join")};
+        QVariantMap e;
+        e.insert(QStringLiteral("title"), snap.title);
+        e.insert(QStringLiteral("kind"), kinds.value(int(snap.type)));
+        e.insert(QStringLiteral("ok"), snap.state == JobState::Finished);
+        e.insert(QStringLiteral("canceled"), snap.state == JobState::Canceled);
+        e.insert(QStringLiteral("errors"), snap.errors);
+        e.insert(QStringLiteral("destination"), snap.toFolder);
+        e.insert(QStringLiteral("items"), snap.totalItems);
+        e.insert(QStringLiteral("bytes"), double(snap.totalBytes));
+        m_scripts->fire(QStringLiteral("jobFinished"), e, activeLister());
+    });
 }
 
 AppContext::~AppContext()
 {
+    m_engine->setScripts(nullptr);
     if (g_instance == this)
         g_instance = nullptr;
 }
