@@ -1,4 +1,7 @@
 #include "ui/ListerWindow.h"
+#include <QSet>
+#include <QShortcut>
+#include "core/KeyMap.h"
 
 #include "core/AliasManager.h"
 #include "core/FileOps.h"
@@ -203,6 +206,9 @@ ListerWindow::ListerWindow(AppContext &app, QWidget *parent)
     buildActions();
     buildMenus();
     buildToolbar();
+    registerKeys();
+    applyKeys();
+    connect(KeyMap::instance(), &KeyMap::changed, this, &ListerWindow::applyKeys);
     updateRoles();
     connect(QGuiApplication::clipboard(), &QClipboard::dataChanged, this, &ListerWindow::scheduleButtonStates);
     connect(Style::instance(), &Style::changed, this, &ListerWindow::scheduleButtonStates);
@@ -222,6 +228,82 @@ QAction *ListerWindow::commandAction(const QString &text, const QString &command
     a->setStatusTip(command);
     connect(a, &QAction::triggered, this, [this, command]() { runCommand(command); });
     return a;
+}
+
+// Every command in the menus (and the lister's other keyed actions) gets an
+// id from where it sits, "Edit > Copy", so that its keys can be changed on
+// the Keys page. Menus that fill themselves when opened are empty now and
+// are left out.
+void ListerWindow::registerKeys()
+{
+    auto clean = [](QString t) {
+        t.remove(QLatin1Char('&'));
+        if (t.endsWith(QLatin1String("...")))
+            t.chop(3);
+        return t.trimmed();
+    };
+    QSet<QAction *> seen;
+    auto add = [&](QAction *a, const QString &where) {
+        if (seen.contains(a) || a->isSeparator() || a->menu() || clean(a->text()).isEmpty())
+            return;
+        seen.insert(a);
+        QString id = where.isEmpty() ? clean(a->text()) : where + QStringLiteral(" > ") + clean(a->text());
+        const QString base = id;
+        for (int n = 2; m_keyActions.contains(id); ++n)
+            id = base + QStringLiteral(" (%1)").arg(n);
+        m_keyActions.insert(id, a);
+        KeyMap::MenuItem item;
+        item.id = id;
+        item.command = a->data().toString();
+        for (const QKeySequence &k : a->shortcuts())
+            item.defaults << KeyMap::portable(k);
+        KeyMap::instance()->registerMenuItem(item);
+    };
+    std::function<void(QMenu *, const QString &)> walk = [&](QMenu *menu, const QString &where) {
+        for (QAction *a : menu->actions()) {
+            if (QMenu *sub = a->menu())
+                walk(sub, where + QStringLiteral(" > ") + clean(sub->title()));
+            else
+                add(a, where);
+        }
+    };
+    for (QAction *top : menuBar()->actions())
+        if (QMenu *m = top->menu())
+            walk(m, clean(m->title()));
+    for (QAction *a : actions())
+        if (!a->shortcuts().isEmpty())
+            add(a, QStringLiteral("Lister"));
+}
+
+void ListerWindow::applyKeys()
+{
+    KeyMap *km = KeyMap::instance();
+    // Your own hotkeys win over a menu command with the same key.
+    QSet<QString> taken;
+    for (const KeyMap::Hotkey &h : km->hotkeys())
+        if (h.enabled && !h.key.isEmpty())
+            taken.insert(h.key);
+    for (auto it = m_keyActions.cbegin(); it != m_keyActions.cend(); ++it) {
+        QAction *a = it.value();
+        if (!a)
+            continue;
+        QList<QKeySequence> keys;
+        for (const QString &k : km->keysFor(it.key()))
+            if (!taken.contains(k))
+                keys << QKeySequence(k, QKeySequence::PortableText);
+        a->setShortcuts(keys);
+    }
+    qDeleteAll(m_hotkeys);
+    m_hotkeys.clear();
+    for (const KeyMap::Hotkey &h : km->hotkeys()) {
+        if (!h.enabled || h.key.isEmpty())
+            continue;
+        auto *sc = new QShortcut(QKeySequence(h.key, QKeySequence::PortableText), this);
+        sc->setContext(Qt::WindowShortcut);
+        const QString cmd = h.command;
+        connect(sc, &QShortcut::activated, this, [this, cmd]() { runCommand(cmd); });
+        m_hotkeys << sc;
+    }
 }
 
 void ListerWindow::buildActions()
@@ -360,6 +442,7 @@ void ListerWindow::buildMenus()
     file->addSeparator();
     file->addAction(commandAction(QStringLiteral("Preferences..."), QStringLiteral("Settings"), QKeySequence(QStringLiteral("Ctrl+,")),
                                   QStringLiteral("configure")));
+    file->addAction(commandAction(QStringLiteral("Keyboard Shortcuts..."), QStringLiteral("Settings PAGE=keys"), {}, QStringLiteral("input-keyboard")));
     QMenu *settingsMenu = file->addMenu(QIcon::fromTheme(QStringLiteral("configure")), QStringLiteral("Settings"));
     settingsMenu->addAction(commandAction(QStringLiteral("Back Up Settings..."), QStringLiteral("Settings BACKUP=ask"),
                                           {}, QStringLiteral("document-save")));
@@ -462,9 +545,9 @@ void ListerWindow::buildMenus()
         cmp->addAction(commandAction(QStringLiteral("Same in Both (both displays)"), QStringLiteral("Select COMPARE=same BOTH")));
         cmp->addAction(commandAction(QStringLiteral("Different Size, Same Date (both displays)"), QStringLiteral("Select COMPARE=different BOTH")));
     }
-    QAction *pattern = edit->addAction(QStringLiteral("Select by Pattern..."));
-    pattern->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+S")));
-    connect(pattern, &QAction::triggered, this, [this]() { runCommand(QStringLiteral("Select PATTERN={dlgstring|Select files matching (for example *.mp3):}")); });
+    // (Ctrl+Shift+S is the Select window's; the two had it at once, so neither worked.)
+    edit->addAction(commandAction(QStringLiteral("Select by Pattern..."),
+                                  QStringLiteral("Select PATTERN={dlgstring|Select files matching (for example *.mp3):}")));
 
     QMenu *view = menuBar()->addMenu(QStringLiteral("&View"));
     view->addAction(m_actSingle);

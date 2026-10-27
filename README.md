@@ -275,7 +275,7 @@ pods=/downloads/podcasts
 | Shift+wheel, Ctrl+= / Ctrl+- / Ctrl+0 | Zoom the list in, out, back to 100% |
 | Ctrl+1 / 2 / 3 / 4 | Details, List, Icons, Thumbnails |
 | Ctrl+A, Ctrl+Shift+A, Ctrl+I | Select all, none, invert |
-| Ctrl+Shift+S | Select by pattern |
+| Ctrl+Shift+S | The Select window (by name, kind, size, age, or comparing the displays) |
 | F5 | Refresh |
 | Ctrl+N | New lister |
 | Ctrl+Shift+V / H / 1 | Dual vertical / dual horizontal / single |
@@ -289,6 +289,8 @@ pods=/downloads/podcasts
 | F3 | Viewer pane |
 | Alt+0..5 | Rating (Alt+0 clears) |
 | Ctrl+Shift+T | Tags and Description |
+
+All of these can be changed. File > Keyboard Shortcuts (Preferences > Keys) lists every key in one place, as Opus's Keys page: the menu commands' keys, toolbar buttons' hotkeys, and hotkeys of your own that run any commands (one or more lines, as on a button). Pick a row and press a key in the Key box to change it. No Key takes it off and Default puts back the one it came with. A key used twice shows in red, and giving a key that is in use asks whether to take it from the other. Your own hotkeys win over a menu command with the same key. Hotkeys can be ticked off without deleting them, filtered, exported to a file and imported (added to yours or replacing them), and the whole list saved as a CSV to print. They are kept in `~/.config/dirduo/keys.json`. The keys inside the file list (Enter, Backspace, typing to find) and the viewer's keys are fixed.
 
 ## Toolbar files
 
@@ -329,6 +331,7 @@ A button with `"dynamic": "favorites"` (or `frequent`, `aliases`, `collections`)
 - `~/.config/dirduo/collections/`: collections, one path per line
 - `~/.config/dirduo/favorites.json`, `frequent.ini`: favorites and folder visit counts
 - `~/.config/dirduo/layouts/`: saved layouts
+- `~/.config/dirduo/keys.json`: changed keys and your own hotkeys
 - `~/.config/dirduo/scripts/`: scripts, with their saved values in `scripts/data/`
 
 Inside the Flatpak these are still the real `~/.config/dirduo`, so the configuration copies straight to another machine.

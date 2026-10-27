@@ -1,4 +1,5 @@
 #include "ui/PreferencesDialog.h"
+#include "ui/KeysPage.h"
 #include <QDoubleSpinBox>
 #include <QUrl>
 #include <QDesktopServices>
@@ -150,7 +151,7 @@ QString safeFileName(QString name)
 QStringList PreferencesDialog::pageNames()
 {
     return {QStringLiteral("general"), QStringLiteral("appearance"), QStringLiteral("theme"), QStringLiteral("labels"),
-            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("filetypes"), QStringLiteral("toolbars"), QStringLiteral("statusbar"), QStringLiteral("scripts"), QStringLiteral("viewer")};
+            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("filetypes"), QStringLiteral("toolbars"), QStringLiteral("statusbar"), QStringLiteral("scripts"), QStringLiteral("viewer"), QStringLiteral("keys")};
 }
 
 PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, const QString &page)
@@ -207,6 +208,9 @@ PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, cons
     addPage(QStringLiteral("viewer"), QStringLiteral("Viewer"), QStringLiteral("view-preview"), buildViewer(),
             {QStringLiteral("picture"), QStringLiteral("image"), QStringLiteral("slideshow"), QStringLiteral("music"), QStringLiteral("video"),
              QStringLiteral("player"), QStringLiteral("show"), QStringLiteral("mark"), QStringLiteral("zoom"), QStringLiteral("wheel")});
+    m_keysPage = new KeysPage(m_app.toolbars());
+    addPage(QStringLiteral("keys"), QStringLiteral("Keys"), QStringLiteral("input-keyboard"), m_keysPage,
+            {QStringLiteral("keyboard"), QStringLiteral("shortcut"), QStringLiteral("hotkey"), QStringLiteral("key"), QStringLiteral("accelerator")});
     addPage(QStringLiteral("toolbars"), QStringLiteral("Toolbars"), QStringLiteral("configure-toolbars"), buildToolbars(),
             {QStringLiteral("button"), QStringLiteral("customize"), QStringLiteral("customize")});
     addPage(QStringLiteral("scripts"), QStringLiteral("Scripts"), QStringLiteral("text-x-script"), buildScripts(),
@@ -1312,6 +1316,8 @@ bool PreferencesDialog::apply(QString *error)
     vw.slideSeconds = m_slideSeconds->value();
     vw.markCollection = m_markName->text().trimmed().isEmpty() ? Prefs::Values::Viewer().markCollection : m_markName->text().trimmed();
     Prefs::instance()->setValues(v);
+    if (!m_keysPage->apply(error))
+        return false;
 
     // Theme: an edited theme is saved under its name, so it survives a restart.
     if (m_themeDirty && !saveTheme(error))

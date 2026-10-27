@@ -328,7 +328,7 @@ QList<CommandInfo> buildCommands()
                       arg("RESTORE=", {QStringLiteral("ask")}, "Put back settings from a backup zip"),
                       arg("QUIET", {}, "Restore without asking first"),
                       arg("PAGE=", {QStringLiteral("appearance"), QStringLiteral("theme"), QStringLiteral("labels"), QStringLiteral("aliases"),
-                                    QStringLiteral("formats"), QStringLiteral("toolbars"), QStringLiteral("filetypes"), QStringLiteral("statusbar"), QStringLiteral("scripts"), QStringLiteral("viewer")},
+                                    QStringLiteral("formats"), QStringLiteral("toolbars"), QStringLiteral("filetypes"), QStringLiteral("statusbar"), QStringLiteral("scripts"), QStringLiteral("viewer"), QStringLiteral("keys")},
                           "Open Preferences on this page (no arguments: Preferences)")},
                      QStringLiteral("Settings PAGE=theme")};
     c << CommandInfo{QStringLiteral("Sync"), QStringLiteral("Compare two folders and make them match"),

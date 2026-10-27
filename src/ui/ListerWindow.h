@@ -39,6 +39,8 @@ public:
     void saveListerState(QSettings &s) const;
 
     bool runCommand(const QString &script);
+    // The menu command a key id names ("Edit > Copy"), for tests and the Keys page.
+    QAction *keyAction(const QString &id) const { return m_keyActions.value(id); }
     // Runs with paths standing in for the selection (files dropped on a button).
     bool runCommandWithFiles(const QString &script, const QStringList &paths);
     // Runs without error boxes; the error, if any, comes back in *error.
@@ -153,6 +155,10 @@ private:
     std::optional<bool> conditionAtom(const QString &name, const QString &value) const;
     void fillViewMenus();
 
+    void registerKeys();
+    void applyKeys();
+    QHash<QString, QPointer<QAction>> m_keyActions;
+    QList<class QShortcut *> m_hotkeys;
     QAction *commandAction(const QString &text, const QString &command, const QKeySequence &key = {},
                            const QString &icon = {});
     FolderTab *sourceTab() const;

@@ -72,6 +72,7 @@ public:
     QCheckBox *viewerBox(const QString &key) const; // pictures, media, siblings, reuse, wrap, autoplay, playnext... // counts, selection, free, ask
     QPlainTextEdit *statusDefinitionEdit() const { return m_statusDef; }
     QTreeWidget *scriptList() const { return m_scriptList; }
+    class KeysPage *keysPage() const { return m_keysPage; }
     QComboBox *terminalBox() const { return m_terminal; }
     QTableWidget *fileTypesTable() const { return m_fileTypes; }
 
@@ -96,6 +97,7 @@ private:
     QWidget *buildStatusBar();
     QWidget *buildScripts();
     QWidget *buildViewer();
+    class KeysPage *m_keysPage = nullptr;
     QHash<QString, QCheckBox *> m_viewerBoxes;
     class QComboBox *m_viewerZoom = nullptr;
     class QComboBox *m_viewerBackground = nullptr;

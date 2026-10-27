@@ -83,6 +83,7 @@ add_library(dirduo_core STATIC
     src/core/ScriptRunner.cpp
     src/core/Apps.cpp
     src/core/Prefs.cpp
+    src/core/KeyMap.cpp
     src/core/FileTags.cpp
     src/core/Checksum.cpp
     src/core/StatusFormat.cpp
@@ -186,6 +187,7 @@ add_library(dirduo_ui STATIC
     src/ui/ServerDialog.cpp
     src/ui/OpenWithDialog.cpp
     src/ui/ViewerWindow.cpp
+    src/ui/KeysPage.cpp
     src/ui/MediaPanel.cpp
     src/ui/TagsDialog.cpp
     src/ui/ChecksumDialog.cpp

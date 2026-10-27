@@ -19,6 +19,7 @@
 #include "ui/PreferencesDialog.h"
 #include "core/Scripting.h"
 #include "ui/ViewerWindow.h"
+#include "ui/KeysPage.h"
 #include <QPainter>
 #include "ui/ViewerPane.h"
 #include "ui/ImageConvertDialog.h"
@@ -667,6 +668,16 @@ int main(int argc, char *argv[])
             prefs.show();
             QTest::qWait(300);
             prefs.grab().save(out + QStringLiteral("/50-viewer-preferences.png"));
+        }
+        {
+            PreferencesDialog prefs(context, w, QStringLiteral("keys"));
+            prefs.resize(900, 640);
+            prefs.keysPage()->addHotkey({QStringLiteral("Downloads"), QStringLiteral("F9"), QStringLiteral("Go /downloads"), true});
+            prefs.keysPage()->setKey({QStringLiteral("menu"), QStringLiteral("Edit > Invert Selection"), -1}, QStringLiteral("Ctrl+K"), true);
+            prefs.keysPage()->setKey({QStringLiteral("menu"), QStringLiteral("Edit > Select None"), -1}, QStringLiteral("Ctrl+K"), false);
+            prefs.show();
+            QTest::qWait(300);
+            prefs.grab().save(out + QStringLiteral("/51-keys.png"));
         }
         // Opus-style tree: branch lines and the path to the current folder.
         w->runCommand(QStringLiteral("Set DUAL=vertical\nSet TREE=separate"));

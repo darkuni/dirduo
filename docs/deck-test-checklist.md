@@ -112,6 +112,13 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Turn on the trees (Set TREE=separate): dotted lines, + / - boxes, and a blue line (green in the destination) from the top down to the folder you are in.
 - [ ] With Steam running, right-click a Windows .exe (or an AppImage) > Add to Steam: Steam adds it to the library (on the Deck it shows in Game Mode too). A text file has no Add to Steam.
 
+## Keyboard shortcuts
+
+- [ ] File > Keyboard Shortcuts: click Edit > Invert Selection, click in Key and press Ctrl+K. OK. Ctrl+K now inverts the selection; Ctrl+I does nothing.
+- [ ] Give Ctrl+K to another command too: it asks to take it from Invert Selection. Say No: both rows show the key in red. Then click Default on Invert Selection.
+- [ ] New Hotkey...: name it Downloads, key F9, command `Go /downloads`. OK. F9 goes to Downloads. Untick it: F9 does nothing.
+- [ ] More > Save a List of All Keys: open the CSV; every key is there.
+
 ## The viewer
 
 - [ ] Preferences > Viewer: tick "Double-clicking a picture opens it in the viewer", OK. Double-click a screenshot: it opens in DirDuo's viewer. Space and Backspace step through the folder; F10 shows the information.

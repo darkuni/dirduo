@@ -48,6 +48,9 @@
 #include "core/FileTags.h"
 #include "core/Prefs.h"
 #include "ui/ViewerWindow.h"
+#include "ui/KeysPage.h"
+#include "core/KeyMap.h"
+#include <QShortcut>
 #include <QSlider>
 #include <QClipboard>
 #include "ui/MediaPanel.h"
@@ -1787,6 +1790,93 @@ dirduo.on("folderOpened", e => { opened.push(e.path); dirduo.save("last", e.path
         host.reload();
         t->navigate(back);
         waitListed(t, QDir(back).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
+    }
+
+    void keyboardShortcuts()
+    {
+        auto key = [](const char *k) { return QKeySequence(QString::fromLatin1(k), QKeySequence::PortableText); };
+        QAction *copy = w->keyAction(QStringLiteral("Edit > Copy"));
+        QVERIFY(copy);
+        QCOMPARE(copy->shortcut(), QKeySequence(QKeySequence::Copy));
+        QAction *all = w->keyAction(QStringLiteral("Edit > Select All"));
+        QAction *invert = w->keyAction(QStringLiteral("Edit > Invert Selection"));
+        QVERIFY(all && invert);
+        QCOMPARE(invert->shortcut(), key("Ctrl+I"));
+        QVERIFY(KeyMap::instance()->menuItem(QStringLiteral("Edit > Invert Selection")).command == QStringLiteral("Select INVERT"));
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("keys"));
+            QCOMPARE(dlg.currentPage(), QStringLiteral("keys"));
+            QVERIFY(dlg.search(QStringLiteral("shortcut")).contains(QStringLiteral("keys")));
+            KeysPage *kp = dlg.keysPage();
+            QVERIFY(kp->menuItem(QStringLiteral("Edit > Copy")));
+            QCOMPARE(kp->menuItem(QStringLiteral("Edit > Invert Selection"))->text(1), QStringLiteral("Ctrl+I"));
+            // A new key for a menu command.
+            QVERIFY(kp->conflicts().isEmpty()); // none to begin with
+            kp->setKey({QStringLiteral("menu"), QStringLiteral("Edit > Select All"), -1}, QStringLiteral("Ctrl+K"), true);
+            QVERIFY(kp->conflicts().isEmpty());
+            // The same key on another, kept by both: a conflict, shown.
+            kp->setKey({QStringLiteral("menu"), QStringLiteral("Edit > Invert Selection"), -1}, QStringLiteral("Ctrl+K"), false);
+            QCOMPARE(kp->conflicts().size(), 1);
+            QVERIFY(kp->conflicts().first().contains(QStringLiteral("Edit > Select All")));
+            QCOMPARE(kp->menuItem(QStringLiteral("Edit > Invert Selection"))->foreground(1).color(), QColor(0xd0, 0x40, 0x30));
+            // Taken: only one has it.
+            kp->setKey({QStringLiteral("menu"), QStringLiteral("Edit > Invert Selection"), -1}, QStringLiteral("Ctrl+K"), true);
+            QVERIFY(kp->conflicts().isEmpty());
+            QVERIFY(kp->menuItem(QStringLiteral("Edit > Select All"))->text(1).isEmpty());
+            // A hotkey of your own.
+            kp->addHotkey({QStringLiteral("To the folder"), QStringLiteral("Ctrl+Alt+J"), QStringLiteral("Go \"%1\"").arg(root + QStringLiteral("/b")), true});
+            kp->setFilter(QStringLiteral("To the fold"));
+            int shown = 0;
+            for (int i = 0; i < kp->list()->topLevelItemCount(); ++i)
+                shown += kp->list()->topLevelItem(i)->isHidden() ? 0 : 1;
+            QCOMPARE(shown, 1);
+            kp->setFilter(QString());
+            QVERIFY(dlg.apply());
+        }
+        QCOMPARE(invert->shortcut(), key("Ctrl+K"));
+        QVERIFY(all->shortcut().isEmpty());
+        QVERIFY(KeyMap::instance()->isChanged(QStringLiteral("Edit > Invert Selection")));
+        QVERIFY(QFile::exists(KeyMap::instance()->file()));
+        // The hotkey runs its command.
+        FolderTab *t = w->display(0)->currentTab();
+        const QString back = t->path();
+        QShortcut *mine = nullptr;
+        for (QShortcut *sc : w->findChildren<QShortcut *>())
+            if (sc->key() == key("Ctrl+Alt+J"))
+                mine = sc;
+        QVERIFY(mine);
+        Q_EMIT mine->activated();
+        QTRY_COMPARE(t->path(), root + QStringLiteral("/b"));
+        t->navigate(back);
+        // A hotkey wins over a menu command with its key.
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("keys"));
+            KeysPage *kp = dlg.keysPage();
+            QCOMPARE(kp->hotkeys().size(), 1);
+            kp->setKey({QStringLiteral("hotkey"), QString(), 0}, QStringLiteral("Ctrl+K"), false);
+            QVERIFY(dlg.apply());
+        }
+        QVERIFY(invert->shortcut().isEmpty());
+        // Back as they came.
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("keys"));
+            KeysPage *kp = dlg.keysPage();
+            kp->resetAll();
+            kp->list()->setCurrentItem(kp->itemFor({QStringLiteral("hotkey"), QString(), 0}));
+            kp->findChildren<QPushButton *>().size(); // buttons exist
+            KeyMap::instance()->set({}, {}); // (what Delete then Apply does)
+        }
+        QCOMPARE(invert->shortcut(), key("Ctrl+I"));
+        QCOMPARE(all->shortcut(), QKeySequence(QKeySequence::SelectAll));
+        QVERIFY(KeyMap::instance()->overrides().isEmpty());
+        // Hotkeys go to a file and back.
+        const QString file = m_dir->filePath(QStringLiteral("hk.json"));
+        QVERIFY(KeyMap::exportHotkeys(file, {{QStringLiteral("A"), QStringLiteral("F9"), QStringLiteral("Go UP"), true}}, nullptr));
+        bool ok = false;
+        const QList<KeyMap::Hotkey> back2 = KeyMap::importHotkeys(file, &ok, nullptr);
+        QVERIFY(ok);
+        QCOMPARE(back2.size(), 1);
+        QCOMPARE(back2.first().command, QStringLiteral("Go UP"));
     }
 
     void preferencesGeneralAndFileTypes()
