@@ -52,6 +52,8 @@
 #include "ui/Notifier.h"
 #include "core/TabGroups.h"
 #include "core/SavedFilters.h"
+#include "core/ContextMenus.h"
+#include <QListWidget>
 #include "core/KeyMap.h"
 #include <QShortcut>
 #include <QSlider>
@@ -2977,6 +2979,126 @@ dirduo.on("folderOpened", e => { opened.push(e.path); dirduo.save("last", e.path
         QTRY_COMPARE(w->display(1)->currentTab()->path(), otherStart);
         t->navigate(start);
         QTRY_COMPARE(t->path(), start);
+    }
+
+    void rightClickMenuOfYourOwn()
+    {
+        QTemporaryDir dir;
+        const QString d = dir.path();
+        for (const char *n : {"game.d64", "pic.png", "pic2.png", "notes.txt"})
+            touch(d + QLatin1Char('/') + QLatin1String(n));
+        QDir().mkpath(d + QStringLiteral("/sub"));
+        FolderTab *t = w->display(0)->currentTab();
+        const QString back = t->path();
+        t->navigate(d);
+        waitListed(t, 5);
+        auto texts = [](QMenu &m) {
+            QStringList out;
+            for (QAction *a : m.actions())
+                out << (a->isSeparator() ? QStringLiteral("-") : a->text());
+            return out;
+        };
+        auto menuFor = [&](const QStringList &paths, QMenu &m, bool onItem = true) {
+            t->selectPaths(paths);
+            QTRY_COMPARE(t->selectedPaths().size(), paths.size());
+            w->fillContextMenu(m, w->display(0), onItem);
+        };
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("contextmenu"));
+            QCOMPARE(dlg.currentPage(), QStringLiteral("contextmenu"));
+            QVERIFY(dlg.search(QStringLiteral("right-click")).contains(QStringLiteral("contextmenu")));
+            ContextMenus::Item c64;
+            c64.label = QStringLiteral("Run in VICE");
+            c64.command = QStringLiteral("Go \"%1\"").arg(root + QStringLiteral("/b"));
+            c64.applies = QStringLiteral("*.d64;*.prg");
+            dlg.addMenuItem(c64);
+            ContextMenus::Item pics;
+            pics.label = QStringLiteral("Make Thumbnails");
+            pics.command = QStringLiteral("Go UP");
+            pics.applies = QStringLiteral("image");
+            pics.submenu = QStringLiteral("Pictures");
+            dlg.addMenuItem(pics);
+            ContextMenus::Item one;
+            one.label = QStringLiteral("Only One");
+            one.command = QStringLiteral("Go UP");
+            one.applies = QStringLiteral("files");
+            one.several = false;
+            dlg.addMenuItem(one);
+            ContextMenus::Item bg;
+            bg.label = QStringLiteral("Here Too");
+            bg.command = QStringLiteral("Go UP");
+            bg.applies = QStringLiteral("background");
+            dlg.addMenuItem(bg);
+            // Leave out a built-in one.
+            QListWidget *built = dlg.menuBuiltInList();
+            for (int i = 0; i < built->count(); ++i)
+                if (built->item(i)->text() == QStringLiteral("Make Link Here") || built->item(i)->text() == QStringLiteral("Convert Image"))
+                    built->item(i)->setCheckState(Qt::Unchecked);
+            QVERIFY(dlg.apply());
+        }
+        QCOMPARE(ContextMenus::instance()->items().size(), 4);
+        QVERIFY(ContextMenus::instance()->isHidden(QStringLiteral("Convert Images...")));
+        {
+            QMenu m;
+            menuFor({d + QStringLiteral("/game.d64")}, m);
+            const QStringList x = texts(m);
+            QVERIFY(x.contains(QStringLiteral("Run in VICE")));
+            QVERIFY(x.contains(QStringLiteral("Only One")));
+            QVERIFY(!x.contains(QStringLiteral("Pictures")));
+            QVERIFY(!x.contains(QStringLiteral("Make Link Here")));
+            QVERIFY(x.indexOf(QStringLiteral("Run in VICE")) < x.indexOf(QStringLiteral("Cut"))); // near the top
+            QVERIFY(x.first() != QStringLiteral("-") && x.last() != QStringLiteral("-"));
+            for (int i = 1; i < x.size(); ++i)
+                QVERIFY(!(x.at(i) == QStringLiteral("-") && x.at(i - 1) == QStringLiteral("-")));
+            // It runs its command.
+            for (QAction *a : m.actions())
+                if (a->text() == QStringLiteral("Run in VICE"))
+                    a->trigger();
+            QTRY_COMPARE(t->path(), root + QStringLiteral("/b"));
+            t->navigate(d);
+            waitListed(t, 5);
+        }
+        {
+            QMenu m;
+            menuFor({d + QStringLiteral("/pic.png"), d + QStringLiteral("/pic2.png")}, m);
+            const QStringList x = texts(m);
+            QVERIFY(x.contains(QStringLiteral("Pictures"))); // a submenu
+            QVERIFY(!x.contains(QStringLiteral("Only One"))); // two selected
+            QVERIFY(!x.contains(QStringLiteral("Run in VICE")));
+            QVERIFY(!x.contains(QStringLiteral("Convert Images...")));
+            QMenu *sub = nullptr;
+            for (QAction *a : m.actions())
+                if (a->menu() && a->text() == QStringLiteral("Pictures"))
+                    sub = a->menu();
+            QVERIFY(sub);
+            QCOMPARE(sub->actions().first()->text(), QStringLiteral("Make Thumbnails"));
+        }
+        {
+            QMenu m;
+            menuFor({d + QStringLiteral("/sub")}, m);
+            QVERIFY(!texts(m).contains(QStringLiteral("Only One"))); // folders are not files
+        }
+        {
+            QMenu m;
+            t->selectPaths({});
+            w->fillContextMenu(m, w->display(0), false);
+            QVERIFY(texts(m).contains(QStringLiteral("Here Too")));
+        }
+        // Switched off on the page: gone.
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("contextmenu"));
+            QCOMPARE(dlg.menuItemList()->topLevelItemCount(), 4);
+            dlg.menuItemList()->topLevelItem(0)->setCheckState(0, Qt::Unchecked);
+            QVERIFY(dlg.apply());
+        }
+        {
+            QMenu m;
+            menuFor({d + QStringLiteral("/game.d64")}, m);
+            QVERIFY(!texts(m).contains(QStringLiteral("Run in VICE")));
+        }
+        ContextMenus::instance()->set({}, {});
+        t->navigate(back);
+        waitListed(t, QDir(back).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
     }
 
     void konsoleOnEmptyArea()

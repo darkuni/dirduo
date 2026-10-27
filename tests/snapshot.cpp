@@ -20,6 +20,7 @@
 #include "core/Scripting.h"
 #include "ui/ViewerWindow.h"
 #include "ui/KeysPage.h"
+#include "core/ContextMenus.h"
 #include <QPainter>
 #include "ui/ViewerPane.h"
 #include "ui/ImageConvertDialog.h"
@@ -678,6 +679,25 @@ int main(int argc, char *argv[])
             prefs.show();
             QTest::qWait(300);
             prefs.grab().save(out + QStringLiteral("/51-keys.png"));
+        }
+        {
+            PreferencesDialog prefs(context, w, QStringLiteral("contextmenu"));
+            prefs.resize(900, 640);
+            ContextMenus::Item a;
+            a.label = QStringLiteral("Run in VICE");
+            a.icon = QStringLiteral("media-playback-start");
+            a.applies = QStringLiteral("*.d64;*.prg;*.t64");
+            a.command = QStringLiteral("x64sc {filepath}");
+            prefs.addMenuItem(a);
+            ContextMenus::Item b;
+            b.label = QStringLiteral("Copy to the SD Card");
+            b.applies = QStringLiteral("diskimage");
+            b.submenu = QStringLiteral("ROMs");
+            b.command = QStringLiteral("Copy TO=/sdcard/roms");
+            prefs.addMenuItem(b);
+            prefs.show();
+            QTest::qWait(300);
+            prefs.grab().save(out + QStringLiteral("/52-right-click-menu.png"));
         }
         // Opus-style tree: branch lines and the path to the current folder.
         w->runCommand(QStringLiteral("Set DUAL=vertical\nSet TREE=separate"));

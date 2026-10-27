@@ -112,6 +112,11 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Turn on the trees (Set TREE=separate): dotted lines, + / - boxes, and a blue line (green in the destination) from the top down to the folder you are in.
 - [ ] With Steam running, right-click a Windows .exe (or an AppImage) > Add to Steam: Steam adds it to the library (on the Deck it shows in Game Mode too). A text file has no Add to Steam.
 
+## Right-click menu
+
+- [ ] Preferences > Right-Click Menu > New: name "Run in VICE", shows for `*.d64;*.prg`, command `Go /downloads`. Right-click a .d64: it is near the top and goes to Downloads; a .png does not have it.
+- [ ] Add one for Disk images in a submenu "ROMs": right-click an .iso, the ROMs submenu has it. Untick "Make Link Here" under Built-in items: it is gone from the menu.
+
 ## Tab groups, filters, notices
 
 - [ ] Open a few tabs on both sides. Go > Tab Groups > Save These Tabs as a Group, name it. Close and change tabs, then Go > Tab Groups > your group: they all come back.

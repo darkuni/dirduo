@@ -86,6 +86,7 @@ add_library(dirduo_core STATIC
     src/core/KeyMap.cpp
     src/core/SavedFilters.cpp
     src/core/TabGroups.cpp
+    src/core/ContextMenus.cpp
     src/core/FileTags.cpp
     src/core/Checksum.cpp
     src/core/StatusFormat.cpp

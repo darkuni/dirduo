@@ -1,4 +1,6 @@
 #include "ui/PreferencesDialog.h"
+#include <QDialog>
+#include "core/ContextMenus.h"
 #include <QSpinBox>
 #include "core/TabGroups.h"
 #include "core/SavedFilters.h"
@@ -154,7 +156,7 @@ QString safeFileName(QString name)
 QStringList PreferencesDialog::pageNames()
 {
     return {QStringLiteral("general"), QStringLiteral("appearance"), QStringLiteral("theme"), QStringLiteral("labels"),
-            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("filetypes"), QStringLiteral("toolbars"), QStringLiteral("statusbar"), QStringLiteral("scripts"), QStringLiteral("viewer"), QStringLiteral("keys"), QStringLiteral("filters"), QStringLiteral("tabgroups")};
+            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("filetypes"), QStringLiteral("toolbars"), QStringLiteral("statusbar"), QStringLiteral("scripts"), QStringLiteral("viewer"), QStringLiteral("keys"), QStringLiteral("filters"), QStringLiteral("tabgroups"), QStringLiteral("contextmenu")};
 }
 
 PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, const QString &page)
@@ -211,6 +213,9 @@ PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, cons
     addPage(QStringLiteral("viewer"), QStringLiteral("Viewer"), QStringLiteral("view-preview"), buildViewer(),
             {QStringLiteral("picture"), QStringLiteral("image"), QStringLiteral("slideshow"), QStringLiteral("music"), QStringLiteral("video"),
              QStringLiteral("player"), QStringLiteral("show"), QStringLiteral("mark"), QStringLiteral("zoom"), QStringLiteral("wheel")});
+    addPage(QStringLiteral("contextmenu"), QStringLiteral("Right-Click Menu"), QStringLiteral("application-menu"), buildContextMenu(),
+            {QStringLiteral("context"), QStringLiteral("menu"), QStringLiteral("right-click"), QStringLiteral("file type"),
+             QStringLiteral("command"), QStringLiteral("hide")});
     addPage(QStringLiteral("filters"), QStringLiteral("Filters"), QStringLiteral("view-filter"), buildFilters(),
             {QStringLiteral("filter"), QStringLiteral("saved"), QStringLiteral("wildcard"), QStringLiteral("pattern")});
     addPage(QStringLiteral("tabgroups"), QStringLiteral("Tab Groups"), QStringLiteral("tab-duplicate"), buildTabGroups(),
@@ -370,6 +375,174 @@ QWidget *PreferencesDialog::buildViewer()
     mf->addRow(mb);
     layout->addWidget(mark);
     layout->addStretch(1);
+    return page;
+}
+
+namespace {
+// Shows a right-click command in its row.
+void showMenuItem(QTreeWidgetItem *it, const ContextMenus::Item &m)
+{
+    it->setText(0, m.label);
+    it->setIcon(0, QIcon::fromTheme(m.icon));
+    it->setText(1, ContextMenus::appliesText(m.applies) + (m.several ? QString() : QStringLiteral(" (one at a time)")));
+    it->setText(2, m.submenu);
+    QString cmd = m.command;
+    cmd.replace(QLatin1Char('\n'), QStringLiteral("; "));
+    it->setText(3, cmd);
+    it->setToolTip(3, m.command);
+    it->setCheckState(0, m.enabled ? Qt::Checked : Qt::Unchecked);
+    it->setData(0, Qt::UserRole, QVariant::fromValue(QStringList{m.label, m.icon, m.command, m.applies, m.submenu,
+                                                                 m.several ? QStringLiteral("1") : QString()}));
+}
+
+ContextMenus::Item menuItemOf(const QTreeWidgetItem *it)
+{
+    const QStringList d = it->data(0, Qt::UserRole).toStringList();
+    ContextMenus::Item m;
+    m.label = d.value(0);
+    m.icon = d.value(1);
+    m.command = d.value(2);
+    m.applies = d.value(3);
+    m.submenu = d.value(4);
+    m.several = !d.value(5).isEmpty();
+    m.enabled = it->checkState(0) == Qt::Checked;
+    return m;
+}
+} // namespace
+
+// One right-click command: its name, icon, what it shows for and what it runs.
+bool PreferencesDialog::editMenuItem(ContextMenus::Item &m)
+{
+    QDialog dlg(this);
+    dlg.setWindowTitle(m.label.isEmpty() ? QStringLiteral("New Right-Click Command") : QStringLiteral("Edit Right-Click Command"));
+    auto *form = new QFormLayout(&dlg);
+    auto *label = new QLineEdit(m.label, &dlg);
+    auto *icon = new QLineEdit(m.icon, &dlg);
+    icon->setPlaceholderText(QStringLiteral("An icon name, e.g. media-playback-start (optional)"));
+    auto *applies = new QComboBox(&dlg);
+    applies->setEditable(true);
+    for (const auto &c : ContextMenus::appliesChoices())
+        applies->addItem(c.second, c.first);
+    const int at = applies->findData(m.applies);
+    if (at >= 0)
+        applies->setCurrentIndex(at);
+    else
+        applies->setEditText(m.applies);
+    applies->setToolTip(QStringLiteral("Pick one, or type wildcards: *.d64;*.prg"));
+    auto *submenu = new QLineEdit(m.submenu, &dlg);
+    submenu->setPlaceholderText(QStringLiteral("Put it in a submenu with this name (optional)"));
+    auto *several = new QCheckBox(QStringLiteral("Also when several items are selected"), &dlg);
+    several->setChecked(m.several);
+    auto *cmd = new QPlainTextEdit(m.command, &dlg);
+    cmd->setPlaceholderText(QStringLiteral("Commands, one per line, as on a button:\nCopy TO=/run/media/deck/SD/roms\nShow"));
+    cmd->setMinimumHeight(fontMetrics().height() * 6);
+    form->addRow(QStringLiteral("Name:"), label);
+    form->addRow(QStringLiteral("Icon:"), icon);
+    form->addRow(QStringLiteral("Shows for:"), applies);
+    form->addRow(QStringLiteral("Submenu:"), submenu);
+    form->addRow(QString(), several);
+    form->addRow(QStringLiteral("Commands:"), cmd);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    form->addRow(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    if (dlg.exec() != QDialog::Accepted || label->text().trimmed().isEmpty() || cmd->toPlainText().trimmed().isEmpty())
+        return false;
+    m.label = label->text().trimmed();
+    m.icon = icon->text().trimmed();
+    const int picked = applies->findText(applies->currentText());
+    m.applies = picked >= 0 ? applies->itemData(picked).toString() : applies->currentText().trimmed();
+    m.submenu = submenu->text().trimmed();
+    m.several = several->isChecked();
+    m.command = cmd->toPlainText().trimmed();
+    return true;
+}
+
+void PreferencesDialog::addMenuItem(const ContextMenus::Item &m)
+{
+    auto *it = new QTreeWidgetItem(m_menuItems);
+    it->setFlags(it->flags() | Qt::ItemIsUserCheckable);
+    showMenuItem(it, m);
+    m_menuItems->setCurrentItem(it);
+}
+
+QWidget *PreferencesDialog::buildContextMenu()
+{
+    auto *page = new QWidget;
+    auto *layout = new QVBoxLayout(page);
+    auto *intro = new QLabel(QStringLiteral("Commands of your own in the right-click menu: for every file, for files or folders, for one kind "
+                                            "(pictures, disk images...), for names matching wildcards (*.d64;*.prg) or for empty space in a "
+                                            "list. They go near the top. Untick a built-in item below to leave it out."),
+                             page);
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+    m_menuItems = new QTreeWidget(page);
+    m_menuItems->setObjectName(QStringLiteral("contextmenu-items"));
+    m_menuItems->setRootIsDecorated(false);
+    m_menuItems->setHeaderLabels({QStringLiteral("Your command"), QStringLiteral("Shows for"), QStringLiteral("Submenu"), QStringLiteral("Runs")});
+    m_menuItems->header()->resizeSection(0, 180);
+    m_menuItems->header()->resizeSection(1, 150);
+    m_menuItems->header()->resizeSection(2, 90);
+    for (const ContextMenus::Item &m : ContextMenus::instance()->items())
+        addMenuItem(m);
+    m_menuItems->setCurrentItem(nullptr);
+    layout->addWidget(m_menuItems, 1);
+    auto *row = new QHBoxLayout;
+    auto *add = new QPushButton(QIcon::fromTheme(QStringLiteral("list-add")), QStringLiteral("New..."), page);
+    auto *edit = new QPushButton(QIcon::fromTheme(QStringLiteral("document-edit")), QStringLiteral("Edit..."), page);
+    auto *del = new QPushButton(QIcon::fromTheme(QStringLiteral("list-remove")), QStringLiteral("Delete"), page);
+    auto *up = new QPushButton(QIcon::fromTheme(QStringLiteral("go-up")), QString(), page);
+    auto *down = new QPushButton(QIcon::fromTheme(QStringLiteral("go-down")), QString(), page);
+    up->setToolTip(QStringLiteral("Earlier in the menu"));
+    down->setToolTip(QStringLiteral("Later in the menu"));
+    for (QPushButton *b : {add, edit, del, up, down})
+        row->addWidget(b);
+    row->addStretch(1);
+    layout->addLayout(row);
+    connect(add, &QPushButton::clicked, this, [this]() {
+        ContextMenus::Item m;
+        if (editMenuItem(m))
+            addMenuItem(m);
+    });
+    auto editCurrent = [this]() {
+        QTreeWidgetItem *it = m_menuItems->currentItem();
+        if (!it)
+            return;
+        ContextMenus::Item m = menuItemOf(it);
+        if (editMenuItem(m))
+            showMenuItem(it, m);
+    };
+    connect(edit, &QPushButton::clicked, this, editCurrent);
+    connect(m_menuItems, &QTreeWidget::itemDoubleClicked, this, editCurrent);
+    connect(del, &QPushButton::clicked, this, [this]() { delete m_menuItems->currentItem(); });
+    auto move = [this](int delta) {
+        QTreeWidgetItem *it = m_menuItems->currentItem();
+        if (!it)
+            return;
+        const int from = m_menuItems->indexOfTopLevelItem(it);
+        const int to = from + delta;
+        if (to < 0 || to >= m_menuItems->topLevelItemCount())
+            return;
+        m_menuItems->takeTopLevelItem(from);
+        m_menuItems->insertTopLevelItem(to, it);
+        m_menuItems->setCurrentItem(it);
+    };
+    connect(up, &QPushButton::clicked, this, [move]() { move(-1); });
+    connect(down, &QPushButton::clicked, this, [move]() { move(1); });
+
+    layout->addWidget(new QLabel(QStringLiteral("Built-in items (shown when they apply):"), page));
+    m_menuBuiltIns = new QListWidget(page);
+    m_menuBuiltIns->setObjectName(QStringLiteral("contextmenu-builtins"));
+    m_menuBuiltIns->setFlow(QListView::TopToBottom);
+    m_menuBuiltIns->setWrapping(true);
+    m_menuBuiltIns->setResizeMode(QListView::Adjust);
+    for (const QString &l : ContextMenus::builtInLabels()) {
+        auto *it = new QListWidgetItem(l, m_menuBuiltIns);
+        it->setFlags(it->flags() | Qt::ItemIsUserCheckable);
+        it->setCheckState(ContextMenus::instance()->isHidden(l) ? Qt::Unchecked : Qt::Checked);
+    }
+    m_menuBuiltIns->setMinimumHeight(m_menuBuiltIns->fontMetrics().height() * 11);
+    layout->addWidget(m_menuBuiltIns, 1);
     return page;
 }
 
@@ -1475,6 +1648,19 @@ bool PreferencesDialog::apply(QString *error)
     Prefs::instance()->setValues(v);
     if (!m_keysPage->apply(error))
         return false;
+
+    // Right-click menu.
+    {
+        QList<ContextMenus::Item> items;
+        for (int i = 0; i < m_menuItems->topLevelItemCount(); ++i)
+            items << menuItemOf(m_menuItems->topLevelItem(i));
+        QStringList hidden;
+        for (int i = 0; i < m_menuBuiltIns->count(); ++i)
+            if (m_menuBuiltIns->item(i)->checkState() == Qt::Unchecked)
+                hidden << m_menuBuiltIns->item(i)->text();
+        if (items != ContextMenus::instance()->items() || hidden != ContextMenus::instance()->hidden())
+            ContextMenus::instance()->set(items, hidden);
+    }
 
     // Saved filters.
     QList<SavedFilters::Filter> filters;

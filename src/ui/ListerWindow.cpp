@@ -1,4 +1,5 @@
 #include "ui/ListerWindow.h"
+#include "core/ContextMenus.h"
 #include "core/SavedFilters.h"
 #include "core/TabGroups.h"
 #include <QSet>
@@ -2501,6 +2502,78 @@ void ListerWindow::fillContextMenu(QMenu &menu, FileDisplay *d, bool onItem)
                                      onItem ? QStringLiteral("Properties") : QStringLiteral("Properties FILE={sourcepath}"), {},
                                      QStringLiteral("document-properties")));
     }
+    customizeContextMenu(menu, onItem ? sel : QStringList(), t);
+}
+
+// Your own right-click commands go in (Preferences > Right-Click Menu), the
+// built-in items you hid come out, and separators are tidied after.
+void ListerWindow::customizeContextMenu(QMenu &menu, const QStringList &paths, FolderTab *t)
+{
+    ContextMenus *cm = ContextMenus::instance();
+    for (QAction *a : menu.actions())
+        if (!a->isSeparator() && cm->isHidden(a->text()))
+            menu.removeAction(a);
+
+    QList<ContextMenus::Item> mine;
+    for (const ContextMenus::Item &i : cm->items())
+        if (ContextMenus::matches(i, paths, [t](const QString &p) { return t && t->isFolder(p); }))
+            mine << i;
+    if (!mine.isEmpty()) {
+        // Near the top: before Cut on items, before Paste on empty space.
+        QAction *before = nullptr;
+        for (QAction *a : menu.actions()) {
+            const QString c = ContextMenus::canonical(a->text());
+            if (c == QLatin1String("Cut") || c == QLatin1String("Copy") || c == QLatin1String("Paste") || c == QLatin1String("New Folder")) {
+                before = a;
+                break;
+            }
+        }
+        QHash<QString, QMenu *> subs;
+        QAction *first = nullptr;
+        for (const ContextMenus::Item &i : std::as_const(mine)) {
+            auto *a = new QAction(QIcon::fromTheme(i.icon), i.label, &menu);
+            a->setObjectName(QStringLiteral("user-menu-item"));
+            a->setStatusTip(i.command);
+            const QString cmd = i.command;
+            connect(a, &QAction::triggered, this, [this, cmd]() { runCommand(cmd); });
+            if (!i.submenu.isEmpty()) {
+                QMenu *sub = subs.value(i.submenu);
+                if (!sub) {
+                    sub = new QMenu(i.submenu, &menu);
+                    subs.insert(i.submenu, sub);
+                    QAction *sa = menu.insertMenu(before, sub);
+                    first = first ? first : sa;
+                }
+                sub->addAction(a);
+            } else {
+                menu.insertAction(before, a);
+                first = first ? first : a;
+            }
+        }
+        menu.insertSeparator(first);
+        if (before)
+            menu.insertSeparator(before);
+    }
+
+    // No separator first, last or twice in a row.
+    bool lastWasSep = true;
+    QAction *lastSep = nullptr;
+    for (QAction *a : menu.actions()) {
+        if (!a->isVisible())
+            continue;
+        if (a->isSeparator()) {
+            if (lastWasSep)
+                menu.removeAction(a);
+            else
+                lastSep = a;
+            lastWasSep = true;
+        } else {
+            lastWasSep = false;
+            lastSep = nullptr;
+        }
+    }
+    if (lastSep)
+        menu.removeAction(lastSep);
 }
 
 void ListerWindow::openFile(const QString &path)

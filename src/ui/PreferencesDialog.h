@@ -4,6 +4,8 @@
 #include "ui/Style.h"
 
 #include <QDialog>
+
+#include "core/ContextMenus.h"
 #include <QHash>
 #include <QToolButton>
 
@@ -74,6 +76,11 @@ public:
     QTreeWidget *scriptList() const { return m_scriptList; }
     class KeysPage *keysPage() const { return m_keysPage; }
     QTreeWidget *filterList() const { return m_filterList; }
+    QTreeWidget *menuItemList() const { return m_menuItems; }
+    class QListWidget *menuBuiltInList() const { return m_menuBuiltIns; }
+    // A right-click command added to the page (as New... does, without the editor).
+    void addMenuItem(const ContextMenus::Item &m);
+    bool editMenuItem(ContextMenus::Item &m);
     QTreeWidget *tabGroupList() const { return m_groupList; }
     QComboBox *terminalBox() const { return m_terminal; }
     QTableWidget *fileTypesTable() const { return m_fileTypes; }
@@ -101,6 +108,9 @@ private:
     QWidget *buildViewer();
     class KeysPage *m_keysPage = nullptr;
     QWidget *buildFilters();
+    QWidget *buildContextMenu();
+    QTreeWidget *m_menuItems = nullptr;
+    class QListWidget *m_menuBuiltIns = nullptr;
     QWidget *buildTabGroups();
     QTreeWidget *m_filterList = nullptr;
     QTreeWidget *m_groupList = nullptr;

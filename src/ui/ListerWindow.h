@@ -81,6 +81,7 @@ public:
     FolderTab *sourceTabForTesting() const { return sourceTab(); }
     // The file display's right-click menu (onItem: clicked on a file).
     void fillContextMenu(QMenu &menu, FileDisplay *d, bool onItem);
+    void customizeContextMenu(QMenu &menu, const QStringList &paths, FolderTab *t);
     // Opens a file: DirDuo's default app for its type, else the desktop's.
     void openFile(const QString &path);
     bool isDual() const { return m_dual; }
