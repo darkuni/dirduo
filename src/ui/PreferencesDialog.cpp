@@ -1,4 +1,5 @@
 #include "ui/PreferencesDialog.h"
+#include <QDoubleSpinBox>
 #include <QUrl>
 #include <QDesktopServices>
 #include <QInputDialog>
@@ -149,7 +150,7 @@ QString safeFileName(QString name)
 QStringList PreferencesDialog::pageNames()
 {
     return {QStringLiteral("general"), QStringLiteral("appearance"), QStringLiteral("theme"), QStringLiteral("labels"),
-            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("filetypes"), QStringLiteral("toolbars"), QStringLiteral("statusbar"), QStringLiteral("scripts")};
+            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("filetypes"), QStringLiteral("toolbars"), QStringLiteral("statusbar"), QStringLiteral("scripts"), QStringLiteral("viewer")};
 }
 
 PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, const QString &page)
@@ -203,6 +204,9 @@ PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, cons
             {QStringLiteral("columns"), QStringLiteral("view"), QStringLiteral("group"), QStringLiteral("icons"), QStringLiteral("pictures")});
     addPage(QStringLiteral("filetypes"), QStringLiteral("File Types"), QStringLiteral("preferences-desktop-filetype-association"), buildFileTypes(),
             {QStringLiteral("open with"), QStringLiteral("application"), QStringLiteral("default"), QStringLiteral("program")});
+    addPage(QStringLiteral("viewer"), QStringLiteral("Viewer"), QStringLiteral("view-preview"), buildViewer(),
+            {QStringLiteral("picture"), QStringLiteral("image"), QStringLiteral("slideshow"), QStringLiteral("music"), QStringLiteral("video"),
+             QStringLiteral("player"), QStringLiteral("show"), QStringLiteral("mark"), QStringLiteral("zoom"), QStringLiteral("wheel")});
     addPage(QStringLiteral("toolbars"), QStringLiteral("Toolbars"), QStringLiteral("configure-toolbars"), buildToolbars(),
             {QStringLiteral("button"), QStringLiteral("customize"), QStringLiteral("customize")});
     addPage(QStringLiteral("scripts"), QStringLiteral("Scripts"), QStringLiteral("text-x-script"), buildScripts(),
@@ -263,6 +267,94 @@ QWidget *PreferencesDialog::buildGeneral()
     layout->addWidget(term);
     layout->addStretch(1);
     return page;
+}
+
+QWidget *PreferencesDialog::buildViewer()
+{
+    auto *page = new QWidget;
+    auto *layout = new QVBoxLayout(page);
+    const Prefs::Values::Viewer &v = Prefs::instance()->values().viewer;
+    auto box = [&](const QString &key, const QString &text, bool on, QLayout *into, QWidget *parent) {
+        auto *b = new QCheckBox(text, parent);
+        b->setChecked(on);
+        into->addWidget(b);
+        m_viewerBoxes.insert(key, b);
+    };
+    auto *intro = new QLabel(QStringLiteral("The standalone viewer: right-click a file > View (or Play), the Show command, or double-click "
+                                            "when turned on below. F3's viewer pane is separate."),
+                             page);
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+
+    auto *open = new QGroupBox(QStringLiteral("Opening"), page);
+    auto *ol = new QVBoxLayout(open);
+    box(QStringLiteral("pictures"), QStringLiteral("Double-clicking a picture opens it in the viewer"), v.openPictures, ol, open);
+    box(QStringLiteral("media"), QStringLiteral("Double-clicking music or a video plays it in the viewer"), v.openMedia, ol, open);
+    box(QStringLiteral("siblings"), QStringLiteral("Next and Previous go through the other files of the same kind in the folder"), v.siblings, ol, open);
+    box(QStringLiteral("reuse"), QStringLiteral("Use the viewer that is already open"), v.reuse, ol, open);
+    layout->addWidget(open);
+
+    auto *look = new QGroupBox(QStringLiteral("Pictures"), page);
+    auto *lf = new QFormLayout(look);
+    m_viewerZoom = new QComboBox(look);
+    m_viewerZoom->addItems({QStringLiteral("Fit to the window (shrink big ones only)"), QStringLiteral("Grow to the window"),
+                            QStringLiteral("Original size")});
+    m_viewerZoom->setCurrentIndex(v.resetZoom);
+    lf->addRow(QStringLiteral("Each picture opens at:"), m_viewerZoom);
+    m_viewerBackground = new QComboBox(look);
+    m_viewerBackground->addItems({QStringLiteral("Dark"), QStringLiteral("Black"), QStringLiteral("White"), QStringLiteral("The theme's"),
+                                  QStringLiteral("Checkerboard")});
+    m_viewerBackground->setCurrentIndex(v.background);
+    lf->addRow(QStringLiteral("Background:"), m_viewerBackground);
+    auto *wheel = new QComboBox(look);
+    wheel->setObjectName(QStringLiteral("viewer-wheel"));
+    wheel->addItems({QStringLiteral("Goes to the next or previous file (Ctrl+wheel zooms)"), QStringLiteral("Zooms")});
+    wheel->setCurrentIndex(v.wheelSteps ? 0 : 1);
+    m_viewerWheel = wheel;
+    lf->addRow(QStringLiteral("The mouse wheel:"), wheel);
+    auto *lb = new QVBoxLayout;
+    box(QStringLiteral("wrap"), QStringLiteral("After the last file, go round to the first"), v.wrap, lb, look);
+    box(QStringLiteral("fullpath"), QStringLiteral("Show the full path in the title"), v.fullPathTitle, lb, look);
+    lf->addRow(lb);
+    layout->addWidget(look);
+
+    auto *play = new QGroupBox(QStringLiteral("Music and video"), page);
+    auto *pl = new QVBoxLayout(play);
+    box(QStringLiteral("autoplay"), QStringLiteral("Start playing when shown"), v.autoPlay, pl, play);
+    box(QStringLiteral("playnext"), QStringLiteral("Play the next file when one ends"), v.playNext, pl, play);
+    layout->addWidget(play);
+
+    auto *slide = new QGroupBox(QStringLiteral("Slideshow (S)"), page);
+    auto *sf = new QFormLayout(slide);
+    m_slideSeconds = new QDoubleSpinBox(slide);
+    m_slideSeconds->setRange(0.2, 3600);
+    m_slideSeconds->setDecimals(1);
+    m_slideSeconds->setSingleStep(0.5);
+    m_slideSeconds->setSuffix(QStringLiteral(" seconds"));
+    m_slideSeconds->setValue(v.slideSeconds);
+    sf->addRow(QStringLiteral("Each picture shows for:"), m_slideSeconds);
+    auto *sb = new QVBoxLayout;
+    box(QStringLiteral("random"), QStringLiteral("In random order"), v.slideRandom, sb, slide);
+    box(QStringLiteral("slideauto"), QStringLiteral("Start one whenever the viewer opens with several pictures"), v.slideAuto, sb, slide);
+    sf->addRow(sb);
+    layout->addWidget(slide);
+
+    auto *mark = new QGroupBox(QStringLiteral("Marking (M)"), page);
+    auto *mf = new QFormLayout(mark);
+    m_markName = new QLineEdit(v.markCollection, mark);
+    m_markName->setToolTip(QStringLiteral("%F is the folder's name, %D today's date"));
+    mf->addRow(QStringLiteral("Marked files go in the collection:"), m_markName);
+    auto *mb = new QVBoxLayout;
+    box(QStringLiteral("openmarked"), QStringLiteral("Open the collection in a tab when the viewer closes"), v.openMarkedOnClose, mb, mark);
+    mf->addRow(mb);
+    layout->addWidget(mark);
+    layout->addStretch(1);
+    return page;
+}
+
+QCheckBox *PreferencesDialog::viewerBox(const QString &key) const
+{
+    return m_viewerBoxes.value(key);
 }
 
 QCheckBox *PreferencesDialog::generalBox(const QString &key) const
@@ -1201,6 +1293,24 @@ bool PreferencesDialog::apply(QString *error)
     const QString typed = m_terminal->currentText().trimmed();
     const int at = m_terminal->findText(typed);
     v.terminal = at >= 0 ? m_terminal->itemData(at).toString() : typed;
+    // Viewer.
+    Prefs::Values::Viewer &vw = v.viewer;
+    vw.openPictures = m_viewerBoxes.value(QStringLiteral("pictures"))->isChecked();
+    vw.openMedia = m_viewerBoxes.value(QStringLiteral("media"))->isChecked();
+    vw.siblings = m_viewerBoxes.value(QStringLiteral("siblings"))->isChecked();
+    vw.reuse = m_viewerBoxes.value(QStringLiteral("reuse"))->isChecked();
+    vw.wrap = m_viewerBoxes.value(QStringLiteral("wrap"))->isChecked();
+    vw.fullPathTitle = m_viewerBoxes.value(QStringLiteral("fullpath"))->isChecked();
+    vw.autoPlay = m_viewerBoxes.value(QStringLiteral("autoplay"))->isChecked();
+    vw.playNext = m_viewerBoxes.value(QStringLiteral("playnext"))->isChecked();
+    vw.slideRandom = m_viewerBoxes.value(QStringLiteral("random"))->isChecked();
+    vw.slideAuto = m_viewerBoxes.value(QStringLiteral("slideauto"))->isChecked();
+    vw.openMarkedOnClose = m_viewerBoxes.value(QStringLiteral("openmarked"))->isChecked();
+    vw.resetZoom = m_viewerZoom->currentIndex();
+    vw.background = m_viewerBackground->currentIndex();
+    vw.wheelSteps = m_viewerWheel->currentIndex() == 0;
+    vw.slideSeconds = m_slideSeconds->value();
+    vw.markCollection = m_markName->text().trimmed().isEmpty() ? Prefs::Values::Viewer().markCollection : m_markName->text().trimmed();
     Prefs::instance()->setValues(v);
 
     // Theme: an edited theme is saved under its name, so it survives a restart.

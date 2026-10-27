@@ -522,6 +522,24 @@ QStringList FolderTab::selectedPaths() const
     return out;
 }
 
+QStringList FolderTab::visiblePaths() const
+{
+    QStringList out;
+    const QAbstractItemModel *m = m_selection->model();
+    std::function<void(const QModelIndex &)> walk = [&](const QModelIndex &parent) {
+        for (int r = 0; r < m->rowCount(parent); ++r) {
+            const QModelIndex i = m->index(r, FileListModel::NameColumn, parent);
+            const QString p = i.data(FileListModel::PathRole).toString();
+            if (!p.isEmpty())
+                out << p;
+            if (m->hasChildren(i))
+                walk(i);
+        }
+    };
+    walk(QModelIndex());
+    return out;
+}
+
 QString FolderTab::focusedPath() const
 {
     const QModelIndex cur = m_selection->currentIndex();

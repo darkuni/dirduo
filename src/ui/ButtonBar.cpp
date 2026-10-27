@@ -819,7 +819,7 @@ QList<ToolbarDef> ToolbarStore::presets()
                          "Select by label or rating")});
     }
     out << bar("images", "Images",
-               {b("Show", "view-preview", "Show", "The picture viewer"),
+               {b("Show", "view-preview", "Show", "The viewer"),
                 split(b("Convert", "image-x-generic", "Image", "Convert, resize, turn", "files"),
                       {b("To PNG", "", "Image CONVERT=png RUN", "", "files"), b("To JPEG", "", "Image CONVERT=jpg RUN", "", "files"),
                        b("To WebP", "", "Image CONVERT=webp RUN", "", "files"),

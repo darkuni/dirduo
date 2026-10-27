@@ -25,6 +25,27 @@ public:
         QString statusDefinition;
         QString effectiveStatusDefinition() const;
         QString terminal;            // empty: Konsole, else the first one installed
+
+        // The standalone viewer (Show), as Opus's Viewer pages.
+        struct Viewer
+        {
+            bool openPictures = false;   // double-clicking a picture opens it in the viewer
+            bool openMedia = false;      // ...music and video too
+            bool siblings = true;        // Next/Previous go through the folder (Opus "Generate Next/Previous list")
+            bool reuse = true;           // open in the viewer already open (Opus "Recycle viewer window")
+            bool wrap = false;           // after the last one, back to the first
+            bool wheelSteps = true;      // the wheel goes to the next file; false: it zooms
+            int resetZoom = 0;           // each new picture: 0 fit, 1 grow, 2 original size
+            int background = 0;          // 0 dark, 1 black, 2 white, 3 the theme's, 4 checkerboard
+            bool fullPathTitle = false;
+            bool playNext = true;        // music/video: go on to the next file when one ends
+            bool autoPlay = true;        // music/video starts playing when shown
+            double slideSeconds = 4.0;
+            bool slideRandom = false;
+            bool slideAuto = false;      // start a slideshow whenever it opens with several pictures
+            QString markCollection = QStringLiteral("Marked Pictures - %F"); // %F folder, %D date
+            bool openMarkedOnClose = true;
+        } viewer;
     };
 
     const Values &values() const { return m_values; }

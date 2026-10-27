@@ -21,7 +21,8 @@
 #include "core/SteamShortcut.h"
 #include "core/Scripting.h"
 #include "core/FileTags.h"
-#include "ui/ImageViewer.h"
+#include "ui/ViewerWindow.h"
+#include "core/Prefs.h"
 #include "ui/OpenWithDialog.h"
 #include "core/Apps.h"
 #include "ui/ServerDialog.h"
@@ -2215,9 +2216,19 @@ void ListerWindow::fillContextMenu(QMenu &menu, FileDisplay *d, bool onItem)
             menu.addAction(commandAction(QStringLiteral("Add to \"%1\"").arg(CommandEngine::suggestedArchiveName(sel, t->path(), QStringLiteral("zip"))),
                                          QStringLiteral("Archive CREATE QUICK FORMAT=zip"), {}, QStringLiteral("archive-insert")));
         }
-        if (pictures) {
+        // Any local files: the standalone viewer ("Play" for music and video).
+        bool files = !sel.isEmpty() && sel.size() <= 2000;
+        bool media = files;
+        for (const QString &p : sel) {
+            files = files && Location::isLocal(p) && !t->isFolder(p);
+            media = media && ViewerWindow::isMedia(p);
+        }
+        if (files) {
             menu.addSeparator();
-            menu.addAction(commandAction(QStringLiteral("View"), QStringLiteral("Show"), {}, QStringLiteral("view-preview")));
+            menu.addAction(commandAction(media ? QStringLiteral("Play") : QStringLiteral("View"), QStringLiteral("Show"), {},
+                                         media ? QStringLiteral("media-playback-start") : QStringLiteral("view-preview")));
+        }
+        if (pictures) {
             menu.addAction(commandAction(sel.size() == 1 ? QStringLiteral("Convert Image...") : QStringLiteral("Convert Images..."),
                                          QStringLiteral("Image"), {}, QStringLiteral("image-x-generic")));
         }
@@ -2295,6 +2306,12 @@ void ListerWindow::openFile(const QString &path)
             backend->openFile(path);
         else
             showError(QStringLiteral("Open"), QStringLiteral("Remote files need the KIO build of DirDuo."));
+        return;
+    }
+    // Pictures, music and video in DirDuo's viewer when Preferences > Viewer says so.
+    const Prefs::Values::Viewer &vp = Prefs::instance()->values().viewer;
+    if ((vp.openPictures && ViewerWindow::isPicture(path)) || (vp.openMedia && ViewerWindow::isMedia(path))) {
+        runCommandWithFiles(QStringLiteral("Show"), {path});
         return;
     }
     // DirDuo's own default for the type first, then the desktop's.
@@ -2834,25 +2851,108 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
         return true;
     }
     if (cmd.is(QStringLiteral("Show"))) {
+        auto wordOf = [&cmd](const QString &key) {
+            const QString v = cmd.value(key).toLower();
+            return !v.isEmpty() ? v : (cmd.hasFlag(key) || cmd.hasArg(key)) ? QStringLiteral("toggle") : QString();
+        };
+        // VIEWERCMD: commands for the viewer that is open (Opus's).
+        if (cmd.hasArg(QStringLiteral("VIEWERCMD"))) {
+            ViewerWindow *v = ViewerWindow::recent();
+            if (!v)
+                return fail(QStringLiteral("No viewer is open."));
+            for (const QString &c : cmd.values(QStringLiteral("VIEWERCMD")))
+                if (!v->runViewerCommand(c, error))
+                    return false;
+            return true;
+        }
+        const QString link = wordOf(QStringLiteral("LISTERLINK"));
+        if (link == QLatin1String("close") || link == QLatin1String("toggle")) {
+            bool closed = false;
+            for (ViewerWindow *v : ViewerWindow::windows())
+                if (v->lister() == this && v->isLinked()) {
+                    v->close();
+                    closed = true;
+                }
+            if (link == QLatin1String("close") || closed)
+                return true;
+        }
         QStringList picked;
         for (const QString &f : cmd.values(QStringLiteral("FILE")))
             picked << m_app.engine().resolvePath(f, sourcePath());
+        for (const QString &f : cmd.positional)
+            if (!f.startsWith(QLatin1Char('-')))
+                picked << m_app.engine().resolvePath(f, sourcePath());
         if (picked.isEmpty())
             picked = selectedPaths();
         if (picked.isEmpty() && !focusedPath().isEmpty())
             picked << focusedPath();
-        QStringList pictures;
+        QStringList files;
         for (const QString &p : std::as_const(picked)) {
-            if (Location::isLocal(p) && ImageConvert::canRead(p))
-                pictures << p;
+            if (!Location::isLocal(p))
+                continue;
+            if (QFileInfo(p).isDir()) // a folder: the files in it
+                files << ViewerWindow::filesIn(p, ViewerWindow::Family::All);
+            else
+                files << p;
         }
-        if (pictures.isEmpty())
-            return fail(QStringLiteral("Select a picture to view."));
-        // Several picked: step through those; one: through its folder.
-        auto *viewer = new ImageViewer(pictures.first(), pictures.size() > 1 ? pictures : QStringList(), nullptr);
-        viewer->show();
+        if (files.isEmpty())
+            return fail(QStringLiteral("Select a file to view."));
+        // Several picked: step through those; one: through its folder (its
+        // kind, or everything with AUTOFILELIST=all).
+        const QString autoList = wordOf(QStringLiteral("AUTOFILELIST"));
+        ViewerWindow::Family family = ViewerWindow::Family::Auto;
+        QStringList list = files.size() > 1 ? files : QStringList();
+        if (autoList == QLatin1String("all"))
+            family = ViewerWindow::Family::All;
+        if (files.size() == 1 && (cmd.hasFlag(QStringLiteral("LISTSIBLINGS")) || !autoList.isEmpty()))
+            list = ViewerWindow::filesIn(QFileInfo(files.first()).absolutePath(),
+                                         family == ViewerWindow::Family::Auto ? ViewerWindow::familyOf(files.first()) : family);
+        if (autoList == QLatin1String("toggle")) {
+            // The files shown in this tab, as Opus's AUTOFILELIST.
+            if (FolderTab *t = sourceTab()) {
+                QStringList shown;
+                const ViewerWindow::Family f = ViewerWindow::familyOf(files.first());
+                for (const QString &p : t->visiblePaths())
+                    if (!t->isFolder(p) && ViewerWindow::familyOf(p) == f)
+                        shown << p;
+                if (!shown.isEmpty())
+                    list = shown;
+            }
+        }
+        const QString reuse = wordOf(QStringLiteral("USEEXISTING"));
+        ViewerWindow *viewer = nullptr;
+        if (reuse != QLatin1String("no") && (Prefs::instance()->values().viewer.reuse || !reuse.isEmpty()))
+            viewer = ViewerWindow::recent();
+        if (!viewer)
+            viewer = new ViewerWindow(this);
+        viewer->setLister(this);
+        if (!link.isEmpty())
+            viewer->setLinked(true);
+        auto numbers = [](const QString &v) {
+            const QStringList parts = v.split(QLatin1Char(','));
+            return parts.size() == 2 ? QPoint(parts.at(0).trimmed().toInt(), parts.at(1).trimmed().toInt()) : QPoint(-1, -1);
+        };
+        if (cmd.hasArg(QStringLiteral("SIZE"))) {
+            const QPoint s = numbers(cmd.value(QStringLiteral("SIZE")));
+            if (s.x() > 0 && s.y() > 0)
+                viewer->resize(s.x(), s.y());
+        }
+        if (cmd.hasArg(QStringLiteral("POS"))) {
+            const QPoint p = numbers(cmd.value(QStringLiteral("POS")));
+            if (p.x() >= 0)
+                viewer->move(p);
+        }
+        viewer->open(files.first(), list, family);
+        if (cmd.hasFlag(QStringLiteral("FULLSCREEN")) || (cmd.hasArg(QStringLiteral("FULLSCREEN")) && cmd.value(QStringLiteral("FULLSCREEN")).toLower() != QLatin1String("off")))
+            viewer->setFullScreenMode(true);
+        if (!viewer->isVisible())
+            viewer->show();
         viewer->raise();
         viewer->activateWindow();
+        const bool slideshow = cmd.hasFlag(QStringLiteral("SLIDESHOW")) || cmd.hasArg(QStringLiteral("SLIDESHOW"))
+            || (Prefs::instance()->values().viewer.slideAuto && viewer->count() > 1 && ViewerWindow::isPicture(files.first()));
+        if (slideshow)
+            viewer->setSlideshow(true);
         return true;
     }
     if (cmd.is(QStringLiteral("OpenWith"))) {
@@ -3155,6 +3255,12 @@ void ListerWindow::updateViewer()
         if (sel.isEmpty() && t && !t->focusedPath().isEmpty())
             sel << t->focusedPath();
         m_metaPane->setFiles(sel);
+    }
+    // Linked viewers show the file in focus (Opus's LISTERLINK).
+    if (t && !t->focusedPath().isEmpty() && Location::isLocal(t->focusedPath()) && !t->isFolder(t->focusedPath())) {
+        for (ViewerWindow *v : ViewerWindow::windows())
+            if (v->lister() == this && v->isLinked() && v->current() != t->focusedPath())
+                v->open(t->focusedPath(), {}, ViewerWindow::familyOf(t->focusedPath()));
     }
     if (!m_viewer || !m_viewer->isVisible())
         return;

@@ -41,5 +41,7 @@ Q_SIGNALS:
 private:
     Collections() = default;
     QString fileFor(const QString &name) const;
+
+public:
     static bool validName(const QString &name, QString *error);
 };

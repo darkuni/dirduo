@@ -50,7 +50,7 @@ Servers and archives (KIO):
 - Shell script buttons: a button whose function starts with `#!/bin/bash` (or any `#!`) runs as a script on the real system (outside the Flatpak). The selected items are `"$@"`, it starts in the source folder, and `$DIRDUO_SOURCE`, `$DIRDUO_DEST` and `$DIRDUO_FOCUSED` are set. `# dirduo: terminal` runs it in Konsole, `# dirduo: output` always shows what it printed (otherwise only when it fails), `# dirduo: norefresh` leaves the listings alone. The button editor's New Script puts in a template
 - Open With: right-click > Open With lists the applications for the file's type (from the system's .desktop files, Flatpak apps included), plus Other Application... to pick any app, search by name, and Always use it for that type. DirDuo's choice wins over the desktop's when opening files. `OpenWith APP=Kate DEFAULT`
 - Viewer pane: pictures, text (NFO/DIZ in code page 437), hex, what is inside any archive (zip, 7z, RAR, tar, ISO...), and music and video with Play, a position bar and the time; nothing plays until asked, and closing the pane or moving on stops it
-- Picture viewer (right-click > View, or the `Show` command): one picture at a time in its own window, stepping through the folder (or the selected pictures) with the arrows, Home/End, the wheel to zoom (Ctrl+wheel to step), 0 to fit, 1 for 100%, R/L to turn, F or a double-click for full screen, Esc to close
+- Standalone viewer, as Opus's (right-click > View or Play, the `Show` command, or double-click when Preferences > Viewer says so): any file in its own window. See "The viewer" below
 - Preferences > General: what the status line shows (counts, selection, free space), whether copies ask Retry / Skip / Abort, and which terminal Open Konsole Here uses. Preferences > File Types: the applications DirDuo uses per type, and back to the desktop's choice
 - Help > About shows which build this is
 - Right-click empty space > Open Konsole in This Folder (also Tools > Open Konsole Here, Shift+F4, and the `Terminal` command). Uses Konsole, or the first other terminal installed; from the Flatpak it opens on the real system
@@ -131,7 +131,7 @@ Every button, menu item, hotkey, drop and inline rename runs one of these. Butto
 | `Undo` | no arguments: the latest; `ID=`, `LIST`, `LOG` (`FIND=`) |
 | `OpenWith` | `APP=<name or desktop id>` (asks when left out), `DEFAULT`, `FILE=...` |
 | `Server` | `GO=<name>` (`NEWTAB`, `OPENINDEST`), `ADD` (asks) or `ADD URL=... NAME=...`, `REMOVE=<name>`; nothing: the list |
-| `Show` | `FILE=...` (the picture viewer) |
+| `Show` | `FILE=...`, `AUTOFILELIST`, `LISTSIBLINGS`, `FULLSCREEN`, `SLIDESHOW`, `LISTERLINK`, `USEEXISTING=no`, `POS=x,y`, `SIZE=w,h`, `VIEWERCMD=...` (the viewer) |
 | `Sync` | `LEFT=`, `RIGHT=`, `MODE=update\|mirror\|twoway`, `COMPARE=datesize\|date\|size\|contents`, `EXCLUDE=*.tmp;...`, `RUN` |
 | `Tag` | `LABEL=<name>\|none`, `RATING=0-5\|+\|-`, `ADD=a,b`, `REMOVE=`, `SET=` (replace the tags), `CLEAR` (tags), `CLEARALL`, `DESCRIPTION=`, `FILE=...`; nothing: the Tags window |
 | `Checksum` | `ALGO=md5\|sha1\|sha256\|crc32`, `CLIPBOARD`, `SAVE[=<file>\|ask]`, `VERIFY`, `FILE=...`; nothing: the Checksums window (a selected list is checked) |
@@ -159,6 +159,34 @@ Go /downloads
 Select PATTERN=*.mp3
 Copy TO=/music/incoming WHENEXISTS=newer
 ```
+
+## The viewer
+
+The standalone viewer follows Directory Opus's: one window that shows any file. Pictures zoom, turn, flip and crop (only what you see; the file is left alone until you Save As). Music and video play with a position bar, volume and mute, cover art when the file has some, and go on to the next file when one ends. Text, `.nfo` files (in the old DOS character set), hex and the contents of archives show too. Next and Previous go through the folder's files of the same kind, or the files you selected.
+
+| Key | Does |
+|---|---|
+| Space / Backspace, wheel, Page Down / Up | Next / previous (Space plays and pauses music and video) |
+| Home / End, X | First / last, a random one |
+| Cursor keys | Scroll a big picture (otherwise previous / next). Music and video: Left / Right seek 5 seconds, Up / Down set the volume |
+| `=` `+` / `-`, Ctrl+wheel | Zoom in / out |
+| O, `/`, numpad `*` | Original size; Ctrl+1 to Ctrl+8 for 25% to 800% |
+| F / G | Fit to the window (shrinks big pictures only) / grow to fill it |
+| L / R, 1 2 3, 0 | Turn left / right, to 90° 180° 270°, back as it was |
+| H / V | Flip horizontally / vertically |
+| Shift+drag, Ctrl+C, Ctrl+R, Ctrl+Z | Select, copy (the selection or the whole picture), crop to it, restore |
+| F10 | Information over the picture |
+| S or P | Slideshow (music and video play to the end before it moves on) |
+| M or Insert | Mark; marked files go into a collection (`Marked Pictures - <folder>`), which opens in a tab when the viewer closes |
+| Ctrl+Left / Right, Ctrl+Up / Down, Shift+M, Ctrl+Space | Previous / next marked, first / last marked, move the mark here, back to where you were |
+| K, J / `;` | Play / pause, back / forward 10 seconds |
+| Alt+Enter, F11, middle click, double-click | Full screen |
+| Delete | Move the file to the trash |
+| Ctrl+L | Select the file in the lister |
+| Ctrl+M | Hide or show the menu bar |
+| Escape | Leave full screen, or close |
+
+File > Follow the Lister (or `Show LISTERLINK`) makes the viewer show whatever is in focus in the lister as you move through it. The File menu also has Copy To, Move To, Save As, Set as Wallpaper (KDE Plasma) and Open in Its Application. `Show VIEWERCMD=...` drives an open viewer from a button: `next`, `prev`, `first`, `last`, `nextrandom`, `goto,5`, `zoom,fit`, `zoom,200`, `rotate,left`, `flip,h`, `fullscreen`, `slideshow,on`, `info`, `hex`, `mark`, `mark,next`, `selectfile`, `playpause`, `delete`, `close`. Preferences > Viewer sets what double-click opens, the zoom each picture starts at, the background, what the wheel does, wrapping round, auto-play and play-next, the slideshow's speed and order, and the marking collection's name.
 
 ## Scripts
 

@@ -112,6 +112,17 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Turn on the trees (Set TREE=separate): dotted lines, + / - boxes, and a blue line (green in the destination) from the top down to the folder you are in.
 - [ ] With Steam running, right-click a Windows .exe (or an AppImage) > Add to Steam: Steam adds it to the library (on the Deck it shows in Game Mode too). A text file has no Add to Steam.
 
+## The viewer
+
+- [ ] Preferences > Viewer: tick "Double-clicking a picture opens it in the viewer", OK. Double-click a screenshot: it opens in DirDuo's viewer. Space and Backspace step through the folder; F10 shows the information.
+- [ ] In the viewer: = zooms in, F fits, G grows, R turns, H flips, O is 100%. Shift+drag a box, Ctrl+C, and paste into another app: just that part. Ctrl+Z puts it back.
+- [ ] Press M on two screenshots: a star shows and the status bar counts them. Close the viewer: the "Marked Pictures" collection opens in a tab.
+- [ ] Press S: a slideshow; S again stops it. Alt+Enter and Esc go in and out of full screen.
+- [ ] Right-click an MP3 > Play: it plays in the viewer with a position bar and volume, and goes on to the next song when it ends. Space pauses; Left/Right seek; Up/Down change the volume.
+- [ ] Right-click a video > Play: it plays; double-click it for full screen.
+- [ ] Right-click a .txt or .nfo > View: the text shows; View > Hex View shows the bytes. A zip shows what is inside.
+- [ ] In the viewer, File > Follow the Lister, then arrow through files in the lister: the viewer follows.
+
 ## Scripts
 
 - [ ] Tools > Scripts > Manage Scripts..., Add Examples: three scripts show as OK, with what each adds.

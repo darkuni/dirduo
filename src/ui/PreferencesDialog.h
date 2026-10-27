@@ -68,7 +68,8 @@ public:
     void addLabelRule(const LabelRule &rule);
 
     // General and file types, for tests.
-    QCheckBox *generalBox(const QString &key) const; // counts, selection, free, ask
+    QCheckBox *generalBox(const QString &key) const;
+    QCheckBox *viewerBox(const QString &key) const; // pictures, media, siblings, reuse, wrap, autoplay, playnext... // counts, selection, free, ask
     QPlainTextEdit *statusDefinitionEdit() const { return m_statusDef; }
     QTreeWidget *scriptList() const { return m_scriptList; }
     QComboBox *terminalBox() const { return m_terminal; }
@@ -94,6 +95,13 @@ private:
     QWidget *buildToolbars();
     QWidget *buildStatusBar();
     QWidget *buildScripts();
+    QWidget *buildViewer();
+    QHash<QString, QCheckBox *> m_viewerBoxes;
+    class QComboBox *m_viewerZoom = nullptr;
+    class QComboBox *m_viewerBackground = nullptr;
+    class QComboBox *m_viewerWheel = nullptr;
+    class QDoubleSpinBox *m_slideSeconds = nullptr;
+    class QLineEdit *m_markName = nullptr;
     QTreeWidget *m_scriptList = nullptr;
     QPlainTextEdit *m_statusDef = nullptr;
     StatusLine *m_statusPreview = nullptr;

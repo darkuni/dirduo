@@ -1,11 +1,5 @@
 #include "ui/ViewerPane.h"
-#ifdef DIRDUO_HAVE_MULTIMEDIA
-#include <QAudioOutput>
-#include <QMediaFormat>
-#include <QMediaPlayer>
-#include <QSlider>
-#include <QVideoWidget>
-#endif
+#include "ui/MediaPanel.h"
 
 #include "core/Archive.h"
 
@@ -292,139 +286,9 @@ Preview Preview::load(const QString &path, int maxImageSide)
 
 // ---------------------------------------------------------------- pane
 
-#ifdef DIRDUO_HAVE_MULTIMEDIA
-// Plays the file in the viewer: a picture for video, the tags for music, and
-// play/pause with a position bar. Nothing starts until Play is pressed, and
-// the player itself is only made the first time something is loaded.
-class MediaPanel : public QWidget
-{
-public:
-    explicit MediaPanel(QWidget *parent)
-        : QWidget(parent)
-    {
-        auto *layout = new QVBoxLayout(this);
-        layout->setContentsMargins(0, 0, 0, 0);
-        m_video = new QVideoWidget(this);
-        m_video->setMinimumHeight(80);
-        m_video->hide();
-        m_tags = new QLabel(this);
-        m_tags->setAlignment(Qt::AlignCenter);
-        m_tags->setWordWrap(true);
-        layout->addWidget(m_video, 1);
-        layout->addWidget(m_tags, 1);
-        auto *row = new QHBoxLayout;
-        m_play = new QToolButton(this);
-        m_play->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-start")));
-        m_play->setText(QStringLiteral("Play"));
-        m_play->setToolTip(QStringLiteral("Play / pause"));
-        m_position = new QSlider(Qt::Horizontal, this);
-        m_time = new QLabel(QStringLiteral("0:00 / 0:00"), this);
-        row->addWidget(m_play);
-        row->addWidget(m_position, 1);
-        row->addWidget(m_time);
-        layout->addLayout(row);
-        QObject::connect(m_play, &QToolButton::clicked, this, [this]() { playPause(); });
-        QObject::connect(m_position, &QSlider::sliderMoved, this, [this](int v) {
-            if (m_player)
-                m_player->setPosition(qint64(v) * 100);
-        });
-    }
-    void load(const QString &path, const QString &tags)
-    {
-        stop();
-        m_tags->setText(tags);
-        m_video->hide();
-        m_tags->show();
-        ensurePlayer();
-        m_player->setSource(QUrl::fromLocalFile(path));
-    }
-    void stop()
-    {
-        if (!m_player)
-            return;
-        m_player->stop();
-        m_player->setSource(QUrl());
-    }
-    void playPause()
-    {
-        if (!m_player)
-            return;
-        if (m_player->playbackState() == QMediaPlayer::PlayingState)
-            m_player->pause();
-        else
-            m_player->play();
-    }
-    bool loaded() const { return m_player && !m_player->source().isEmpty(); }
-    bool playing() const { return m_player && m_player->playbackState() == QMediaPlayer::PlayingState; }
-
-private:
-    void ensurePlayer()
-    {
-        if (m_player)
-            return;
-        m_player = new QMediaPlayer(this);
-        m_audio = new QAudioOutput(this);
-        m_player->setAudioOutput(m_audio);
-        m_player->setVideoOutput(m_video);
-        QObject::connect(m_player, &QMediaPlayer::durationChanged, this, [this](qint64 d) {
-            m_position->setRange(0, int(d / 100));
-            updateTime();
-        });
-        QObject::connect(m_player, &QMediaPlayer::positionChanged, this, [this](qint64 p) {
-            if (!m_position->isSliderDown())
-                m_position->setValue(int(p / 100));
-            updateTime();
-        });
-        QObject::connect(m_player, &QMediaPlayer::playbackStateChanged, this, [this](QMediaPlayer::PlaybackState st) {
-            m_play->setIcon(QIcon::fromTheme(st == QMediaPlayer::PlayingState ? QStringLiteral("media-playback-pause")
-                                                                               : QStringLiteral("media-playback-start")));
-        });
-        QObject::connect(m_player, &QMediaPlayer::hasVideoChanged, this, [this](bool v) {
-            m_video->setVisible(v);
-            m_tags->setVisible(!v);
-        });
-    }
-    void updateTime()
-    {
-        auto fmt = [](qint64 ms) {
-            const qint64 s = ms / 1000;
-            return s >= 3600 ? QStringLiteral("%1:%2:%3").arg(s / 3600).arg((s / 60) % 60, 2, 10, QLatin1Char('0')).arg(s % 60, 2, 10, QLatin1Char('0'))
-                             : QStringLiteral("%1:%2").arg(s / 60).arg(s % 60, 2, 10, QLatin1Char('0'));
-        };
-        m_time->setText(QStringLiteral("%1 / %2").arg(fmt(m_player->position()), fmt(m_player->duration())));
-    }
-
-    QMediaPlayer *m_player = nullptr;
-    QAudioOutput *m_audio = nullptr;
-    QVideoWidget *m_video;
-    QLabel *m_tags;
-    QToolButton *m_play;
-    QSlider *m_position;
-    QLabel *m_time;
-};
-#else
-class MediaPanel : public QWidget
-{
-public:
-    using QWidget::QWidget;
-    void load(const QString &, const QString &) {}
-    void stop() {}
-    void playPause() {}
-    bool loaded() const { return false; }
-    bool playing() const { return false; }
-};
-#endif
-
 bool ViewerPane::canPlay()
 {
-#ifdef DIRDUO_HAVE_MULTIMEDIA
-    // A media backend with no decoders (GStreamer without its plugins) can
-    // crash when a player is made: check that it can decode something first.
-    static const bool usable = !QMediaFormat().supportedFileFormats(QMediaFormat::Decode).isEmpty();
-    return usable;
-#else
-    return false;
-#endif
+    return MediaPanel::available();
 }
 
 bool ViewerPane::mediaLoaded() const

@@ -30,6 +30,26 @@ void Prefs::reload()
     v.treePath = s.value(QStringLiteral("treePath"), true).toBool();
     v.statusDefinition = s.value(QStringLiteral("statusDefinition")).toString();
     v.terminal = s.value(QStringLiteral("terminal")).toString();
+    s.endGroup();
+    s.beginGroup(QStringLiteral("Viewer"));
+    Values::Viewer &w = v.viewer;
+    const Values::Viewer d;
+    w.openPictures = s.value(QStringLiteral("openPictures"), d.openPictures).toBool();
+    w.openMedia = s.value(QStringLiteral("openMedia"), d.openMedia).toBool();
+    w.siblings = s.value(QStringLiteral("siblings"), d.siblings).toBool();
+    w.reuse = s.value(QStringLiteral("reuse"), d.reuse).toBool();
+    w.wrap = s.value(QStringLiteral("wrap"), d.wrap).toBool();
+    w.wheelSteps = s.value(QStringLiteral("wheelSteps"), d.wheelSteps).toBool();
+    w.resetZoom = qBound(0, s.value(QStringLiteral("resetZoom"), d.resetZoom).toInt(), 2);
+    w.background = qBound(0, s.value(QStringLiteral("background"), d.background).toInt(), 4);
+    w.fullPathTitle = s.value(QStringLiteral("fullPathTitle"), d.fullPathTitle).toBool();
+    w.playNext = s.value(QStringLiteral("playNext"), d.playNext).toBool();
+    w.autoPlay = s.value(QStringLiteral("autoPlay"), d.autoPlay).toBool();
+    w.slideSeconds = qBound(0.2, s.value(QStringLiteral("slideSeconds"), d.slideSeconds).toDouble(), 3600.0);
+    w.slideRandom = s.value(QStringLiteral("slideRandom"), d.slideRandom).toBool();
+    w.slideAuto = s.value(QStringLiteral("slideAuto"), d.slideAuto).toBool();
+    w.markCollection = s.value(QStringLiteral("markCollection"), d.markCollection).toString();
+    w.openMarkedOnClose = s.value(QStringLiteral("openMarkedOnClose"), d.openMarkedOnClose).toBool();
     m_values = v;
 }
 
@@ -47,6 +67,25 @@ void Prefs::setValues(const Values &v)
     s.setValue(QStringLiteral("treePath"), v.treePath);
     s.setValue(QStringLiteral("statusDefinition"), v.statusDefinition);
     s.setValue(QStringLiteral("terminal"), v.terminal);
+    s.endGroup();
+    s.beginGroup(QStringLiteral("Viewer"));
+    const Values::Viewer &w = v.viewer;
+    s.setValue(QStringLiteral("openPictures"), w.openPictures);
+    s.setValue(QStringLiteral("openMedia"), w.openMedia);
+    s.setValue(QStringLiteral("siblings"), w.siblings);
+    s.setValue(QStringLiteral("reuse"), w.reuse);
+    s.setValue(QStringLiteral("wrap"), w.wrap);
+    s.setValue(QStringLiteral("wheelSteps"), w.wheelSteps);
+    s.setValue(QStringLiteral("resetZoom"), w.resetZoom);
+    s.setValue(QStringLiteral("background"), w.background);
+    s.setValue(QStringLiteral("fullPathTitle"), w.fullPathTitle);
+    s.setValue(QStringLiteral("playNext"), w.playNext);
+    s.setValue(QStringLiteral("autoPlay"), w.autoPlay);
+    s.setValue(QStringLiteral("slideSeconds"), w.slideSeconds);
+    s.setValue(QStringLiteral("slideRandom"), w.slideRandom);
+    s.setValue(QStringLiteral("slideAuto"), w.slideAuto);
+    s.setValue(QStringLiteral("markCollection"), w.markCollection);
+    s.setValue(QStringLiteral("openMarkedOnClose"), w.openMarkedOnClose);
     Q_EMIT changed();
 }
 

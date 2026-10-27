@@ -47,7 +47,11 @@
 #include <QTreeWidget>
 #include "core/FileTags.h"
 #include "core/Prefs.h"
-#include "ui/ImageViewer.h"
+#include "ui/ViewerWindow.h"
+#include <QSlider>
+#include <QClipboard>
+#include "ui/MediaPanel.h"
+#include "core/Collections.h"
 #include "ui/OpenWithDialog.h"
 #include "core/Apps.h"
 #include "core/HostRun.h"
@@ -1987,39 +1991,149 @@ dirduo.on("folderOpened", e => { opened.push(e.path); dirduo.save("last", e.path
             QVERIFY(w->runCommand(QStringLiteral("Set VIEWER=off")));
         }
 
-        // The picture viewer steps through the folder.
+        // The standalone viewer steps through the folder's pictures.
         QDir().mkpath(d + QStringLiteral("/pics"));
         for (const char *n : {"a1.png", "a2.png", "a10.png"}) {
             QImage img(40, 20, QImage::Format_RGB32);
             img.fill(Qt::blue);
             QVERIFY(img.save(d + QStringLiteral("/pics/") + QLatin1String(n)));
         }
-        touch(d + QStringLiteral("/pics/readme.txt"));
-        QCOMPARE(ImageViewer::picturesIn(d + QStringLiteral("/pics")).size(), 3);
-        QVERIFY(w->runCommand(QStringLiteral("Show FILE=\"%1\"").arg(d + QStringLiteral("/pics/a2.png"))));
-        ImageViewer *viewer = nullptr;
-        for (QWidget *top : QApplication::topLevelWidgets()) {
-            if (auto *iv = qobject_cast<ImageViewer *>(top))
-                viewer = iv;
+        {
+            QFile f(d + QStringLiteral("/pics/readme.txt"));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("Hello viewer\n");
         }
+        QCOMPARE(ViewerWindow::filesIn(d + QStringLiteral("/pics"), ViewerWindow::Family::Pictures).size(), 3);
+        QVERIFY(!runFailing(QStringLiteral("Show VIEWERCMD=next"))); // none open yet
+        QVERIFY(w->runCommand(QStringLiteral("Show FILE=\"%1\"").arg(d + QStringLiteral("/pics/a2.png"))));
+        ViewerWindow *viewer = ViewerWindow::recent();
         QVERIFY(viewer);
         QCOMPARE(viewer->count(), 3);
         QCOMPARE(viewer->index(), 1); // natural order: a1, a2, a10
+        QTRY_VERIFY(!viewer->isLoading());
+        QCOMPARE(viewer->kind(), Preview::Kind::Image);
         QCOMPARE(viewer->imageSize(), QSize(40, 20));
-        QTest::keyClick(viewer, Qt::Key_Right);
+        QVERIFY(viewer->windowTitle().contains(QStringLiteral("a2.png (2 of 3)")));
+        QTest::keyClick(viewer, Qt::Key_Right); // nothing to scroll: the next one
         QVERIFY(viewer->current().endsWith(QStringLiteral("a10.png")));
-        QTest::keyClick(viewer, Qt::Key_Right); // stays on the last
+        QTest::keyClick(viewer, Qt::Key_Space); // stays on the last
         QCOMPARE(viewer->index(), 2);
-        QTest::keyClick(viewer, Qt::Key_Home);
+        QVERIFY(w->runCommand(QStringLiteral("Show VIEWERCMD=first")));
         QCOMPARE(viewer->index(), 0);
-        QTest::keyClick(viewer, Qt::Key_1);
-        QCOMPARE(viewer->zoom(), 1.0);
-        QTest::keyClick(viewer, Qt::Key_0);
-        QCOMPARE(viewer->zoom(), 0.0);
-        QPointer<ImageViewer> gone(viewer);
+        QTRY_VERIFY(!viewer->isLoading());
+        QVERIFY(!runFailing(QStringLiteral("Show VIEWERCMD=bogus")));
+
+        // Zoom, turn, flip, select, copy, crop; the file is left alone.
+        QCOMPARE(viewer->zoomMode(), QStringLiteral("fit"));
+        QCOMPARE(viewer->scale(), 1.0); // small pictures are not blown up
+        QVERIFY(viewer->runViewerCommand(QStringLiteral("zoom,200")));
+        QCOMPARE(viewer->zoomMode(), QStringLiteral("fixed"));
+        QCOMPARE(viewer->scale(), 2.0);
+        QVERIFY(viewer->runViewerCommand(QStringLiteral("zoom=grow")));
+        QVERIFY(viewer->scale() > 2.0);
+        QVERIFY(viewer->runViewerCommand(QStringLiteral("rotate,right")));
+        QCOMPARE(viewer->imageSize(), QSize(20, 40));
+        QCOMPARE(viewer->rotation(), 90);
+        QVERIFY(viewer->runViewerCommand(QStringLiteral("flip,h")));
+        viewer->restore();
+        QCOMPARE(viewer->imageSize(), QSize(40, 20));
+        QCOMPARE(viewer->rotation(), 0);
+        viewer->setSelection(QRect(0, 0, 10, 8));
+        viewer->copyToClipboard();
+        QCOMPARE(QApplication::clipboard()->image().size(), QSize(10, 8));
+        QVERIFY(viewer->cropToSelection());
+        QCOMPARE(viewer->imageSize(), QSize(10, 8));
+        viewer->restore();
+        QCOMPARE(QImage(d + QStringLiteral("/pics/a1.png")).size(), QSize(40, 20));
+
+        // Marking puts pictures in a collection.
+        viewer->toggleMark();
+        QCOMPARE(viewer->markCollection(), QStringLiteral("Marked Pictures - pics"));
+        QVERIFY(viewer->isMarked(d + QStringLiteral("/pics/a1.png")));
+        QVERIFY(Collections::instance()->items(viewer->markCollection()).contains(d + QStringLiteral("/pics/a1.png")));
+        viewer->goTo(2);
+        QVERIFY(viewer->runViewerCommand(QStringLiteral("mark,prev")));
+        QCOMPARE(viewer->index(), 0);
+        viewer->toggleMark();
+        QVERIFY(viewer->marked().isEmpty());
+
+        // A slideshow moves on by itself.
+        Prefs::Values pv = Prefs::instance()->values();
+        pv.viewer.slideSeconds = 0.2;
+        Prefs::instance()->setValues(pv);
+        QTRY_VERIFY(!viewer->isLoading());
+        viewer->setSlideshow(true);
+        QTRY_COMPARE(viewer->index(), 1);
+        QTRY_COMPARE(viewer->index(), 2);
+        viewer->setSlideshow(false);
+        QVERIFY(!viewer->isSlideshow());
+
+        // Other files show in the same window: text, hex.
+        QVERIFY(w->runCommand(QStringLiteral("Show FILE=\"%1\"").arg(d + QStringLiteral("/pics/readme.txt"))));
+        QCOMPARE(ViewerWindow::windows().size(), 1);
+        QCOMPARE(ViewerWindow::recent(), viewer);
+        QCOMPARE(viewer->count(), 4); // everything in the folder
+        QTRY_COMPARE(viewer->kind(), Preview::Kind::Text);
+        QVERIFY(viewer->textShown().contains(QStringLiteral("Hello viewer")));
+        viewer->setHex(true);
+        QVERIFY(viewer->textShown().startsWith(QStringLiteral("00000000  48 65 6c 6c")));
+        viewer->setHex(false);
+        // AUTOFILELIST=all from a picture: all files.
+        QVERIFY(w->runCommand(QStringLiteral("Show FILE=\"%1\" AUTOFILELIST=all").arg(d + QStringLiteral("/pics/a1.png"))));
+        QCOMPARE(viewer->count(), 4);
+        // USEEXISTING=no: a window of its own.
+        QVERIFY(w->runCommand(QStringLiteral("Show FILE=\"%1\" USEEXISTING=no").arg(d + QStringLiteral("/pics/a1.png"))));
+        QCOMPARE(ViewerWindow::windows().size(), 2);
+        ViewerWindow::recent()->close();
+        QTRY_COMPARE(ViewerWindow::windows().size(), 1);
+
+        // Music and video play in it.
+        if (ViewerPane::canPlay()) {
+            QVERIFY(w->runCommand(QStringLiteral("Show FILE=\"%1\"").arg(d + QStringLiteral("/beep.wav"))));
+            QTRY_COMPARE(viewer->kind(), Preview::Kind::Media);
+            QVERIFY(viewer->media()->loaded());
+            QVERIFY(viewer->findChild<QSlider *>(QStringLiteral("media-volume")));
+            viewer->media()->setVolume(30);
+            QCOMPARE(viewer->media()->volume(), 30);
+            QVERIFY(w->runCommand(QStringLiteral("Show FILE=\"%1\"").arg(d + QStringLiteral("/pics/a1.png"))));
+            QTRY_COMPARE(viewer->kind(), Preview::Kind::Image);
+            QVERIFY(!viewer->media()->loaded()); // moving on stops it
+        }
+
+        // Linked to the lister: the file in focus shows.
+        FolderTab *lt = w->display(0)->currentTab();
+        const QString back = lt->path();
+        lt->navigate(d + QStringLiteral("/pics"));
+        waitListed(lt, 4);
+        QVERIFY(w->runCommand(QStringLiteral("Show FILE=\"%1\" LISTERLINK").arg(d + QStringLiteral("/pics/a1.png"))));
+        QVERIFY(viewer->isLinked());
+        lt->selectPaths({d + QStringLiteral("/pics/a10.png")});
+        QTRY_COMPARE(viewer->current(), d + QStringLiteral("/pics/a10.png"));
+        QVERIFY(w->runCommand(QStringLiteral("Show LISTERLINK=close")));
+        QTRY_COMPARE(ViewerWindow::windows().size(), 0);
+        lt->navigate(back);
+        waitListed(lt, QDir(back).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
+
+        // Double-clicking a picture opens the viewer when Preferences says so.
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("viewer"));
+            QCOMPARE(dlg.currentPage(), QStringLiteral("viewer"));
+            QVERIFY(dlg.search(QStringLiteral("slideshow")).contains(QStringLiteral("viewer")));
+            QVERIFY(!dlg.viewerBox(QStringLiteral("pictures"))->isChecked());
+            dlg.viewerBox(QStringLiteral("pictures"))->setChecked(true);
+            QVERIFY(dlg.apply());
+        }
+        QVERIFY(Prefs::instance()->values().viewer.openPictures);
+        pv = Prefs::instance()->values();
+        w->openFile(d + QStringLiteral("/pics/a2.png"));
+        QTRY_COMPARE(ViewerWindow::windows().size(), 1);
+        viewer = ViewerWindow::recent();
+        QCOMPARE(viewer->current(), d + QStringLiteral("/pics/a2.png"));
+        pv.viewer = Prefs::Values::Viewer();
+        Prefs::instance()->setValues(pv);
+        QPointer<ViewerWindow> gone(viewer);
         QTest::keyClick(viewer, Qt::Key_Escape);
         QTRY_VERIFY(!gone);
-        QVERIFY(!runFailing(QStringLiteral("Show FILE=\"%1\"").arg(d + QStringLiteral("/pics/readme.txt"))));
     }
 
     void savedLayouts()

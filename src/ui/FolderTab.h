@@ -46,6 +46,8 @@ public:
     QString path() const { return m_path; }
     QString title() const;
     QStringList selectedPaths() const;
+    // Every item listed, in the order shown (after sorting and the filter).
+    QStringList visiblePaths() const;
     QString focusedPath() const;
     // From the listing, so it also works for remote items.
     bool isFolder(const QString &path) const;

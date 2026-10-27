@@ -18,6 +18,8 @@
 #include "ui/ButtonBar.h"
 #include "ui/PreferencesDialog.h"
 #include "core/Scripting.h"
+#include "ui/ViewerWindow.h"
+#include <QPainter>
 #include "ui/ViewerPane.h"
 #include "ui/ImageConvertDialog.h"
 #include "ui/DuplicatesDialog.h"
@@ -626,6 +628,45 @@ int main(int argc, char *argv[])
             prefs.show();
             QTest::qWait(400);
             prefs.grab().save(out + QStringLiteral("/47-scripts-preferences.png"));
+        }
+        {
+            // The standalone viewer: a picture with the information overlay and a mark.
+            QDir().mkpath(root + QStringLiteral("/Pictures/Screenshots"));
+            QImage img(1280, 800, QImage::Format_RGB32);
+            {
+                QPainter p(&img);
+                QLinearGradient g(0, 0, 1280, 800);
+                g.setColorAt(0, QColor(0x1b, 0x3a, 0x6b));
+                g.setColorAt(1, QColor(0xc8, 0x5a, 0x2a));
+                p.fillRect(img.rect(), g);
+                p.setPen(Qt::white);
+                QFont f;
+                f.setPointSize(64);
+                f.setBold(true);
+                p.setFont(f);
+                p.drawText(img.rect(), Qt::AlignCenter, QStringLiteral("Directory Duo"));
+            }
+            for (int i = 1; i <= 3; ++i)
+                img.save(root + QStringLiteral("/Pictures/Screenshots/shot%1.png").arg(i));
+            w->runCommand(QStringLiteral("Show FILE=\"%1\"").arg(root + QStringLiteral("/Pictures/Screenshots/shot2.png")));
+            ViewerWindow *v = ViewerWindow::recent();
+            v->resize(960, 680);
+            QTest::qWait(600);
+            v->toggleMark();
+            v->setInfoShown(true);
+            QTest::qWait(200);
+            v->grab().save(out + QStringLiteral("/48-viewer-picture.png"));
+            v->toggleMark();
+            v->setInfoShown(false);
+            v->open(root + QStringLiteral("/Music/Joan Jett/Bad Reputation.mp3"));
+            QTest::qWait(600);
+            v->grab().save(out + QStringLiteral("/49-viewer-music.png"));
+            v->close();
+            PreferencesDialog prefs(context, w, QStringLiteral("viewer"));
+            prefs.resize(860, 760);
+            prefs.show();
+            QTest::qWait(300);
+            prefs.grab().save(out + QStringLiteral("/50-viewer-preferences.png"));
         }
         // Opus-style tree: branch lines and the path to the current folder.
         w->runCommand(QStringLiteral("Set DUAL=vertical\nSet TREE=separate"));

@@ -185,7 +185,8 @@ add_library(dirduo_ui STATIC
     src/ui/Glyphs.cpp
     src/ui/ServerDialog.cpp
     src/ui/OpenWithDialog.cpp
-    src/ui/ImageViewer.cpp
+    src/ui/ViewerWindow.cpp
+    src/ui/MediaPanel.cpp
     src/ui/TagsDialog.cpp
     src/ui/ChecksumDialog.cpp
     src/ui/StatusLine.cpp
