@@ -53,6 +53,7 @@
 #include "core/TabGroups.h"
 #include "core/SavedFilters.h"
 #include "core/ContextMenus.h"
+#include "core/StatusFormat.h"
 #include <QListWidget>
 #include "core/KeyMap.h"
 #include <QShortcut>
@@ -2019,6 +2020,60 @@ dirduo.on("folderOpened", e => { opened.push(e.path); dirduo.save("last", e.path
         t->navigate(leftBack);
         if (!wasDual)
             QVERIFY(w->runCommand(QStringLiteral("Set DUAL=off")));
+    }
+
+    void statusBarPerLister()
+    {
+        FileDisplay *d = w->display(0);
+        QVERIFY(w->runCommand(QStringLiteral("Set STATUSDEF=\"Mine: {ti}\"")));
+        QCOMPARE(w->statusDefinition(), QStringLiteral("Mine: {ti}"));
+        QTRY_VERIFY(d->statusLineText().startsWith(QStringLiteral("Mine: ")));
+        QVERIFY(d->currentTab()->statusText().startsWith(QStringLiteral("Mine: ")));
+        // New tabs follow it.
+        d->addTab(root + QStringLiteral("/b"), false);
+        QTRY_VERIFY(d->tab(d->tabCount() - 1)->statusText().startsWith(QStringLiteral("Mine: ")));
+        d->closeTab(d->tabCount() - 1);
+        // Another lister keeps Preferences' bar.
+        ListerWindow *other = m_app->newLister(root + QStringLiteral("/a"));
+        waitListed(other->display(0)->currentTab(), 3);
+        QVERIFY(!other->display(0)->currentTab()->statusText().startsWith(QStringLiteral("Mine: ")));
+        other->close();
+        // Kept in a layout.
+        QVERIFY(w->runCommand(QStringLiteral("Layout SAVE=StatusLayout")));
+        QVERIFY(w->runCommand(QStringLiteral("Set STATUSDEF=default")));
+        QVERIFY(w->statusDefinition().isEmpty());
+        QTRY_VERIFY(!d->statusLineText().startsWith(QStringLiteral("Mine: ")));
+        QVERIFY(w->runCommand(QStringLiteral("Layout LOAD=StatusLayout")));
+        // Loading a layout replaces the lister.
+        QTRY_VERIFY(m_app->activeLister() && m_app->activeLister() != w);
+        w = m_app->activeLister();
+        QVERIFY(QTest::qWaitForWindowExposed(w));
+        d = w->display(0);
+        QCOMPARE(w->statusDefinition(), QStringLiteral("Mine: {ti}"));
+        QTRY_VERIFY(d->statusLineText().startsWith(QStringLiteral("Mine: ")));
+        // Samples by name; broken ones are refused.
+        QVERIFY(w->runCommand(QStringLiteral("Set STATUSDEF=@Minimal")));
+        QCOMPARE(w->statusDefinition(), StatusFormat::samples().at(2).second);
+        QVERIFY(!runFailing(QStringLiteral("Set STATUSDEF=@Nope")));
+        QVERIFY(!runFailing(QStringLiteral("Set STATUSDEF=\"[{ti}\"")));
+        // Preferences > Status Bar: this lister only.
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("statusbar"));
+            QVERIFY(dlg.generalBox(QStringLiteral("statuslister"))->isChecked());
+            dlg.statusDefinitionEdit()->setPlainText(QStringLiteral("Here only {ti}"));
+            QVERIFY(dlg.apply());
+        }
+        QCOMPARE(w->statusDefinition(), QStringLiteral("Here only {ti}"));
+        QVERIFY(Prefs::instance()->values().statusDefinition.isEmpty());
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("statusbar"));
+            dlg.generalBox(QStringLiteral("statuslister"))->setChecked(false);
+            dlg.generalBox(QStringLiteral("custom"))->setChecked(false);
+            QVERIFY(dlg.apply());
+        }
+        QVERIFY(w->statusDefinition().isEmpty());
+        QTRY_VERIFY(d->currentTab()->statusText().contains(QStringLiteral("file")));
+        QVERIFY(m_app->deleteLayout(QStringLiteral("StatusLayout")));
     }
 
     void preferencesGeneralAndFileTypes()

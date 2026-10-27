@@ -340,6 +340,7 @@ FolderTab *FileDisplay::addTab(const QString &path, bool makeCurrent)
 {
     auto *t = new FolderTab(m_stack);
     t->setShowHidden(m_showHidden);
+    t->setStatusDefinition(m_statusDef);
     t->setZoom(m_zoom);
     m_stack->addWidget(t);
     const int insertAt = m_tabs->count() == 0 ? 0 : m_tabs->currentIndex() + 1;
@@ -452,6 +453,14 @@ void FileDisplay::updateHeader()
     updateFreeSpace();
 }
 
+void FileDisplay::setStatusDefinition(const QString &def)
+{
+    m_statusDef = def.trimmed();
+    for (int i = 0; i < tabCount(); ++i)
+        tab(i)->setStatusDefinition(m_statusDef);
+    updateFreeSpace();
+}
+
 void FileDisplay::updateFreeSpace()
 {
     // The whole status bar: its definition, filled in for the list shown.
@@ -465,7 +474,7 @@ void FileDisplay::updateFreeSpace()
         m_status->setMessage(msg);
         return;
     }
-    const QString def = Prefs::instance()->values().effectiveStatusDefinition();
+    const QString def = t->statusDefinition();
     QHash<QString, QString> v = t->statusValues(def.contains(QLatin1String("{d")) || def.contains(QLatin1String("{bar}")));
     v.insert(QStringLiteral("tabs"), QString::number(tabCount()));
     v.insert(QStringLiteral("role"), m_role == Role::Source ? QStringLiteral("SOURCE") : m_role == Role::Dest ? QStringLiteral("DEST") : QString());

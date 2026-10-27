@@ -690,12 +690,17 @@ QHash<QString, QString> FolderTab::statusValues(bool withDisk) const
     return v;
 }
 
+QString FolderTab::statusDefinition() const
+{
+    return m_statusDef.trimmed().isEmpty() ? Prefs::instance()->values().effectiveStatusDefinition() : m_statusDef;
+}
+
 QString FolderTab::statusText() const
 {
     const QString msg = statusMessage();
     if (!msg.isEmpty())
         return msg;
-    const QString def = Prefs::instance()->values().effectiveStatusDefinition();
+    const QString def = statusDefinition();
     return StatusFormat::plainText(StatusFormat::render(def, statusValues(def.contains(QLatin1String("{d")) || def.contains(QLatin1String("{bar}")))), false);
 }
 

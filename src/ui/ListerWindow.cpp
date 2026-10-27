@@ -1,4 +1,5 @@
 #include "ui/ListerWindow.h"
+#include "core/StatusFormat.h"
 #include "core/ContextMenus.h"
 #include "core/SavedFilters.h"
 #include "core/TabGroups.h"
@@ -1983,6 +1984,28 @@ bool ListerWindow::set(const ParsedCommand &cmd, QString *error)
                                                             : FileSortProxy::FilterScope::Files;
             }
             sourceTab()->setFilter(text, invert, scope);
+        } else if (key == QLatin1String("STATUSDEF")) {
+            // This lister's own status bar: a definition, a sample's name
+            // (@Classic), or default for Preferences'.
+            QString def = it.value().value(0);
+            if (def.compare(QLatin1String("default"), Qt::CaseInsensitive) == 0) {
+                setStatusDefinition(QString());
+            } else {
+                if (def.startsWith(QLatin1Char('@'))) {
+                    bool found = false;
+                    for (const auto &smp : StatusFormat::samples())
+                        if (smp.first.compare(def.mid(1), Qt::CaseInsensitive) == 0) {
+                            def = smp.second;
+                            found = true;
+                        }
+                    if (!found)
+                        return fail(QStringLiteral("There is no status bar sample called \"%1\".").arg(def.mid(1)));
+                }
+                QString err;
+                if (!StatusFormat::check(def, &err))
+                    return fail(QStringLiteral("Status bar: %1").arg(err));
+                setStatusDefinition(def);
+            }
         } else if (key == QLatin1String("FILTERSAVE")) {
             FolderTab *t = sourceTab();
             if (!t || t->filterText().isEmpty())
@@ -2633,6 +2656,13 @@ void ListerWindow::rebuildAliasMenu()
 
 // ---------------------------------------------------------------- session
 
+void ListerWindow::setStatusDefinition(const QString &def)
+{
+    m_statusDef = def.trimmed();
+    for (FileDisplay *d : m_displays)
+        d->setStatusDefinition(m_statusDef);
+}
+
 void ListerWindow::saveListerState(QSettings &s) const
 {
     s.setValue(QStringLiteral("geometry"), saveGeometry());
@@ -2664,6 +2694,10 @@ void ListerWindow::saveListerState(QSettings &s) const
     s.setValue(QStringLiteral("lastTree"), int(m_lastTreeMode));
     s.setValue(QStringLiteral("outer"), m_outer->saveState());
     s.setValue(QStringLiteral("hidden"), m_displays[0]->showHidden());
+    if (m_statusDef.isEmpty())
+        s.remove(QStringLiteral("statusDefinition"));
+    else
+        s.setValue(QStringLiteral("statusDefinition"), m_statusDef);
     s.remove(QStringLiteral("zoom"));
     for (int i = 0; i < 2; ++i) {
         const FileDisplay *d = m_displays[i];
@@ -2703,6 +2737,7 @@ void ListerWindow::saveListerState(QSettings &s) const
 bool ListerWindow::restoreListerState(QSettings &s)
 {
     const bool hidden = s.value(QStringLiteral("hidden"), false).toBool();
+    setStatusDefinition(s.value(QStringLiteral("statusDefinition")).toString());
     // Older sessions kept one zoom for the whole lister.
     const int oldZoom = s.value(QStringLiteral("zoom"), 100).toInt();
     for (int i = 0; i < 2; ++i)

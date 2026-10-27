@@ -76,6 +76,9 @@ public:
     int zoom() const { return m_zoom; }
     QString freeSpaceText() const; // the right of the status bar: "12.3 GB free of 64 GB", empty for servers
     QString statusLineText() const; // the left of the status bar
+    // The lister's own status bar definition (empty: Preferences'), for every tab.
+    void setStatusDefinition(const QString &def);
+    QString statusDefinition() const { return m_statusDef; }
 
 Q_SIGNALS:
     void activated(FileDisplay *display);
@@ -130,4 +133,5 @@ private:
     QStackedWidget *m_stack;
     StatusLine *m_status;
     void updateFreeSpace();
+    QString m_statusDef;
 };

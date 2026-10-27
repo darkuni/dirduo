@@ -882,8 +882,12 @@ QWidget *PreferencesDialog::buildStatusBar()
     box(QStringLiteral("free"), QStringLiteral("Free space on the drive or card"), v.statusFree, sl, simple);
     layout->addWidget(simple);
 
+    const QString own = m_lister ? m_lister->statusDefinition() : QString();
     QCheckBox *custom = box(QStringLiteral("custom"), QStringLiteral("Use my own definition, with codes"),
-                            !v.statusDefinition.trimmed().isEmpty(), layout, page);
+                            !v.statusDefinition.trimmed().isEmpty() || !own.isEmpty(), layout, page);
+    QCheckBox *listerOnly = box(QStringLiteral("statuslister"),
+                                QStringLiteral("Only for this lister (kept with it, and in layouts saved from it)"), !own.isEmpty(), layout, page);
+    listerOnly->setEnabled(m_lister);
     auto *defBox = new QGroupBox(QStringLiteral("Definition"), page);
     auto *dl = new QVBoxLayout(defBox);
     auto *row = new QHBoxLayout;
@@ -895,7 +899,7 @@ QWidget *PreferencesDialog::buildStatusBar()
     m_statusDef = new QPlainTextEdit(defBox);
     m_statusDef->setObjectName(QStringLiteral("status-definition"));
     m_statusDef->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
-    m_statusDef->setPlainText(v.effectiveStatusDefinition());
+    m_statusDef->setPlainText(own.isEmpty() ? v.effectiveStatusDefinition() : own);
     m_statusDef->setFixedHeight(fontMetrics().height() * 6);
     for (const StatusFormat::CodeInfo &c : StatusFormat::codes()) {
         QMenu *&g = groups[c.group];
@@ -956,7 +960,9 @@ QWidget *PreferencesDialog::buildStatusBar()
     layout->addWidget(defBox);
     layout->addStretch(1);
 
-    auto refresh = [this, custom, simple, defBox]() {
+    auto refresh = [this, custom, simple, defBox, listerOnly]() {
+        if (listerOnly->isChecked() && !custom->isChecked())
+            custom->setChecked(true); // a lister's own bar is always a definition
         simple->setEnabled(!custom->isChecked());
         m_statusDef->setReadOnly(!custom->isChecked());
         if (!custom->isChecked()) {
@@ -979,6 +985,7 @@ QWidget *PreferencesDialog::buildStatusBar()
         Q_UNUSED(defBox);
     };
     connect(custom, &QCheckBox::toggled, this, refresh);
+    connect(listerOnly, &QCheckBox::toggled, this, refresh);
     for (const char *k : {"counts", "selection", "free"})
         connect(m_general.value(QLatin1String(k)), &QCheckBox::toggled, this, refresh);
     connect(m_statusDef, &QPlainTextEdit::textChanged, this, refresh);
@@ -1608,6 +1615,7 @@ bool PreferencesDialog::apply(QString *error)
     v.statusSelection = m_general.value(QStringLiteral("selection"))->isChecked();
     v.statusFree = m_general.value(QStringLiteral("free"))->isChecked();
     v.askOnError = m_general.value(QStringLiteral("ask"))->isChecked();
+    const bool listerOnly = m_lister && m_general.value(QStringLiteral("statuslister"))->isChecked();
     if (m_general.value(QStringLiteral("custom"))->isChecked()) {
         QString err;
         if (!StatusFormat::check(m_statusDef->toPlainText(), &err)) {
@@ -1615,10 +1623,15 @@ bool PreferencesDialog::apply(QString *error)
                 *error = QStringLiteral("Status bar: %1").arg(err);
             return false;
         }
-        v.statusDefinition = m_statusDef->toPlainText().trimmed();
+        if (listerOnly)
+            m_lister->setStatusDefinition(m_statusDef->toPlainText()); // Preferences' own stays as it was
+        else
+            v.statusDefinition = m_statusDef->toPlainText().trimmed();
     } else {
         v.statusDefinition.clear();
     }
+    if (m_lister && !listerOnly)
+        m_lister->setStatusDefinition(QString());
     v.junkHidden = m_general.value(QStringLiteral("junk"))->isChecked();
     v.treeLines = m_general.value(QStringLiteral("treelines"))->isChecked();
     v.treePath = m_general.value(QStringLiteral("treepath"))->isChecked();

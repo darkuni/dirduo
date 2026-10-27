@@ -38,6 +38,9 @@ public:
 
     void openDefault(const QString &path);
     bool restoreListerState(QSettings &s);
+    // This lister's own status bar (kept with its layout); empty: Preferences'.
+    void setStatusDefinition(const QString &def);
+    QString statusDefinition() const { return m_statusDef; }
     void saveListerState(QSettings &s) const;
 
     bool runCommand(const QString &script);
@@ -159,6 +162,7 @@ private:
     void fillViewMenus();
 
     void registerKeys();
+    QString m_statusDef;
     void saveTabGroup(const QString &name);
     void loadTabGroup(const struct TabGroups::Group &g);
     void refillDynamicPart(class QMenu *menu, const QString &kind);

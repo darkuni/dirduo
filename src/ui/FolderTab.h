@@ -52,6 +52,9 @@ public:
     // From the listing, so it also works for remote items.
     bool isFolder(const QString &path) const;
     QString statusText() const;
+    // A status bar definition of its own (its lister's); empty: Preferences'.
+    void setStatusDefinition(const QString &def) { m_statusDef = def; }
+    QString statusDefinition() const;
     // An error or "Reading folder...", which shows instead of the definition.
     QString statusMessage() const;
     // The values of the status bar's codes for this list (StatusFormat).
@@ -213,6 +216,7 @@ private:
     QStackedLayout *m_stack;
     GroupTreeView *m_details;
     QWidget *m_filterBar;
+    QString m_statusDef;
     QLineEdit *m_filterEdit;
     QCheckBox *m_filterInvert;
     QComboBox *m_filterScope;
