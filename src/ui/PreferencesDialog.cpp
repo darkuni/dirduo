@@ -1,4 +1,7 @@
 #include "ui/PreferencesDialog.h"
+#include <QSpinBox>
+#include "core/TabGroups.h"
+#include "core/SavedFilters.h"
 #include "ui/KeysPage.h"
 #include <QDoubleSpinBox>
 #include <QUrl>
@@ -151,7 +154,7 @@ QString safeFileName(QString name)
 QStringList PreferencesDialog::pageNames()
 {
     return {QStringLiteral("general"), QStringLiteral("appearance"), QStringLiteral("theme"), QStringLiteral("labels"),
-            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("filetypes"), QStringLiteral("toolbars"), QStringLiteral("statusbar"), QStringLiteral("scripts"), QStringLiteral("viewer"), QStringLiteral("keys")};
+            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("filetypes"), QStringLiteral("toolbars"), QStringLiteral("statusbar"), QStringLiteral("scripts"), QStringLiteral("viewer"), QStringLiteral("keys"), QStringLiteral("filters"), QStringLiteral("tabgroups")};
 }
 
 PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, const QString &page)
@@ -208,6 +211,10 @@ PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, cons
     addPage(QStringLiteral("viewer"), QStringLiteral("Viewer"), QStringLiteral("view-preview"), buildViewer(),
             {QStringLiteral("picture"), QStringLiteral("image"), QStringLiteral("slideshow"), QStringLiteral("music"), QStringLiteral("video"),
              QStringLiteral("player"), QStringLiteral("show"), QStringLiteral("mark"), QStringLiteral("zoom"), QStringLiteral("wheel")});
+    addPage(QStringLiteral("filters"), QStringLiteral("Filters"), QStringLiteral("view-filter"), buildFilters(),
+            {QStringLiteral("filter"), QStringLiteral("saved"), QStringLiteral("wildcard"), QStringLiteral("pattern")});
+    addPage(QStringLiteral("tabgroups"), QStringLiteral("Tab Groups"), QStringLiteral("tab-duplicate"), buildTabGroups(),
+            {QStringLiteral("tab"), QStringLiteral("group"), QStringLiteral("tabs"), QStringLiteral("session")});
     m_keysPage = new KeysPage(m_app.toolbars());
     addPage(QStringLiteral("keys"), QStringLiteral("Keys"), QStringLiteral("input-keyboard"), m_keysPage,
             {QStringLiteral("keyboard"), QStringLiteral("shortcut"), QStringLiteral("hotkey"), QStringLiteral("key"), QStringLiteral("accelerator")});
@@ -248,6 +255,16 @@ QWidget *PreferencesDialog::buildGeneral()
     auto *cl = new QVBoxLayout(copies);
     box(QStringLiteral("ask"), QStringLiteral("Ask Retry / Skip / Abort when an item fails (otherwise skip it and list it at the end)"),
         v.askOnError, cl, copies);
+    auto *notifyRow = new QHBoxLayout;
+    box(QStringLiteral("notify"), QStringLiteral("A desktop notice when a job finishes while DirDuo is in the background, if it took over"),
+        v.notifyJobs, notifyRow, copies);
+    m_notifyAfter = new QSpinBox(copies);
+    m_notifyAfter->setRange(0, 3600);
+    m_notifyAfter->setSuffix(QStringLiteral(" seconds"));
+    m_notifyAfter->setValue(v.notifyAfter);
+    notifyRow->addWidget(m_notifyAfter);
+    notifyRow->addStretch(1);
+    cl->addLayout(notifyRow);
     layout->addWidget(copies);
     auto *files = new QGroupBox(QStringLiteral("Files"), page);
     auto *fl = new QVBoxLayout(files);
@@ -353,6 +370,144 @@ QWidget *PreferencesDialog::buildViewer()
     mf->addRow(mb);
     layout->addWidget(mark);
     layout->addStretch(1);
+    return page;
+}
+
+QWidget *PreferencesDialog::buildFilters()
+{
+    auto *page = new QWidget;
+    auto *layout = new QVBoxLayout(page);
+    auto *intro = new QLabel(QStringLiteral("Filters kept under a name: pick one from the filter bar's Saved button, View > Saved Filters, "
+                                            "a toolbar button (Set FILTER=@name) or Select PATTERN=@name. Separate wildcards with ; "
+                                            "(*.iso;*.chd). Double-click a cell to change it."),
+                             page);
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+    m_filterList = new QTreeWidget(page);
+    m_filterList->setObjectName(QStringLiteral("filter-list"));
+    m_filterList->setRootIsDecorated(false);
+    m_filterList->setHeaderLabels({QStringLiteral("Name"), QStringLiteral("Wildcards"), QStringLiteral("Hide matches"), QStringLiteral("Applies to")});
+    m_filterList->header()->resizeSection(0, 150);
+    m_filterList->header()->resizeSection(1, 360);
+    m_filterList->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
+    auto addRow = [this](const SavedFilters::Filter &f) {
+        auto *it = new QTreeWidgetItem(m_filterList, {f.name, f.pattern, QString(), f.scope});
+        it->setFlags(it->flags() | Qt::ItemIsEditable | Qt::ItemIsUserCheckable);
+        it->setCheckState(2, f.hide ? Qt::Checked : Qt::Unchecked);
+        return it;
+    };
+    for (const SavedFilters::Filter &f : SavedFilters::instance()->filters())
+        addRow(f);
+    layout->addWidget(m_filterList, 1);
+    auto *row = new QHBoxLayout;
+    auto *add = new QPushButton(QIcon::fromTheme(QStringLiteral("list-add")), QStringLiteral("New"), page);
+    auto *del = new QPushButton(QIcon::fromTheme(QStringLiteral("list-remove")), QStringLiteral("Delete"), page);
+    auto *defaults = new QPushButton(QStringLiteral("Add the Ready-Made Ones"), page);
+    row->addWidget(add);
+    row->addWidget(del);
+    row->addStretch(1);
+    row->addWidget(defaults);
+    layout->addLayout(row);
+    connect(add, &QPushButton::clicked, this, [this, addRow]() {
+        SavedFilters::Filter f;
+        f.name = QStringLiteral("New filter");
+        f.pattern = QStringLiteral("*.txt");
+        QTreeWidgetItem *it = addRow(f);
+        m_filterList->setCurrentItem(it);
+        m_filterList->editItem(it, 0);
+    });
+    connect(del, &QPushButton::clicked, this, [this]() { delete m_filterList->currentItem(); });
+    connect(defaults, &QPushButton::clicked, this, [this, addRow]() {
+        QStringList have;
+        for (int i = 0; i < m_filterList->topLevelItemCount(); ++i)
+            have << m_filterList->topLevelItem(i)->text(0).toLower();
+        for (const SavedFilters::Filter &f : SavedFilters::defaults())
+            if (!have.contains(f.name.toLower()))
+                addRow(f);
+    });
+    // "Applies to" is files, folders or both.
+    connect(m_filterList, &QTreeWidget::itemChanged, this, [](QTreeWidgetItem *it, int col) {
+        if (col != 3)
+            return;
+        const QString v = it->text(3).trimmed().toLower();
+        const QString fixed = v.startsWith(QLatin1Char('d')) || v.startsWith(QLatin1String("fo")) ? QStringLiteral("folders")
+            : v.startsWith(QLatin1Char('b'))                                                   ? QStringLiteral("both")
+                                                                                               : QStringLiteral("files");
+        if (fixed != it->text(3))
+            it->setText(3, fixed);
+    });
+    return page;
+}
+
+QWidget *PreferencesDialog::buildTabGroups()
+{
+    auto *page = new QWidget;
+    auto *layout = new QVBoxLayout(page);
+    auto *intro = new QLabel(QStringLiteral("The tabs of both displays, saved under a name to open again all at once: Go > Tab Groups, "
+                                            "or a button with Go TABGROUPLOAD=name. Go > Tab Groups > Save These Tabs as a Group makes one. "
+                                            "Double-click a name to rename it."),
+                             page);
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+    m_groupList = new QTreeWidget(page);
+    m_groupList->setObjectName(QStringLiteral("tabgroup-list"));
+    m_groupList->setHeaderLabels({QStringLiteral("Tab group"), QStringLiteral("Tabs"), QStringLiteral("Close the open tabs first")});
+    m_groupList->header()->resizeSection(0, 200);
+    m_groupList->header()->resizeSection(1, 90);
+    m_groupList->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
+    for (const TabGroups::Group &g : TabGroups::instance()->groups()) {
+        auto *it = new QTreeWidgetItem(m_groupList, {g.name, g.right.isEmpty() ? QString::number(g.left.size())
+                                                                              : QStringLiteral("%1 + %2").arg(g.left.size()).arg(g.right.size())});
+        it->setFlags(it->flags() | Qt::ItemIsEditable | Qt::ItemIsUserCheckable);
+        it->setCheckState(2, g.closeOthers ? Qt::Checked : Qt::Unchecked);
+        it->setData(0, Qt::UserRole, g.name);
+        auto addSide = [it](const QString &title, const QStringList &paths, int current) {
+            auto *side = new QTreeWidgetItem(it, {title});
+            side->setFlags(side->flags() & ~Qt::ItemIsEditable);
+            for (int i = 0; i < paths.size(); ++i) {
+                auto *t = new QTreeWidgetItem(side, {paths.at(i)});
+                if (i == current) {
+                    QFont f = t->font(0);
+                    f.setBold(true);
+                    t->setFont(0, f);
+                }
+            }
+        };
+        addSide(g.right.isEmpty() ? QStringLiteral("Tabs") : QStringLiteral("First display"), g.left, g.leftCurrent);
+        if (!g.right.isEmpty())
+            addSide(QStringLiteral("Second display"), g.right, g.rightCurrent);
+    }
+    layout->addWidget(m_groupList, 1);
+    auto *row = new QHBoxLayout;
+    auto *del = new QPushButton(QIcon::fromTheme(QStringLiteral("list-remove")), QStringLiteral("Delete"), page);
+    auto *open = new QPushButton(QIcon::fromTheme(QStringLiteral("tab-new")), QStringLiteral("Open Now"), page);
+    auto *update = new QPushButton(QIcon::fromTheme(QStringLiteral("document-save")), QStringLiteral("Replace with the Tabs Open Now"), page);
+    row->addWidget(open);
+    row->addWidget(update);
+    row->addWidget(del);
+    row->addStretch(1);
+    layout->addLayout(row);
+    auto topOf = [](QTreeWidgetItem *it) {
+        while (it && it->parent())
+            it = it->parent();
+        return it;
+    };
+    connect(del, &QPushButton::clicked, this, [this, topOf]() { delete topOf(m_groupList->currentItem()); });
+    connect(open, &QPushButton::clicked, this, [this, topOf]() {
+        if (QTreeWidgetItem *it = topOf(m_groupList->currentItem()); it && m_lister) {
+            QString n = it->data(0, Qt::UserRole).toString();
+            n.remove(QLatin1Char('"'));
+            m_lister->runCommand(QStringLiteral("Go TABGROUPLOAD=\"%1\"").arg(n));
+        }
+    });
+    connect(update, &QPushButton::clicked, this, [this, topOf]() {
+        if (QTreeWidgetItem *it = topOf(m_groupList->currentItem()); it && m_lister) {
+            QString n = it->data(0, Qt::UserRole).toString();
+            n.remove(QLatin1Char('"'));
+            m_lister->runCommand(QStringLiteral("Go TABGROUPSAVE=\"%1\"").arg(n));
+            it->setText(1, QStringLiteral("updated"));
+        }
+    });
     return page;
 }
 
@@ -1294,6 +1449,8 @@ bool PreferencesDialog::apply(QString *error)
     v.junkHidden = m_general.value(QStringLiteral("junk"))->isChecked();
     v.treeLines = m_general.value(QStringLiteral("treelines"))->isChecked();
     v.treePath = m_general.value(QStringLiteral("treepath"))->isChecked();
+    v.notifyJobs = m_general.value(QStringLiteral("notify"))->isChecked();
+    v.notifyAfter = m_notifyAfter->value();
     const QString typed = m_terminal->currentText().trimmed();
     const int at = m_terminal->findText(typed);
     v.terminal = at >= 0 ? m_terminal->itemData(at).toString() : typed;
@@ -1318,6 +1475,45 @@ bool PreferencesDialog::apply(QString *error)
     Prefs::instance()->setValues(v);
     if (!m_keysPage->apply(error))
         return false;
+
+    // Saved filters.
+    QList<SavedFilters::Filter> filters;
+    QStringList seen;
+    for (int i = 0; i < m_filterList->topLevelItemCount(); ++i) {
+        const QTreeWidgetItem *it = m_filterList->topLevelItem(i);
+        SavedFilters::Filter f;
+        f.name = it->text(0).trimmed();
+        f.pattern = it->text(1).trimmed();
+        f.hide = it->checkState(2) == Qt::Checked;
+        f.scope = it->text(3);
+        if (f.name.isEmpty() || f.pattern.isEmpty())
+            continue;
+        if (seen.contains(f.name.toLower())) {
+            if (error)
+                *error = QStringLiteral("Filters: two are called \"%1\".").arg(f.name);
+            return false;
+        }
+        seen << f.name.toLower();
+        filters << f;
+    }
+    if (filters != SavedFilters::instance()->filters() || !QFile::exists(SavedFilters::instance()->file()))
+        SavedFilters::instance()->setFilters(filters);
+
+    // Tab groups: renamed, deleted, close-first changed.
+    QList<TabGroups::Group> groups;
+    for (int i = 0; i < m_groupList->topLevelItemCount(); ++i) {
+        const QTreeWidgetItem *it = m_groupList->topLevelItem(i);
+        TabGroups::Group g = TabGroups::instance()->group(it->data(0, Qt::UserRole).toString());
+        if (g.name.isEmpty())
+            continue;
+        const QString newName = it->text(0).trimmed();
+        if (!newName.isEmpty())
+            g.name = newName;
+        g.closeOthers = it->checkState(2) == Qt::Checked;
+        groups << g;
+    }
+    if (m_groupList->topLevelItemCount() != TabGroups::instance()->groups().size() || !groups.isEmpty())
+        TabGroups::instance()->setGroups(groups);
 
     // Theme: an edited theme is saved under its name, so it survives a restart.
     if (m_themeDirty && !saveTheme(error))

@@ -6,6 +6,8 @@
 #include <QMainWindow>
 #include <QPointer>
 
+#include "core/TabGroups.h"
+
 #include <optional>
 
 class AppContext;
@@ -156,6 +158,10 @@ private:
     void fillViewMenus();
 
     void registerKeys();
+    void saveTabGroup(const QString &name);
+    void loadTabGroup(const struct TabGroups::Group &g);
+    void refillDynamicPart(class QMenu *menu, const QString &kind);
+    void fillDynamicMenu(class QMenu *menu, const QString &kind, bool withCommands);
     void applyKeys();
     QHash<QString, QPointer<QAction>> m_keyActions;
     QList<class QShortcut *> m_hotkeys;

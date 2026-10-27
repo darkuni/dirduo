@@ -49,6 +49,9 @@
 #include "core/Prefs.h"
 #include "ui/ViewerWindow.h"
 #include "ui/KeysPage.h"
+#include "ui/Notifier.h"
+#include "core/TabGroups.h"
+#include "core/SavedFilters.h"
 #include "core/KeyMap.h"
 #include <QShortcut>
 #include <QSlider>
@@ -1877,6 +1880,143 @@ dirduo.on("folderOpened", e => { opened.push(e.path); dirduo.save("last", e.path
         QVERIFY(ok);
         QCOMPARE(back2.size(), 1);
         QCOMPARE(back2.first().command, QStringLiteral("Go UP"));
+    }
+
+    void tabGroupsFiltersAndNotices()
+    {
+        // Tab groups: save the tabs, change them, open the group again.
+        QDir().mkpath(root + QStringLiteral("/c"));
+        const bool wasDual = w->isDual();
+        QVERIFY(w->runCommand(QStringLiteral("Set DUAL=vertical")));
+        FileDisplay *left = w->display(0);
+        FileDisplay *right = w->display(1);
+        const QString leftBack = left->currentTab()->path();
+        const QString rightBack = right->currentTab()->path();
+        const int leftTabs = left->tabCount();
+        left->addTab(root + QStringLiteral("/a"));
+        right->currentTab()->navigate(root + QStringLiteral("/b"));
+        QTRY_COMPARE(right->currentTab()->path(), root + QStringLiteral("/b"));
+        QVERIFY(w->runCommand(QStringLiteral("Go TABGROUPSAVE=\"Work set\"")));
+        TabGroups::Group g = TabGroups::instance()->group(QStringLiteral("work SET"));
+        QCOMPARE(g.name, QStringLiteral("Work set"));
+        QCOMPARE(g.left.size(), leftTabs + 1);
+        QCOMPARE(g.left.last(), root + QStringLiteral("/a"));
+        QCOMPARE(g.right.value(right->currentIndex()), root + QStringLiteral("/b"));
+        QVERIFY(g.closeOthers);
+        // Move away, then back in one go.
+        left->closeTab(left->currentIndex());
+        left->addTab(root + QStringLiteral("/c"));
+        left->addTab(root + QStringLiteral("/c"));
+        right->currentTab()->navigate(root + QStringLiteral("/a"));
+        QVERIFY(w->runCommand(QStringLiteral("Go TABGROUPLOAD=\"Work set\"")));
+        QCOMPARE(left->tabCount(), leftTabs + 1);
+        QTRY_COMPARE(left->currentTab()->path(), root + QStringLiteral("/a"));
+        QTRY_COMPARE(right->currentTab()->path(), root + QStringLiteral("/b"));
+        QVERIFY(!runFailing(QStringLiteral("Go TABGROUPLOAD=Nothing")));
+        // Not closing the open tabs: they are added.
+        g = TabGroups::instance()->group(QStringLiteral("Work set"));
+        g.closeOthers = false;
+        TabGroups::instance()->save(g);
+        QVERIFY(w->runCommand(QStringLiteral("Go TABGROUPLOAD=\"Work set\"")));
+        QCOMPARE(left->tabCount(), 2 * (leftTabs + 1));
+        // In the Go menu, and on the Tab Groups page.
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("tabgroups"));
+            QCOMPARE(dlg.tabGroupList()->topLevelItemCount(), 1);
+            dlg.tabGroupList()->topLevelItem(0)->setText(0, QStringLiteral("Renamed"));
+            QVERIFY(dlg.apply());
+        }
+        QVERIFY(TabGroups::instance()->has(QStringLiteral("Renamed")));
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("tabgroups"));
+            delete dlg.tabGroupList()->topLevelItem(0);
+            QVERIFY(dlg.apply());
+        }
+        QVERIFY(TabGroups::instance()->groups().isEmpty());
+        while (left->tabCount() > leftTabs)
+            left->closeTab(left->tabCount() - 1);
+        left->setCurrentIndex(0);
+        left->currentTab()->navigate(leftBack);
+        right->currentTab()->navigate(rightBack);
+
+        // Saved filters: ready-made ones, @name, saving the one in use.
+        QVERIFY(SavedFilters::instance()->has(QStringLiteral("Disc images")));
+        QTemporaryDir dir;
+        const QString d = dir.path();
+        for (const char *n : {"game.iso", "game.cue", "notes.txt", "pic.png"})
+            touch(d + QLatin1Char('/') + QLatin1String(n));
+        FolderTab *t = left->currentTab();
+        t->navigate(d);
+        waitListed(t, 4);
+        QVERIFY(w->runCommand(QStringLiteral("Set FILTER=\"@Disc images\"")));
+        QCOMPARE(t->filterText(), SavedFilters::instance()->filter(QStringLiteral("Disc images")).pattern);
+        QTRY_COMPARE(t->visiblePaths().size(), 2);
+        QVERIFY(!runFailing(QStringLiteral("Set FILTER=@Nope")));
+        QVERIFY(w->runCommand(QStringLiteral("Set FILTER=*.txt;*.png")));
+        QVERIFY(w->runCommand(QStringLiteral("Set FILTERSAVE=\"Notes and pictures\"")));
+        QCOMPARE(SavedFilters::instance()->filter(QStringLiteral("Notes and pictures")).pattern, QStringLiteral("*.txt;*.png"));
+        QVERIFY(w->runCommand(QStringLiteral("Set FILTER=\"\" FILTERBAR=off")));
+        QTRY_COMPARE(t->visiblePaths().size(), 4);
+        QVERIFY(w->runCommand(QStringLiteral("Select PATTERN=\"@Notes and pictures\"")));
+        QCOMPARE(t->selectedPaths().size(), 2);
+        // The Filters page edits and deletes them.
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("filters"));
+            QTreeWidget *list = dlg.filterList();
+            QTreeWidgetItem *mine = nullptr;
+            for (int i = 0; i < list->topLevelItemCount(); ++i)
+                if (list->topLevelItem(i)->text(0) == QStringLiteral("Notes and pictures"))
+                    mine = list->topLevelItem(i);
+            QVERIFY(mine);
+            mine->setText(1, QStringLiteral("*.txt"));
+            mine->setCheckState(2, Qt::Checked);
+            QVERIFY(dlg.apply());
+        }
+        const SavedFilters::Filter edited = SavedFilters::instance()->filter(QStringLiteral("Notes and pictures"));
+        QCOMPARE(edited.pattern, QStringLiteral("*.txt"));
+        QVERIFY(edited.hide);
+        QVERIFY(w->runCommand(QStringLiteral("Set FILTER=\"@Notes and pictures\"")));
+        QTRY_COMPARE(t->visiblePaths().size(), 3); // hides the text file
+        QVERIFY(SavedFilters::instance()->remove(QStringLiteral("Notes and pictures")));
+        QVERIFY(w->runCommand(QStringLiteral("Set FILTER=\"\" FILTERBAR=off")));
+
+        // A notice when a long job finishes with nobody looking.
+        QList<Notifier::Notice> notices;
+        Notifier::instance()->setSink([&notices](const Notifier::Notice &n) { notices << n; });
+        m_app->setNotifyWhenActive(true);
+        Prefs::Values pv = Prefs::instance()->values();
+        pv.notifyAfter = 0;
+        Prefs::instance()->setValues(pv);
+        t->selectPaths({d + QStringLiteral("/notes.txt")});
+        QTRY_COMPARE(t->selectedPaths().size(), 1);
+        QVERIFY(w->runCommand(QStringLiteral("Copy TO=\"%1\"").arg(root + QStringLiteral("/c"))));
+        QVERIFY(m_app->jobs().waitForIdle(5000));
+        QTRY_COMPARE(notices.size(), 1);
+        QVERIFY(notices.first().title.contains(QStringLiteral("done")));
+        QVERIFY(notices.first().body.contains(QStringLiteral("1 item")));
+        Notifier::instance()->click(Notifier::instance()->lastId()); // opens the folder
+        QTRY_COMPARE(w->sourceDisplay()->currentTab()->path(), root + QStringLiteral("/c"));
+        // Short jobs say nothing.
+        pv.notifyAfter = 30;
+        Prefs::instance()->setValues(pv);
+        QFile::remove(root + QStringLiteral("/c/notes.txt"));
+        t = w->sourceDisplay()->currentTab();
+        t->navigate(d);
+        waitListed(t, 4);
+        t->selectPaths({d + QStringLiteral("/notes.txt")});
+        QTRY_COMPARE(t->selectedPaths().size(), 1);
+        QVERIFY(w->runCommand(QStringLiteral("Copy TO=\"%1\"").arg(root + QStringLiteral("/c"))));
+        QVERIFY(m_app->jobs().waitForIdle(5000));
+        QTest::qWait(100);
+        QCOMPARE(notices.size(), 1);
+        pv.notifyAfter = 10;
+        Prefs::instance()->setValues(pv);
+        m_app->setNotifyWhenActive(false);
+        Notifier::instance()->setSink({});
+        QFile::remove(root + QStringLiteral("/c/notes.txt"));
+        t->navigate(leftBack);
+        if (!wasDual)
+            QVERIFY(w->runCommand(QStringLiteral("Set DUAL=off")));
     }
 
     void preferencesGeneralAndFileTypes()

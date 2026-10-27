@@ -27,6 +27,8 @@ finish-args:
   # Button commands run real system tools through `flatpak-spawn --host`
   # (phase 3).
   - --talk-name=org.freedesktop.Flatpak
+  # A notice when a long copy finishes while DirDuo is in the background.
+  - --talk-name=org.freedesktop.Notifications
   # Server passwords: KIO asks the desktop's password server and wallet.
   - --talk-name=org.kde.kiod6
   - --talk-name=org.kde.kded6

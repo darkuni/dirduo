@@ -128,6 +128,8 @@ public:
     void setFilter(const QString &text, bool invert = false,
                    FileSortProxy::FilterScope scope = FileSortProxy::FilterScope::Files);
     QString filterText() const;
+    bool filterHides() const;
+    FileSortProxy::FilterScope filterScope() const;
 
     // Check box mode
     void setCheckMode(bool on);

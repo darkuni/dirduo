@@ -37,7 +37,7 @@ namespace {
 
 const QStringList kGoFlags = {
     QStringLiteral("UP"), QStringLiteral("BACK"), QStringLiteral("FORWARD"), QStringLiteral("REFRESH"),
-    QStringLiteral("SWAP"), QStringLiteral("NEWTAB"), QStringLiteral("OPENINDEST"),
+    QStringLiteral("SWAP"), QStringLiteral("NEWTAB"), QStringLiteral("OPENINDEST"), QStringLiteral("TABGROUPSAVE"),
 };
 const QStringList kCopyFlags = {QStringLiteral("MOVE"), QStringLiteral("AS")};
 const QStringList kDeleteFlags = {QStringLiteral("NORECYCLE"), QStringLiteral("QUIET")};

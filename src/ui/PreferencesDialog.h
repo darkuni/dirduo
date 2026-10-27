@@ -73,6 +73,8 @@ public:
     QPlainTextEdit *statusDefinitionEdit() const { return m_statusDef; }
     QTreeWidget *scriptList() const { return m_scriptList; }
     class KeysPage *keysPage() const { return m_keysPage; }
+    QTreeWidget *filterList() const { return m_filterList; }
+    QTreeWidget *tabGroupList() const { return m_groupList; }
     QComboBox *terminalBox() const { return m_terminal; }
     QTableWidget *fileTypesTable() const { return m_fileTypes; }
 
@@ -98,6 +100,11 @@ private:
     QWidget *buildScripts();
     QWidget *buildViewer();
     class KeysPage *m_keysPage = nullptr;
+    QWidget *buildFilters();
+    QWidget *buildTabGroups();
+    QTreeWidget *m_filterList = nullptr;
+    QTreeWidget *m_groupList = nullptr;
+    class QSpinBox *m_notifyAfter = nullptr;
     QHash<QString, QCheckBox *> m_viewerBoxes;
     class QComboBox *m_viewerZoom = nullptr;
     class QComboBox *m_viewerBackground = nullptr;

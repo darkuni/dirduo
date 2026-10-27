@@ -50,6 +50,9 @@ Servers and archives (KIO):
 - Shell script buttons: a button whose function starts with `#!/bin/bash` (or any `#!`) runs as a script on the real system (outside the Flatpak). The selected items are `"$@"`, it starts in the source folder, and `$DIRDUO_SOURCE`, `$DIRDUO_DEST` and `$DIRDUO_FOCUSED` are set. `# dirduo: terminal` runs it in Konsole, `# dirduo: output` always shows what it printed (otherwise only when it fails), `# dirduo: norefresh` leaves the listings alone. The button editor's New Script puts in a template
 - Open With: right-click > Open With lists the applications for the file's type (from the system's .desktop files, Flatpak apps included), plus Other Application... to pick any app, search by name, and Always use it for that type. DirDuo's choice wins over the desktop's when opening files. `OpenWith APP=Kate DEFAULT`
 - Viewer pane: pictures, text (NFO/DIZ in code page 437), hex, what is inside any archive (zip, 7z, RAR, tar, ISO...), and music and video with Play, a position bar and the time; nothing plays until asked, and closing the pane or moving on stops it
+- Tab groups (Go > Tab Groups), as in Opus: Save These Tabs as a Group keeps the tabs of both displays under a name; picking it opens them all again (two displays when it has both), closing the open tabs first or adding to them (Preferences > Tab Groups, where groups are renamed, deleted, opened, or replaced with the tabs open now). `Go TABGROUPLOAD=name` and `Go TABGROUPSAVE=name` for buttons and keys; a toolbar menu button with `"dynamic": "tabgroups"` lists them
+- Saved filters: the filter bar's Saved button, View > Saved Filters and Preferences > Filters. Ready-made ones (Pictures, Music, Video, Disc images, Archives, Documents) to start with; save the filter in use under a name; each can hide what matches instead and apply to files, folders or both. `Set FILTER=@name`, `Set FILTERSAVE=name` and `Select PATTERN=@name`; `"dynamic": "filters"` on a toolbar menu button
+- A desktop notice when a copy, move, extract or other job finishes while DirDuo is in the background and it took over 10 seconds (Preferences > General sets the time, or turns it off). Click it to open the folder the files went to
 - Standalone viewer, as Opus's (right-click > View or Play, the `Show` command, or double-click when Preferences > Viewer says so): any file in its own window. See "The viewer" below
 - Preferences > General: what the status line shows (counts, selection, free space), whether copies ask Retry / Skip / Abort, and which terminal Open Konsole Here uses. Preferences > File Types: the applications DirDuo uses per type, and back to the desktop's choice
 - Help > About shows which build this is
@@ -314,7 +317,7 @@ Each toolbar is `~/.config/dirduo/toolbars/<id>.json`. Customize mode writes the
 
 A toolbar file can also have `"style": "icons"` (or `text`, `beside`, `under`) and `"iconSize": 24`. Besides buttons and `{ "separator": true }`, a toolbar can hold `{ "spacer": true }` and fields: `{ "field": "filter", "label": "Filter" }` (`find`, `go`, or `command` with `"left": "Select PATTERN={text}"`). A menu button with `"split": true` and a `"left"` command runs it on a click and opens the menu from its arrow.
 
-A button with `"dynamic": "favorites"` (or `frequent`, `aliases`, `collections`) is a menu that fills itself.
+A button with `"dynamic": "favorites"` (or `frequent`, `aliases`, `collections`, `servers`, `tabgroups`, `filters`) is a menu that fills itself.
 
 `enableWhen` grays a button out when false; `checkWhen` shows it pressed when true. They combine these words with `&&`, `||`, `!` and parentheses: `selection`, `files`, `folders`, `single`, `multiple`, `dual`, `dest`, `destlocked`, `navlock`, `remote`, `canup`, `favorite`, `back`, `forward`, `clipboard`, `hidden`, `tree`, `flat`, `grouped`, `filter`, `checkboxes`, `foldersizes`, and `view=`, `layout=`, `groupby=`, `treemode=`, `theme=`.
 
@@ -332,6 +335,7 @@ A button with `"dynamic": "favorites"` (or `frequent`, `aliases`, `collections`)
 - `~/.config/dirduo/favorites.json`, `frequent.ini`: favorites and folder visit counts
 - `~/.config/dirduo/layouts/`: saved layouts
 - `~/.config/dirduo/keys.json`: changed keys and your own hotkeys
+- `~/.config/dirduo/filters.json`, `tabgroups.json`: saved filters and tab groups
 - `~/.config/dirduo/scripts/`: scripts, with their saved values in `scripts/data/`
 
 Inside the Flatpak these are still the real `~/.config/dirduo`, so the configuration copies straight to another machine.

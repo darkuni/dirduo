@@ -30,6 +30,8 @@ void Prefs::reload()
     v.treePath = s.value(QStringLiteral("treePath"), true).toBool();
     v.statusDefinition = s.value(QStringLiteral("statusDefinition")).toString();
     v.terminal = s.value(QStringLiteral("terminal")).toString();
+    v.notifyJobs = s.value(QStringLiteral("notifyJobs"), true).toBool();
+    v.notifyAfter = qBound(0, s.value(QStringLiteral("notifyAfter"), 10).toInt(), 3600);
     s.endGroup();
     s.beginGroup(QStringLiteral("Viewer"));
     Values::Viewer &w = v.viewer;
@@ -67,6 +69,8 @@ void Prefs::setValues(const Values &v)
     s.setValue(QStringLiteral("treePath"), v.treePath);
     s.setValue(QStringLiteral("statusDefinition"), v.statusDefinition);
     s.setValue(QStringLiteral("terminal"), v.terminal);
+    s.setValue(QStringLiteral("notifyJobs"), v.notifyJobs);
+    s.setValue(QStringLiteral("notifyAfter"), v.notifyAfter);
     s.endGroup();
     s.beginGroup(QStringLiteral("Viewer"));
     const Values::Viewer &w = v.viewer;

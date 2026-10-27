@@ -25,6 +25,8 @@ public:
         QString statusDefinition;
         QString effectiveStatusDefinition() const;
         QString terminal;            // empty: Konsole, else the first one installed
+        bool notifyJobs = true;      // a desktop notice when a job finishes while DirDuo is in the background
+        int notifyAfter = 10;        // ...and it took at least this many seconds
 
         // The standalone viewer (Show), as Opus's Viewer pages.
         struct Viewer

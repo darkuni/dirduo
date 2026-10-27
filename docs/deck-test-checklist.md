@@ -112,6 +112,13 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Turn on the trees (Set TREE=separate): dotted lines, + / - boxes, and a blue line (green in the destination) from the top down to the folder you are in.
 - [ ] With Steam running, right-click a Windows .exe (or an AppImage) > Add to Steam: Steam adds it to the library (on the Deck it shows in Game Mode too). A text file has no Add to Steam.
 
+## Tab groups, filters, notices
+
+- [ ] Open a few tabs on both sides. Go > Tab Groups > Save These Tabs as a Group, name it. Close and change tabs, then Go > Tab Groups > your group: they all come back.
+- [ ] Preferences > Tab Groups: untick "Close the open tabs first", OK. Open the group again: its tabs are added to the open ones. Rename and delete it there too.
+- [ ] Ctrl+F, click Saved > Disc images in a ROM folder: only .iso/.chd/.cue show. Type `*.txt;*.nfo`, Saved > Save This Filter: it is in View > Saved Filters.
+- [ ] Copy a big folder (over 10 seconds) to the SD card and switch to another app: a desktop notice says it is done. Click it: DirDuo opens that folder.
+
 ## Keyboard shortcuts
 
 - [ ] File > Keyboard Shortcuts: click Edit > Invert Selection, click in Key and press Ctrl+K. OK. Ctrl+K now inverts the selection; Ctrl+I does nothing.

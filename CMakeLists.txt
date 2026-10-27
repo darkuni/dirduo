@@ -84,6 +84,8 @@ add_library(dirduo_core STATIC
     src/core/Apps.cpp
     src/core/Prefs.cpp
     src/core/KeyMap.cpp
+    src/core/SavedFilters.cpp
+    src/core/TabGroups.cpp
     src/core/FileTags.cpp
     src/core/Checksum.cpp
     src/core/StatusFormat.cpp
@@ -188,6 +190,7 @@ add_library(dirduo_ui STATIC
     src/ui/OpenWithDialog.cpp
     src/ui/ViewerWindow.cpp
     src/ui/KeysPage.cpp
+    src/ui/Notifier.cpp
     src/ui/MediaPanel.cpp
     src/ui/TagsDialog.cpp
     src/ui/ChecksumDialog.cpp
@@ -202,6 +205,12 @@ add_library(dirduo_ui STATIC
     src/ui/AppContext.cpp
 )
 target_link_libraries(dirduo_ui PUBLIC dirduo_core Qt6::Widgets Qt6::Network)
+# Desktop notifications when a long job finishes. Optional.
+find_package(Qt6 QUIET COMPONENTS DBus)
+if(Qt6DBus_FOUND)
+    target_link_libraries(dirduo_ui PUBLIC Qt6::DBus)
+    target_compile_definitions(dirduo_ui PUBLIC DIRDUO_HAVE_DBUS)
+endif()
 
 # Playing music and video in the viewer pane. Optional; the Flatpak has it.
 option(DIRDUO_REQUIRE_MULTIMEDIA "Fail when Qt Multimedia is missing" OFF)

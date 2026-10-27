@@ -1,4 +1,6 @@
 #include "ui/ListerWindow.h"
+#include "core/SavedFilters.h"
+#include "core/TabGroups.h"
 #include <QSet>
 #include <QShortcut>
 #include "core/KeyMap.h"
@@ -572,6 +574,12 @@ void ListerWindow::buildMenus()
     viewerPos->addAction(commandAction(QStringLiteral("Bottom"), QStringLiteral("Set VIEWERPOS=bottom")));
     viewerPos->addAction(commandAction(QStringLiteral("Left"), QStringLiteral("Set VIEWERPOS=left")));
     view->addAction(m_actFilterBar);
+    QMenu *filters = view->addMenu(QIcon::fromTheme(QStringLiteral("view-filter")), QStringLiteral("Saved Filters"));
+    filters->addAction(commandAction(QStringLiteral("Save This Filter..."), QStringLiteral("Set FILTERSAVE=ask"), {}, QStringLiteral("document-save")));
+    filters->addAction(commandAction(QStringLiteral("Clear the Filter"), QStringLiteral("Set FILTER=\"\" FILTERBAR=off"), {},
+                                     QStringLiteral("edit-clear")));
+    filters->addAction(commandAction(QStringLiteral("Manage Filters..."), QStringLiteral("Settings PAGE=filters"), {}, QStringLiteral("configure")));
+    connect(filters, &QMenu::aboutToShow, this, [this, filters]() { refillDynamicPart(filters, QStringLiteral("filters")); });
     view->addAction(m_actChecks);
     view->addAction(m_actFolderSizes);
     QMenu *format = view->addMenu(QStringLiteral("Folder Format"));
@@ -617,6 +625,12 @@ void ListerWindow::buildMenus()
     QAction *location = go->addAction(QStringLiteral("Edit Location"));
     location->setShortcuts({QKeySequence(QStringLiteral("Ctrl+L")), QKeySequence(QStringLiteral("Alt+D"))});
     connect(location, &QAction::triggered, this, [this]() { sourceDisplay()->breadcrumb()->startEditing(); });
+    QMenu *groups = go->addMenu(QIcon::fromTheme(QStringLiteral("tab-duplicate")), QStringLiteral("Tab Groups"));
+    groups->addAction(commandAction(QStringLiteral("Save These Tabs as a Group..."), QStringLiteral("Go TABGROUPSAVE"), {},
+                                    QStringLiteral("document-save")));
+    groups->addAction(commandAction(QStringLiteral("Manage Tab Groups..."), QStringLiteral("Settings PAGE=tabgroups"), {},
+                                    QStringLiteral("configure")));
+    connect(groups, &QMenu::aboutToShow, this, [this, groups]() { refillDynamicPart(groups, QStringLiteral("tabgroups")); });
     go->addSeparator();
     // The network: machines found on it, Windows and Samba shares (KIO's smb
     // worker), and the saved servers.
@@ -1635,6 +1649,54 @@ QString ListerWindow::chooseDestination(const QString &title)
                                              QFileDialog::ShowDirsOnly | QFileDialog::DontUseNativeDialog);
 }
 
+void ListerWindow::saveTabGroup(const QString &name)
+{
+    TabGroups::Group g;
+    const TabGroups::Group old = TabGroups::instance()->group(name);
+    g.name = old.name.isEmpty() ? name : old.name;
+    g.closeOthers = old.name.isEmpty() ? true : old.closeOthers;
+    auto tabsOf = [](FileDisplay *d) {
+        QStringList out;
+        for (int i = 0; i < d->tabCount(); ++i)
+            out << d->tab(i)->path();
+        return out;
+    };
+    g.left = tabsOf(m_displays[0]);
+    g.leftCurrent = m_displays[0]->currentIndex();
+    if (m_dual) {
+        g.right = tabsOf(m_displays[1]);
+        g.rightCurrent = m_displays[1]->currentIndex();
+    }
+    TabGroups::instance()->save(g);
+}
+
+void ListerWindow::loadTabGroup(const TabGroups::Group &g)
+{
+    // A group of both displays opens two; one of one display goes into the source.
+    if (!g.right.isEmpty() && !m_dual)
+        setDual(true);
+    auto fill = [&g](FileDisplay *d, const QStringList &paths, int current) {
+        const int before = d->tabCount();
+        for (const QString &p : paths)
+            d->addTab(p, false);
+        if (g.closeOthers) {
+            for (int i = 0; i < before; ++i)
+                d->closeTab(0);
+            d->setCurrentIndex(qBound(0, current, d->tabCount() - 1));
+        } else {
+            d->setCurrentIndex(qBound(0, before + current, d->tabCount() - 1));
+        }
+    };
+    if (!g.right.isEmpty()) {
+        fill(m_displays[0], g.left, g.leftCurrent);
+        fill(m_displays[1], g.right, g.rightCurrent);
+    } else {
+        fill(sourceDisplay(), g.left, g.leftCurrent);
+    }
+    updateRoles();
+    scheduleButtonStates();
+}
+
 bool ListerWindow::go(const ParsedCommand &cmd, QString *error)
 {
     auto fail = [error](const QString &msg) {
@@ -1642,6 +1704,27 @@ bool ListerWindow::go(const ParsedCommand &cmd, QString *error)
             *error = msg;
         return false;
     };
+
+    if (cmd.hasArg(QStringLiteral("TABGROUPLOAD"))) {
+        const TabGroups::Group g = TabGroups::instance()->group(cmd.value(QStringLiteral("TABGROUPLOAD")));
+        if (g.name.isEmpty())
+            return fail(QStringLiteral("There is no tab group called \"%1\".").arg(cmd.value(QStringLiteral("TABGROUPLOAD"))));
+        loadTabGroup(g);
+        return true;
+    }
+    if (cmd.hasArg(QStringLiteral("TABGROUPSAVE")) || cmd.hasFlag(QStringLiteral("TABGROUPSAVE"))) {
+        QString name = cmd.value(QStringLiteral("TABGROUPSAVE")).trimmed();
+        if (name.isEmpty() || name.compare(QLatin1String("ask"), Qt::CaseInsensitive) == 0) {
+            name = sourceTab() ? Location::fileName(sourceTab()->path()) : QString();
+            if (!promptText(QStringLiteral("Save Tab Group"), QStringLiteral("Name for the tabs that are open:"), name))
+                return true;
+            name = name.trimmed();
+            if (name.isEmpty())
+                return true;
+        }
+        saveTabGroup(name);
+        return true;
+    }
 
     if (cmd.hasFlag(QStringLiteral("SWAP"))) {
         if (!m_dual)
@@ -1884,10 +1967,43 @@ bool ListerWindow::set(const ParsedCommand &cmd, QString *error)
         } else if (key == QLatin1String("FILTER")) {
             // A leading ! hides what matches instead of showing it.
             QString text = it.value().value(0);
-            const bool invert = text.startsWith(QLatin1Char('!'));
+            bool invert = text.startsWith(QLatin1Char('!'));
             if (invert)
                 text.remove(0, 1);
-            sourceTab()->setFilter(text, invert, FileSortProxy::FilterScope::Files);
+            FileSortProxy::FilterScope scope = FileSortProxy::FilterScope::Files;
+            if (text.startsWith(QLatin1Char('@'))) { // a saved filter
+                const SavedFilters::Filter f = SavedFilters::instance()->filter(text.mid(1));
+                if (f.name.isEmpty())
+                    return fail(QStringLiteral("There is no saved filter called \"%1\".").arg(text.mid(1)));
+                text = f.pattern;
+                invert = invert != f.hide;
+                scope = f.scope == QLatin1String("folders") ? FileSortProxy::FilterScope::Folders
+                    : f.scope == QLatin1String("both")      ? FileSortProxy::FilterScope::Both
+                                                            : FileSortProxy::FilterScope::Files;
+            }
+            sourceTab()->setFilter(text, invert, scope);
+        } else if (key == QLatin1String("FILTERSAVE")) {
+            FolderTab *t = sourceTab();
+            if (!t || t->filterText().isEmpty())
+                return fail(QStringLiteral("Type a filter first (Ctrl+F)."));
+            QString name = it.value().value(0); // as typed: value is lowercased
+            if (name.isEmpty() || name.compare(QLatin1String("ask"), Qt::CaseInsensitive) == 0) {
+                name.clear();
+                if (!promptText(QStringLiteral("Save Filter"), QStringLiteral("Name for the filter \"%1\":").arg(t->filterText()), name))
+                    return true;
+            }
+            name = name.trimmed();
+            if (name.isEmpty())
+                return true;
+            SavedFilters::Filter f;
+            f.name = name;
+            f.pattern = t->filterText();
+            f.hide = t->filterHides();
+            const FileSortProxy::FilterScope sc = t->filterScope();
+            f.scope = sc == FileSortProxy::FilterScope::Folders ? QStringLiteral("folders")
+                : sc == FileSortProxy::FilterScope::Both      ? QStringLiteral("both")
+                                                              : QStringLiteral("files");
+            SavedFilters::instance()->save(f);
         } else if (key == QLatin1String("CHECKBOXES")) {
             bool on = sourceTab()->checkMode();
             if (!parseSwitch(value, on, on))
@@ -1990,7 +2106,10 @@ bool ListerWindow::select(const ParsedCommand &cmd, QString *error)
         rules = rules || cmd.hasArg(k);
     if (rules) {
         SelectRules r;
-        r.pattern = cmd.values(QStringLiteral("PATTERN")).join(QLatin1Char(';'));
+        QStringList patterns;
+        for (const QString &p : cmd.values(QStringLiteral("PATTERN"))) // @name: a saved filter's pattern
+            patterns << SavedFilters::instance()->resolve(p);
+        r.pattern = patterns.join(QLatin1Char(';'));
         if (cmd.hasArg(QStringLiteral("KIND"))) {
             if (!FileKind::categoryFromKey(cmd.value(QStringLiteral("KIND")).toLower(), r.kind))
                 return fail(QStringLiteral("KIND takes image, audio, video, archive, diskimage, document, code, program or folder."));
@@ -3262,7 +3381,32 @@ void ListerWindow::showFindResults(const QString &collectionLocation, int count)
     d->addTab(collectionLocation, true);
 }
 
+// A menu with fixed commands (which the Keys page can give keys) and a list
+// that is made again each time it opens, below them.
+void ListerWindow::refillDynamicPart(QMenu *menu, const QString &kind)
+{
+    for (QAction *a : menu->actions())
+        if (a->property("dirduoDynamic").toBool())
+            delete a;
+    auto *sep = menu->addSeparator();
+    sep->setProperty("dirduoDynamic", true);
+    QMenu scratch;
+    fillDynamicMenu(&scratch, kind, false);
+    for (QAction *a : scratch.actions()) {
+        scratch.removeAction(a);
+        a->setParent(menu);
+        a->setProperty("dirduoDynamic", true);
+        menu->addAction(a);
+    }
+    sep->setVisible(menu->actions().last() != sep);
+}
+
 void ListerWindow::fillDynamicMenu(QMenu *menu, const QString &kind)
+{
+    fillDynamicMenu(menu, kind, true);
+}
+
+void ListerWindow::fillDynamicMenu(QMenu *menu, const QString &kind, bool withCommands)
 {
     auto goAction = [this](QMenu *m, const QString &label, const QString &command, const QString &tip, const QString &icon) {
         QAction *a = m->addAction(QIcon::fromTheme(icon), label);
@@ -3307,6 +3451,41 @@ void ListerWindow::fillDynamicMenu(QMenu *menu, const QString &kind)
         AliasManager &aliases = m_app.aliases();
         for (const QString &name : aliases.names())
             goAction(menu, QLatin1Char('/') + name, QStringLiteral("Go /") + name, aliases.aliasPath(name), QStringLiteral("folder-bookmark"));
+    } else if (kind == QLatin1String("tabgroups")) {
+        for (const TabGroups::Group &g : TabGroups::instance()->groups()) {
+            QStringList where = g.left;
+            where += g.right;
+            QString tip = where.mid(0, 12).join(QLatin1Char('\n'));
+            if (where.size() > 12)
+                tip += QStringLiteral("\n...");
+            QString q = g.name;
+            q.remove(QLatin1Char('"'));
+            goAction(menu, g.name, QStringLiteral("Go TABGROUPLOAD=\"%1\"").arg(q), tip,
+                     g.right.isEmpty() ? QStringLiteral("tab-new") : QStringLiteral("view-split-left-right"));
+        }
+        if (withCommands) {
+            if (!menu->isEmpty())
+                menu->addSeparator();
+            goAction(menu, QStringLiteral("Save These Tabs as a Group..."), QStringLiteral("Go TABGROUPSAVE"), QString(), QStringLiteral("document-save"));
+            goAction(menu, QStringLiteral("Manage Tab Groups..."), QStringLiteral("Settings PAGE=tabgroups"), QString(), QStringLiteral("configure"));
+        }
+    } else if (kind == QLatin1String("filters")) {
+        const QString now = sourceTab() ? sourceTab()->filterText() : QString();
+        for (const SavedFilters::Filter &f : SavedFilters::instance()->filters()) {
+            QString q = f.name;
+            q.remove(QLatin1Char('"'));
+            QAction *a = goAction(menu, f.name, QStringLiteral("Set FILTER=\"@%1\"").arg(q),
+                                  (f.hide ? QStringLiteral("Hides ") : QString()) + f.pattern, QStringLiteral("view-filter"));
+            a->setCheckable(true);
+            a->setChecked(!now.isEmpty() && now == f.pattern);
+        }
+        if (withCommands) {
+            if (!menu->isEmpty())
+                menu->addSeparator();
+            goAction(menu, QStringLiteral("Clear the Filter"), QStringLiteral("Set FILTER=\"\" FILTERBAR=off"), QString(), QStringLiteral("edit-clear"));
+            goAction(menu, QStringLiteral("Save This Filter..."), QStringLiteral("Set FILTERSAVE=ask"), QString(), QStringLiteral("document-save"));
+            goAction(menu, QStringLiteral("Manage Filters..."), QStringLiteral("Settings PAGE=filters"), QString(), QStringLiteral("configure"));
+        }
     } else if (kind == QLatin1String("servers")) {
         goAction(menu, QStringLiteral("Windows Shares"), QStringLiteral("Go smb:/"), QStringLiteral("Windows and Samba machines (SMB)"),
                  QStringLiteral("network-workgroup"));

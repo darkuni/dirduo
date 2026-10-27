@@ -1,4 +1,6 @@
 #include "ui/FolderTab.h"
+#include <QInputDialog>
+#include "core/SavedFilters.h"
 #include "core/Prefs.h"
 #include "core/StatusFormat.h"
 #include "core/Scripting.h"
@@ -86,7 +88,54 @@ FolderTab::FolderTab(QWidget *parent)
     closeFilter->setAutoRaise(true);
     closeFilter->setIcon(QIcon::fromTheme(QStringLiteral("window-close")));
     closeFilter->setToolTip(QStringLiteral("Close the filter (Esc)"));
+    // Saved filters (Preferences > Filters): pick one, or keep this one.
+    auto *saved = new QToolButton(m_filterBar);
+    saved->setObjectName(QStringLiteral("filter-saved"));
+    saved->setAutoRaise(true);
+    saved->setIcon(QIcon::fromTheme(QStringLiteral("bookmarks")));
+    saved->setText(QStringLiteral("Saved"));
+    saved->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    saved->setToolTip(QStringLiteral("Saved filters"));
+    saved->setPopupMode(QToolButton::InstantPopup);
+    auto *savedMenu = new QMenu(saved);
+    saved->setMenu(savedMenu);
+    connect(savedMenu, &QMenu::aboutToShow, this, [this, savedMenu]() {
+        savedMenu->clear();
+        for (const SavedFilters::Filter &f : SavedFilters::instance()->filters()) {
+            QAction *a = savedMenu->addAction(f.name);
+            a->setToolTip((f.hide ? QStringLiteral("Hides ") : QString()) + f.pattern);
+            a->setCheckable(true);
+            a->setChecked(!m_filterEdit->text().isEmpty() && m_filterEdit->text() == f.pattern);
+            connect(a, &QAction::triggered, this, [this, f]() {
+                setFilter(f.pattern, f.hide,
+                          f.scope == QLatin1String("folders") ? FileSortProxy::FilterScope::Folders
+                          : f.scope == QLatin1String("both")  ? FileSortProxy::FilterScope::Both
+                                                              : FileSortProxy::FilterScope::Files);
+            });
+        }
+        savedMenu->setToolTipsVisible(true);
+        savedMenu->addSeparator();
+        QAction *keep = savedMenu->addAction(QIcon::fromTheme(QStringLiteral("document-save")), QStringLiteral("Save This Filter..."));
+        keep->setEnabled(!m_filterEdit->text().isEmpty());
+        connect(keep, &QAction::triggered, this, [this]() {
+            bool ok = false;
+            const QString name = QInputDialog::getText(this, QStringLiteral("Save Filter"),
+                                                       QStringLiteral("Name for the filter \"%1\":").arg(m_filterEdit->text()),
+                                                       QLineEdit::Normal, QString(), &ok).trimmed();
+            if (!ok || name.isEmpty())
+                return;
+            SavedFilters::Filter f;
+            f.name = name;
+            f.pattern = m_filterEdit->text();
+            f.hide = m_filterInvert->isChecked();
+            f.scope = m_filterScope->currentIndex() == 1 ? QStringLiteral("folders")
+                : m_filterScope->currentIndex() == 2   ? QStringLiteral("both")
+                                                       : QStringLiteral("files");
+            SavedFilters::instance()->save(f);
+        });
+    });
     fl->addWidget(m_filterEdit, 1);
+    fl->addWidget(saved);
     fl->addWidget(m_filterInvert);
     fl->addWidget(m_filterScope);
     fl->addWidget(closeFilter);
@@ -1361,6 +1410,16 @@ void FolderTab::setFilterBarVisible(bool visible)
 bool FolderTab::filterBarVisible() const
 {
     return !m_filterBar->isHidden();
+}
+
+bool FolderTab::filterHides() const
+{
+    return m_filterInvert->isChecked();
+}
+
+FileSortProxy::FilterScope FolderTab::filterScope() const
+{
+    return static_cast<FileSortProxy::FilterScope>(m_filterScope->currentIndex());
 }
 
 void FolderTab::setFilter(const QString &text, bool invert, FileSortProxy::FilterScope scope)

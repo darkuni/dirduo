@@ -289,7 +289,7 @@ ButtonDef ButtonDef::fromJson(const QJsonObject &o)
 QStringList ButtonDef::dynamicKinds()
 {
     return {QStringLiteral("favorites"), QStringLiteral("frequent"), QStringLiteral("aliases"), QStringLiteral("collections"),
-            QStringLiteral("servers")};
+            QStringLiteral("servers"), QStringLiteral("tabgroups"), QStringLiteral("filters")};
 }
 
 QStringList ButtonDef::fieldKinds()

@@ -1,4 +1,7 @@
 #pragma once
+#include "core/Job.h"
+#include <QHash>
+#include <QElapsedTimer>
 
 #include "ui/Launch.h"
 
@@ -40,6 +43,8 @@ public:
     CommandEngine &engine() { return *m_engine; }
     QSettings &settings() { return *m_settings; }
     ToolbarStore &toolbars() { return *m_toolbars; }
+    // Tests: notices even with a window active.
+    void setNotifyWhenActive(bool on) { m_notifyWhenActive = on; }
     ScriptHost &scripts() { return *m_scripts; }
 
     // Every file under ~/.config/dirduo in one zip, and back. Restoring
@@ -82,6 +87,10 @@ private:
     std::unique_ptr<QSettings> m_settings;
     std::unique_ptr<ToolbarStore> m_toolbars;
     std::unique_ptr<ScriptHost> m_scripts;
+    void notifyJobDone(const struct JobSnapshot &snap, qint64 ms);
+    QHash<int, QElapsedTimer> m_jobClocks;
+    QHash<int, struct JobSnapshot> m_doneSnaps;
+    bool m_notifyWhenActive = false;
     std::unique_ptr<AliasManager> m_aliases;
     std::unique_ptr<JobManager> m_jobs;
     std::unique_ptr<CommandEngine> m_engine;

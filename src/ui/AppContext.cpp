@@ -1,4 +1,7 @@
 #include "ui/AppContext.h"
+#include "core/Prefs.h"
+#include "core/FileOps.h"
+#include "ui/Notifier.h"
 #include "core/Scripting.h"
 #include <QDesktopServices>
 #include <QUrl>
@@ -63,8 +66,21 @@ AppContext::AppContext(QObject *parent)
     m_engine->setScripts(m_scripts.get());
     m_scripts->setOpener([](const QString &path) { QDesktopServices::openUrl(QUrl::fromLocalFile(path)); });
     m_scripts->reload();
-    connect(m_jobs.get(), &JobManager::jobFinished, this, [this](int id) {
+    connect(m_jobs.get(), &JobManager::jobAdded, this, [this](int id) { m_jobClocks[id].start(); });
+    // The job's last state, kept: a progress window can let the job go
+    // before jobFinished gets here.
+    connect(m_jobs.get(), &JobManager::jobChanged, this, [this](int id) {
         const JobSnapshot snap = m_jobs->snapshot(id);
+        if (snap.id == id && snap.isDone())
+            m_doneSnaps.insert(id, snap);
+    });
+    connect(m_jobs.get(), &JobManager::jobFinished, this, [this](int id) {
+        JobSnapshot snap = m_jobs->snapshot(id);
+        if (snap.id != id)
+            snap = m_doneSnaps.value(id);
+        m_doneSnaps.remove(id);
+        const qint64 ms = m_jobClocks.contains(id) ? m_jobClocks.take(id).elapsed() : 0;
+        notifyJobDone(snap, ms);
         static const QStringList kinds = {QStringLiteral("copy"), QStringLiteral("move"), QStringLiteral("trash"), QStringLiteral("delete"),
                                           QStringLiteral("pack"), QStringLiteral("unpack"), QStringLiteral("split"), QStringLiteral("join")};
         QVariantMap e;
@@ -78,6 +94,45 @@ AppContext::AppContext(QObject *parent)
         e.insert(QStringLiteral("bytes"), double(snap.totalBytes));
         m_scripts->fire(QStringLiteral("jobFinished"), e, activeLister());
     });
+}
+
+void AppContext::notifyJobDone(const JobSnapshot &snap, qint64 ms)
+{
+    // Only when nobody is looking: no DirDuo window has the focus.
+    const Prefs::Values &v = Prefs::instance()->values();
+    if (!v.notifyJobs || snap.state == JobState::Canceled || ms < qint64(v.notifyAfter) * 1000
+        || (QApplication::activeWindow() && !m_notifyWhenActive))
+        return;
+    Notifier::Notice n;
+    const bool ok = snap.state == JobState::Finished && snap.errors.isEmpty();
+    n.title = ok ? QStringLiteral("%1: done").arg(snap.title) : QStringLiteral("%1: finished with problems").arg(snap.title);
+    QStringList bits;
+    if (snap.totalItems > 0)
+        bits << (snap.totalItems == 1 ? QStringLiteral("1 item") : QStringLiteral("%1 items").arg(snap.totalItems));
+    if (snap.totalBytes > 0)
+        bits << FileOps::formatSize(snap.totalBytes);
+    QString body = bits.join(QStringLiteral(", "));
+    if (!snap.toFolder.isEmpty())
+        body += (body.isEmpty() ? QString() : QStringLiteral(" to ")) + Location::display(snap.toFolder);
+    if (!snap.errors.isEmpty())
+        body += QStringLiteral("\n%1 could not be done: %2").arg(snap.errors.size()).arg(snap.errors.first());
+    n.body = body;
+    n.icon = ok ? QStringLiteral("dialog-ok") : QStringLiteral("dialog-warning");
+    const QString folder = !snap.toFolder.isEmpty() ? snap.toFolder : snap.fromFolder;
+    if (!folder.isEmpty()) {
+        n.onClick = [this, folder]() {
+            ListerWindow *w = activeLister();
+            if (!w)
+                return;
+            QString q = folder;
+            q.remove(QLatin1Char('"'));
+            w->runCommand(QStringLiteral("Go \"%1\"").arg(q));
+            w->showNormal();
+            w->raise();
+            w->activateWindow();
+        };
+    }
+    Notifier::instance()->show(n);
 }
 
 AppContext::~AppContext()
