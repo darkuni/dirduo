@@ -35,8 +35,6 @@ struct Preview
     // PDFs (when built with Qt PDF).
     static bool canShowPdf();
     static bool isPdf(const QString &path);
-    // A rendered PDF page on white paper (pages are see-through where nothing is drawn).
-    static QImage onPaper(const QImage &page);
 };
 
 // The viewer pane: a dock beside or below the displays that shows the file

@@ -194,6 +194,7 @@ add_library(dirduo_ui STATIC
     src/ui/KeysPage.cpp
     src/ui/Notifier.cpp
     src/ui/IndexSearch.cpp
+    src/ui/PdfDoc.cpp
     src/ui/MediaPanel.cpp
     src/ui/TagsDialog.cpp
     src/ui/ChecksumDialog.cpp
@@ -226,15 +227,24 @@ elseif(DIRDUO_REQUIRE_MULTIMEDIA)
     message(FATAL_ERROR "Qt Multimedia not found (DIRDUO_REQUIRE_MULTIMEDIA is on)")
 endif()
 
-# PDFs in the viewer and the viewer pane. Optional; the Flatpak has it.
-option(DIRDUO_REQUIRE_PDF "Fail when Qt PDF is missing" OFF)
+# PDFs in the viewer and the viewer pane: Poppler (the Flatpak builds it), or
+# Qt PDF without it. Optional.
+option(DIRDUO_REQUIRE_PDF "Fail when neither Poppler nor Qt PDF is found" OFF)
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(POPPLER_QT6 QUIET IMPORTED_TARGET poppler-qt6)
+endif()
 find_package(Qt6 QUIET COMPONENTS Pdf)
-if(Qt6Pdf_FOUND)
+if(POPPLER_QT6_FOUND)
+    target_link_libraries(dirduo_ui PUBLIC PkgConfig::POPPLER_QT6)
+    target_compile_definitions(dirduo_ui PUBLIC DIRDUO_HAVE_PDF DIRDUO_HAVE_POPPLER)
+    message(STATUS "Poppler ${POPPLER_QT6_VERSION}: PDFs in the viewer on")
+elseif(Qt6Pdf_FOUND)
     target_link_libraries(dirduo_ui PUBLIC Qt6::Pdf)
-    target_compile_definitions(dirduo_ui PUBLIC DIRDUO_HAVE_PDF)
+    target_compile_definitions(dirduo_ui PUBLIC DIRDUO_HAVE_PDF DIRDUO_HAVE_QTPDF)
     message(STATUS "Qt PDF: PDFs in the viewer on")
 elseif(DIRDUO_REQUIRE_PDF)
-    message(FATAL_ERROR "Qt PDF not found (DIRDUO_REQUIRE_PDF is on)")
+    message(FATAL_ERROR "No PDF library: neither Poppler (poppler-qt6) nor Qt PDF found (DIRDUO_REQUIRE_PDF is on)")
 endif()
 
 if(DIRDUO_WITH_KIO)

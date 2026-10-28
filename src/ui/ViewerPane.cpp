@@ -1,8 +1,6 @@
 #include "ui/ViewerPane.h"
 #include "ui/MediaPanel.h"
-#ifdef DIRDUO_HAVE_PDF
-#include <QPdfDocument>
-#endif
+#include "ui/PdfDoc.h"
 
 #include "core/Archive.h"
 
@@ -173,22 +171,20 @@ Preview Preview::load(const QString &path, int maxImageSide)
     p.info = QStringLiteral("%1, %2, %3").arg(mime.comment(), FileOps::formatSize(fi.size()), when);
     const QString ext = fi.suffix().toLower();
 
-#ifdef DIRDUO_HAVE_PDF
     // PDFs: the first page, as a picture.
-    if (isPdf(path)) {
-        QPdfDocument doc;
-        doc.load(path);
-        if (doc.status() == QPdfDocument::Status::Ready && doc.pageCount() > 0) {
-            const QSizeF pt = doc.pagePointSize(0);
+    if (isPdf(path) && PdfDoc::available()) {
+        PdfDoc doc;
+        if (doc.load(path)) {
+            const QSizeF pt = doc.pagePoints(0);
             const int side = qMin(maxImageSide, 2400);
             QSize px = (pt * 2.0).toSize(); // 144 dpi
             if (px.width() > side || px.height() > side)
                 px.scale(side, side, Qt::KeepAspectRatio);
-            p.image = onPaper(doc.render(0, px));
+            p.image = doc.render(0, px);
             if (!p.image.isNull()) {
                 p.kind = Kind::Image;
                 p.pages = doc.pageCount();
-                const QString title = doc.metaData(QPdfDocument::MetaDataField::Title).toString().trimmed();
+                const QString title = doc.title();
                 p.info = QStringLiteral("PDF document, %1, %2, %3")
                              .arg(p.pages == 1 ? QStringLiteral("1 page") : QStringLiteral("%1 pages").arg(p.pages),
                                   FileOps::formatSize(fi.size()), when);
@@ -198,7 +194,6 @@ Preview Preview::load(const QString &path, int maxImageSide)
             }
         }
     }
-#endif
 
     // Pictures
     QImageReader reader(path);
@@ -318,22 +313,7 @@ Preview Preview::load(const QString &path, int maxImageSide)
 
 bool Preview::canShowPdf()
 {
-#ifdef DIRDUO_HAVE_PDF
-    return true;
-#else
-    return false;
-#endif
-}
-
-QImage Preview::onPaper(const QImage &page)
-{
-    if (page.isNull() || !page.hasAlphaChannel())
-        return page;
-    QImage out(page.size(), QImage::Format_RGB32);
-    out.fill(Qt::white);
-    QPainter p(&out);
-    p.drawImage(0, 0, page);
-    return out;
+    return PdfDoc::available();
 }
 
 bool Preview::isPdf(const QString &path)

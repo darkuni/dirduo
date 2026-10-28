@@ -40,13 +40,7 @@
 #include <QTreeWidget>
 #include <QUrl>
 #include <QtConcurrent>
-#ifdef DIRDUO_HAVE_PDF
-#include <QPdfDocument>
-#else
-class QPdfDocument
-{
-};
-#endif
+#include "ui/PdfDoc.h"
 
 #include <algorithm>
 #include <cmath>
@@ -745,22 +739,21 @@ void ViewerWindow::display(const Preview &p)
 
 bool ViewerWindow::goPage(int page, bool atBottom)
 {
-#ifdef DIRDUO_HAVE_PDF
     if (m_pages <= 0 || page < 0 || page >= m_pages || m_hex)
         return false;
     if (!m_pdf || m_pdfPath != m_preview.path) {
-        m_pdf = std::make_unique<QPdfDocument>();
+        m_pdf = std::make_unique<PdfDoc>();
         m_pdf->load(m_preview.path);
         m_pdfPath = m_preview.path;
     }
-    if (m_pdf->status() != QPdfDocument::Status::Ready)
+    if (!m_pdf->isLoaded())
         return false;
     // As sharp as the first page: the same width (pages can differ in shape).
-    const QSizeF pt = m_pdf->pagePointSize(page);
+    const QSizeF pt = m_pdf->pagePoints(page);
     QSize px = pt.toSize();
     if (pt.width() > 0)
         px = QSize(m_pageSize.width(), qRound(m_pageSize.width() * pt.height() / pt.width()));
-    const QImage img = Preview::onPaper(m_pdf->render(page, px));
+    const QImage img = m_pdf->render(page, px);
     if (img.isNull())
         return false;
     m_page = page;
@@ -768,11 +761,6 @@ bool ViewerWindow::goPage(int page, bool atBottom)
     updateTitle();
     updateStatus();
     return true;
-#else
-    Q_UNUSED(page)
-    Q_UNUSED(atBottom)
-    return false;
-#endif
 }
 
 void ViewerWindow::pageOrFile(int delta)

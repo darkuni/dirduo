@@ -194,6 +194,40 @@ modules:
         tag: v0.28.8
         commit: 2cd987a731236037b6b78cbff897d08685a8ef49
 
+  # PDFs in the viewer (the KDE runtime has no Qt PDF). Only the Qt 6 part.
+  - name: poppler
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DENABLE_UTILS=OFF
+      - -DENABLE_CPP=OFF
+      - -DENABLE_GLIB=OFF
+      - -DENABLE_GOBJECT_INTROSPECTION=OFF
+      - -DENABLE_QT5=OFF
+      - -DENABLE_QT6=ON
+      - -DENABLE_BOOST=OFF
+      - -DENABLE_LIBOPENJPEG=none
+      - -DENABLE_NSS3=OFF
+      - -DENABLE_GPGME=OFF
+      - -DENABLE_LCMS=OFF
+      - -DENABLE_LIBCURL=OFF
+      - -DENABLE_LIBTIFF=OFF
+      - -DBUILD_GTK_TESTS=OFF
+      - -DBUILD_QT5_TESTS=OFF
+      - -DBUILD_QT6_TESTS=OFF
+      - -DBUILD_CPP_TESTS=OFF
+      - -DBUILD_MANUAL_TESTS=OFF
+      - -DENABLE_UNSTABLE_API_ABI_HEADERS=OFF
+      - -DRUN_GPERF_IF_PRESENT=OFF
+    cleanup:
+      - /include
+      - /lib/pkgconfig
+    sources:
+      - type: git
+        url: https://gitlab.freedesktop.org/poppler/poppler.git
+        tag: poppler-25.01.0
+
   - name: dirduo
     buildsystem: cmake-ninja
     builddir: true

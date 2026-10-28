@@ -185,7 +185,7 @@ private:
     int m_page = 0;
     QSize m_pageSize;
     QString m_pdfPath;
-    std::unique_ptr<class QPdfDocument> m_pdf;
+    std::unique_ptr<class PdfDoc> m_pdf;
 
     QStackedWidget *m_stack;
     PictureView *m_picture;
