@@ -1,4 +1,5 @@
 #include "ui/FolderTree.h"
+#include <QScrollBar>
 #include <QPainter>
 #include "core/Prefs.h"
 #include "core/Servers.h"
@@ -354,6 +355,22 @@ FolderTree::FolderTree(AliasManager *aliases, QWidget *parent)
     });
     setModel(m_model);
     header()->hide();
+    // One column as wide as the longest name shown (at least the view), with a
+    // scroll bar across, so deep folders keep their names instead of being cut
+    // to nothing; the current one is scrolled into view (as Opus's tree).
+    header()->setStretchLastSection(false);
+    header()->setSectionResizeMode(0, QHeaderView::Fixed);
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    setTextElideMode(Qt::ElideNone);
+    m_fit.setSingleShot(true);
+    m_fit.setInterval(0);
+    connect(&m_fit, &QTimer::timeout, this, &FolderTree::fitColumn);
+    connect(this, &QTreeView::expanded, &m_fit, qOverload<>(&QTimer::start));
+    connect(this, &QTreeView::collapsed, &m_fit, qOverload<>(&QTimer::start));
+    connect(m_model, &QAbstractItemModel::rowsInserted, &m_fit, qOverload<>(&QTimer::start));
+    connect(m_model, &QAbstractItemModel::rowsRemoved, &m_fit, qOverload<>(&QTimer::start));
+    connect(m_model, &QAbstractItemModel::modelReset, &m_fit, qOverload<>(&QTimer::start));
+    connect(m_model, &QAbstractItemModel::dataChanged, &m_fit, qOverload<>(&QTimer::start));
     setUniformRowHeights(true);
     setAnimated(false);
     setIndentation(Style::instance()->scaled(18));
@@ -473,8 +490,37 @@ void FolderTree::reveal()
     for (QModelIndex p = idx.parent(); p.isValid(); p = p.parent())
         expand(p);
     selectionModel()->setCurrentIndex(idx, QItemSelectionModel::ClearAndSelect);
+    fitColumn();
     scrollTo(idx, QAbstractItemView::EnsureVisible);
+    showAcross(idx);
     m_syncing = false;
+}
+
+void FolderTree::fitColumn()
+{
+    const int want = qMax(sizeHintForColumn(0), viewport()->width());
+    if (header()->sectionSize(0) != want)
+        header()->resizeSection(0, want);
+}
+
+// Scrolls across so the folder's whole name shows, as little as it takes.
+void FolderTree::showAcross(const QModelIndex &idx)
+{
+    QScrollBar *bar = horizontalScrollBar();
+    const QRect r = visualRect(idx);
+    if (!r.isValid())
+        return;
+    const int left = r.left() + bar->value(); // in column coordinates
+    const int textWidth = sizeHintForIndex(idx).width();
+    // Only as far as it takes to show the whole name, never past its start.
+    const int need = left + textWidth + 6 - viewport()->width();
+    bar->setValue(qBound(0, need, qMax(0, left - indentation())));
+}
+
+void FolderTree::resizeEvent(QResizeEvent *event)
+{
+    QTreeView::resizeEvent(event);
+    m_fit.start();
 }
 
 void FolderTree::setZoom(int percent)

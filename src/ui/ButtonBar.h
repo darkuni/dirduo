@@ -143,10 +143,13 @@ protected:
     void mouseDoubleClickEvent(QMouseEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
+    QSize sizeHint() const override;
 
 private:
     QMenu *buildMenu(const QList<ButtonDef> &children, QWidget *parent);
     bool editing() const;
+    bool ownArrow() const;
+    int arrowWidth() const;
     bool onArrow(const QPoint &pos) const;
 
     ButtonDef m_def;

@@ -98,11 +98,14 @@ Q_SIGNALS:
     void folderActivated(const QString &path);
 
 protected:
+    void resizeEvent(QResizeEvent *event) override;
     void drawBranches(QPainter *painter, const QRect &rect, const QModelIndex &index) const override;
 
 private:
     void rebuild(const QList<DriveEntry> &drives);
     void reveal();
+    void fitColumn();
+    void showAcross(const QModelIndex &idx);
 
     AliasManager *m_aliases;
     FolderTreeModel *m_model;
@@ -113,4 +116,5 @@ private:
     int m_zoom = 100;
     QColor m_pathColor;
     bool m_autoColor = true; // until a display gives it its color
+    QTimer m_fit;
 };

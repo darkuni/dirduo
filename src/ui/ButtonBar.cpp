@@ -18,6 +18,8 @@
 #include <QPainter>
 #include <QSaveFile>
 #include <QShortcut>
+#include <QStylePainter>
+#include <QStyleOptionToolButton>
 #include <QStyleOptionToolButton>
 #include <QUrl>
 
@@ -1080,9 +1082,51 @@ void ThreeButton::contextMenuEvent(QContextMenuEvent *event)
         event->accept(); // right-click is a function, not a menu
 }
 
+// A menu button's ▾ goes at the right, in the middle (styles put it in the
+// bottom corner, under the label); split buttons keep their own arrow part.
+bool ThreeButton::ownArrow() const
+{
+    return menu() && popupMode() == QToolButton::InstantPopup && toolButtonStyle() != Qt::ToolButtonTextUnderIcon;
+}
+
+QSize ThreeButton::sizeHint() const
+{
+    QSize s = QToolButton::sizeHint();
+    if (ownArrow()) {
+        // Without the style's corner arrow, plus room for ours.
+        QStyleOptionToolButton opt;
+        initStyleOption(&opt);
+        const int styleArrow = style()->pixelMetric(QStyle::PM_MenuButtonIndicator, &opt, this);
+        s.setWidth(s.width() - (opt.features & QStyleOptionToolButton::MenuButtonPopup ? styleArrow : 0) + arrowWidth());
+    }
+    return s;
+}
+
+int ThreeButton::arrowWidth() const
+{
+    return qMax(8, fontMetrics().height() * 2 / 3);
+}
+
 void ThreeButton::paintEvent(QPaintEvent *event)
 {
-    QToolButton::paintEvent(event);
+    if (ownArrow()) {
+        QStylePainter p(this);
+        QStyleOptionToolButton opt;
+        initStyleOption(&opt);
+        opt.features &= ~QStyleOptionToolButton::HasMenu; // no corner arrow
+        const int aw = arrowWidth();
+        // The label keeps clear of the arrow.
+        QStyleOptionToolButton body = opt;
+        p.drawComplexControl(QStyle::CC_ToolButton, body);
+        QStyleOption arrow;
+        arrow.initFrom(this);
+        arrow.rect = QRect(width() - aw - 2, (height() - aw) / 2, aw, aw);
+        if (!isEnabled())
+            arrow.state &= ~QStyle::State_Enabled;
+        p.drawPrimitive(QStyle::PE_IndicatorArrowDown, arrow);
+    } else {
+        QToolButton::paintEvent(event);
+    }
     if (editing()) {
         QPainter p(this);
         QPen dash(palette().color(QPalette::Highlight));
