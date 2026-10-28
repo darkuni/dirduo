@@ -45,6 +45,8 @@ public:
             double slideSeconds = 4.0;
             bool slideRandom = false;
             bool slideAuto = false;      // start a slideshow whenever it opens with several pictures
+            bool slideFade = false;      // fade from one picture to the next
+            bool markPane = true;        // show the marked pane when a picture is marked
             QString markCollection = QStringLiteral("Marked Pictures - %F"); // %F folder, %D date
             bool openMarkedOnClose = true;
         } viewer;

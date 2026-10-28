@@ -137,6 +137,10 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 
 - [ ] Right-click a PDF (a game manual) > View: the first page; Page Down and Space turn pages, the status bar says "page 2 of 12"; past the last page it goes on to the next file. F3's pane shows the first page.
 
+- [ ] In the viewer, press M on a picture: the Marked pane opens on the left with its thumbnail; Ctrl+M hides and shows it; double-click a thumbnail to jump to it.
+- [ ] Ctrl+P on a picture and on a PDF: the print dialog; print a page range of the PDF (or Print to File as PDF).
+- [ ] Preferences > Viewer > Slideshow: tick "Fade from one picture to the next", then S: pictures fade into each other.
+
 ## Keyboard shortcuts
 
 - [ ] File > Keyboard Shortcuts: click Edit > Invert Selection, click in Key and press Ctrl+K. OK. Ctrl+K now inverts the selection; Ctrl+I does nothing.

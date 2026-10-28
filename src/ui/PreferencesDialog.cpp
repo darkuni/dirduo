@@ -366,6 +366,7 @@ QWidget *PreferencesDialog::buildViewer()
     auto *sb = new QVBoxLayout;
     box(QStringLiteral("random"), QStringLiteral("In random order"), v.slideRandom, sb, slide);
     box(QStringLiteral("slideauto"), QStringLiteral("Start one whenever the viewer opens with several pictures"), v.slideAuto, sb, slide);
+    box(QStringLiteral("slidefade"), QStringLiteral("Fade from one picture to the next"), v.slideFade, sb, slide);
     sf->addRow(sb);
     layout->addWidget(slide);
 
@@ -376,6 +377,7 @@ QWidget *PreferencesDialog::buildViewer()
     mf->addRow(QStringLiteral("Marked files go in the collection:"), m_markName);
     auto *mb = new QVBoxLayout;
     box(QStringLiteral("openmarked"), QStringLiteral("Open the collection in a tab when the viewer closes"), v.openMarkedOnClose, mb, mark);
+    box(QStringLiteral("markpane"), QStringLiteral("Show the marked pane (Ctrl+M) when a picture is marked"), v.markPane, mb, mark);
     mf->addRow(mb);
     layout->addWidget(mark);
     layout->addStretch(1);
@@ -1742,6 +1744,8 @@ bool PreferencesDialog::apply(QString *error)
     vw.playNext = m_viewerBoxes.value(QStringLiteral("playnext"))->isChecked();
     vw.slideRandom = m_viewerBoxes.value(QStringLiteral("random"))->isChecked();
     vw.slideAuto = m_viewerBoxes.value(QStringLiteral("slideauto"))->isChecked();
+    vw.slideFade = m_viewerBoxes.value(QStringLiteral("slidefade"))->isChecked();
+    vw.markPane = m_viewerBoxes.value(QStringLiteral("markpane"))->isChecked();
     vw.openMarkedOnClose = m_viewerBoxes.value(QStringLiteral("openmarked"))->isChecked();
     vw.resetZoom = m_viewerZoom->currentIndex();
     vw.background = m_viewerBackground->currentIndex();

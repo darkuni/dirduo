@@ -85,7 +85,7 @@ QList<CommandInfo> buildCommands()
                       arg("AUTOFILELIST=", {QStringLiteral("all")}, "Next/Previous go through the files shown in the tab (all: every file in the folder)"),
                       arg("LISTSIBLINGS", {}, "Next/Previous go through the folder's files of the same kind"),
                       arg("FULLSCREEN", {}, "Open in full screen"),
-                      arg("SLIDESHOW", {}, "Start a slideshow"),
+                      arg("SLIDESHOW=", {QStringLiteral("fade")}, "Start a slideshow (fade: fading from one picture to the next)"),
                       arg("LISTERLINK=", {QStringLiteral("close"), QStringLiteral("toggle")}, "Show the file in focus in the lister (close: close the linked viewer)"),
                       arg("USEEXISTING=", {QStringLiteral("no")}, "no: a new window even when one is open"),
                       arg("POS=", {}, "Where the window goes: x,y"),

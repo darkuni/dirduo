@@ -12,7 +12,7 @@ endif()
 
 set(DIRDUO_APP_ID "com.monroeworld.DirDuo")
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Concurrent Network Qml)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Concurrent Network Qml PrintSupport)
 
 # KIO adds servers (SFTP, FTP, SMB, WebDAV...) and archives as folders. Without
 # it DirDuo still builds and handles local files.
@@ -208,7 +208,7 @@ add_library(dirduo_ui STATIC
     src/ui/ListerWindow.cpp
     src/ui/AppContext.cpp
 )
-target_link_libraries(dirduo_ui PUBLIC dirduo_core Qt6::Widgets Qt6::Network)
+target_link_libraries(dirduo_ui PUBLIC dirduo_core Qt6::Widgets Qt6::Network Qt6::PrintSupport)
 # Desktop notifications when a long job finishes. Optional.
 find_package(Qt6 QUIET COMPONENTS DBus)
 if(Qt6DBus_FOUND)

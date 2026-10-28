@@ -40,6 +40,15 @@
 #include <QTreeWidget>
 #include <QUrl>
 #include <QtConcurrent>
+#include <QTimer>
+#include <QMenu>
+#include <QElapsedTimer>
+#include <QPageLayout>
+#include <QPrintDialog>
+#include <QPrinter>
+#include <QImageReader>
+#include <QListWidget>
+#include <QDockWidget>
 #include "ui/PdfDoc.h"
 
 #include <algorithm>
@@ -65,6 +74,14 @@ public:
     explicit PictureView(QWidget *parent)
         : QWidget(parent)
     {
+        m_fadeTimer.setInterval(16);
+        connect(&m_fadeTimer, &QTimer::timeout, this, [this]() {
+            if (m_fadeClock.elapsed() >= kFadeMs) {
+                m_fadeTimer.stop();
+                m_fadeFrom = QImage();
+            }
+            update();
+        });
         setMinimumSize(80, 80);
         setFocusPolicy(Qt::StrongFocus);
         setMouseTracking(false);
@@ -74,8 +91,17 @@ public:
     std::function<void(int)> onStep;
     std::function<void()> onChanged; // zoom, turn, selection
 
-    void setImage(const QImage &img, int resetZoom)
+    void setImage(const QImage &img, int resetZoom, bool fade = false)
     {
+        // A cross-fade from what is shown now (the slideshow's).
+        if (fade && !m_shown.isNull()) {
+            m_fadeFrom = m_shown;
+            m_fadeRect = target();
+            m_fadeClock.start();
+            m_fadeTimer.start();
+        } else {
+            m_fadeFrom = QImage();
+        }
         m_original = img;
         m_shown = img;
         m_rotation = 0;
@@ -255,7 +281,15 @@ protected:
         if (m_shown.hasAlphaChannel() && m_background != 4)
             paintBackground(p, r.toAlignedRect(), 4); // a checkerboard behind see-through pictures
         p.setRenderHint(QPainter::SmoothPixmapTransform, scale() < 4.0); // big zooms show the pixels
-        p.drawImage(r, m_shown);
+        if (!m_fadeFrom.isNull()) {
+            const double t = qBound(0.0, m_fadeClock.elapsed() / double(kFadeMs), 1.0);
+            p.drawImage(m_fadeRect, m_fadeFrom);
+            p.setOpacity(t);
+            p.drawImage(r, m_shown);
+            p.setOpacity(1.0);
+        } else {
+            p.drawImage(r, m_shown);
+        }
         if (!m_selection.isEmpty()) {
             const double s = scale();
             const QRectF sel(r.topLeft() + QPointF(m_selection.x() * s, m_selection.y() * s),
@@ -412,8 +446,13 @@ private:
         p.drawText(box.adjusted(8, 6, -8, -6), Qt::AlignLeft | Qt::TextWordWrap, text);
     }
 
+    static constexpr int kFadeMs = 450;
     QImage m_original;
     QImage m_shown;
+    QImage m_fadeFrom;
+    QRectF m_fadeRect;
+    QElapsedTimer m_fadeClock;
+    QTimer m_fadeTimer;
     Mode m_mode = Mode::Fit;
     double m_zoom = 1.0;
     int m_rotation = 0;
@@ -502,6 +541,7 @@ ViewerWindow::ViewerWindow(ListerWindow *lister)
     m_statusRight = new QLabel(this);
     statusBar()->addWidget(m_statusLeft, 1);
     statusBar()->addPermanentWidget(m_statusRight);
+    buildMarkedPane();
     applyBackground();
 
     QSettings s(Paths::configFile(QStringLiteral("dirduo.ini")), QSettings::IniFormat);
@@ -678,7 +718,7 @@ void ViewerWindow::display(const Preview &p)
     } else {
         switch (p.kind) {
         case Preview::Kind::Image:
-            m_picture->setImage(p.image, v.resetZoom);
+            m_picture->setImage(p.image, v.resetZoom, m_slideOn && (v.slideFade || m_slideFade));
             show = m_picture;
             if (p.pages > 0) { // a PDF: its first page; the others as they are asked for
                 m_pages = p.pages;
@@ -769,6 +809,223 @@ void ViewerWindow::pageOrFile(int delta)
     if (m_pages > 1 && m_page + delta >= 0 && m_page + delta < m_pages && goPage(m_page + delta, delta < 0))
         return;
     step(delta);
+}
+
+// ---------------------------------------------------------------- marked pane
+
+// Opus's marked pictures pane: thumbnails of what is marked, on the left.
+void ViewerWindow::buildMarkedPane()
+{
+    m_markDock = new QDockWidget(QStringLiteral("Marked"), this);
+    m_markDock->setObjectName(QStringLiteral("viewer-marked-dock"));
+    m_markDock->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable);
+    m_markList = new QListWidget(m_markDock);
+    m_markList->setObjectName(QStringLiteral("viewer-marked"));
+    m_markList->setViewMode(QListView::IconMode);
+    m_markList->setFlow(QListView::TopToBottom);
+    m_markList->setWrapping(false);
+    m_markList->setResizeMode(QListView::Adjust);
+    m_markList->setMovement(QListView::Static);
+    m_markList->setIconSize(QSize(120, 90));
+    m_markList->setUniformItemSizes(true);
+    m_markList->setSpacing(4);
+    m_markList->setMinimumWidth(150);
+    m_markList->setFocusPolicy(Qt::NoFocus);
+    m_markList->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_markDock->setWidget(m_markList);
+    addDockWidget(Qt::LeftDockWidgetArea, m_markDock);
+    m_markDock->hide();
+    connect(m_markList, &QListWidget::itemActivated, this, [this](QListWidgetItem *it) {
+        const QString path = it->data(Qt::UserRole).toString();
+        const int i = int(m_files.indexOf(path));
+        m_markReturn = current();
+        if (i >= 0)
+            goTo(i);
+        else
+            open(path, marked());
+    });
+    connect(m_markList, &QListWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
+        QListWidgetItem *it = m_markList->itemAt(pos);
+        if (!it)
+            return;
+        const QString path = it->data(Qt::UserRole).toString();
+        QMenu menu(this);
+        menu.addAction(QIcon::fromTheme(QStringLiteral("go-jump")), QStringLiteral("Show It"), this, [this, it]() {
+            Q_EMIT m_markList->itemActivated(it);
+        });
+        menu.addAction(QIcon::fromTheme(QStringLiteral("list-remove")), QStringLiteral("Unmark"), this, [this, path]() {
+            Collections::instance()->removeItems(m_markName, {path});
+            m_picture->setMarked(isMarked(current()));
+            refreshMarkedPane();
+            updateStatus();
+            updateActions();
+        });
+        menu.exec(m_markList->viewport()->mapToGlobal(pos));
+    });
+    connect(m_markDock, &QDockWidget::visibilityChanged, this, [this](bool on) {
+        if (QAction *a = m_actions.value(QStringLiteral("markpane")))
+            a->setChecked(on);
+        if (on)
+            refreshMarkedPane();
+    });
+    connect(Collections::instance(), &Collections::changed, this, [this](const QString &name) {
+        if (name == m_markName && m_markDock->isVisible())
+            refreshMarkedPane();
+    });
+}
+
+bool ViewerWindow::markedPaneShown() const
+{
+    return m_markDock && m_markDock->isVisible();
+}
+
+void ViewerWindow::setMarkedPaneShown(bool on)
+{
+    if (!m_markDock)
+        return;
+    const bool first = on && !m_markDock->isVisible() && !m_markSized;
+    m_markDock->setVisible(on);
+    if (first) {
+        m_markSized = true; // as wide as a thumbnail; it can be dragged wider
+        resizeDocks({m_markDock}, {m_markList->iconSize().width() + 40}, Qt::Horizontal);
+    }
+    if (on)
+        refreshMarkedPane();
+}
+
+void ViewerWindow::refreshMarkedPane()
+{
+    if (!m_markList || !m_markDock->isVisible())
+        return;
+    const QStringList paths = marked();
+    QStringList shown;
+    for (int i = 0; i < m_markList->count(); ++i)
+        shown << m_markList->item(i)->data(Qt::UserRole).toString();
+    if (shown == paths)
+        return;
+    m_markList->clear();
+    const QIcon placeholder = QIcon::fromTheme(QStringLiteral("image-x-generic"));
+    for (const QString &p : paths) {
+        auto *it = new QListWidgetItem(placeholder, Location::fileName(p), m_markList);
+        it->setData(Qt::UserRole, p);
+        it->setToolTip(p);
+    }
+    // Thumbnails in the background.
+    const QSize side = m_markList->iconSize();
+    const quint64 generation = ++m_markGeneration;
+    for (const QString &p : paths) {
+        auto *w = new QFutureWatcher<QImage>(this);
+        connect(w, &QFutureWatcherBase::finished, this, [this, w, p, generation]() {
+            const QImage img = w->result();
+            w->deleteLater();
+            if (generation != m_markGeneration || img.isNull())
+                return;
+            for (int i = 0; i < m_markList->count(); ++i)
+                if (m_markList->item(i)->data(Qt::UserRole).toString() == p)
+                    m_markList->item(i)->setIcon(QIcon(QPixmap::fromImage(img)));
+        });
+        w->setFuture(QtConcurrent::run([p, side]() {
+            QImageReader r(p);
+            r.setAutoTransform(true);
+            const QSize full = r.size();
+            if (full.isValid())
+                r.setScaledSize(full.scaled(side, Qt::KeepAspectRatio));
+            return r.read();
+        }));
+    }
+}
+
+QStringList ViewerWindow::markedPaneFiles() const
+{
+    QStringList out;
+    for (int i = 0; m_markList && i < m_markList->count(); ++i)
+        out << m_markList->item(i)->data(Qt::UserRole).toString();
+    return out;
+}
+
+// ---------------------------------------------------------------- printing
+
+bool ViewerWindow::canPrint() const
+{
+    return (m_preview.kind == Preview::Kind::Image && !m_picture->shown().isNull())
+        || m_preview.kind == Preview::Kind::Text || m_preview.kind == Preview::Kind::Hex || m_hex;
+}
+
+void ViewerWindow::print()
+{
+    if (!canPrint())
+        return;
+    QPrinter printer(QPrinter::HighResolution);
+    printer.setDocName(Location::fileName(current()));
+    QPrintDialog dlg(&printer, this);
+    dlg.setWindowTitle(QStringLiteral("Print %1").arg(Location::fileName(current())));
+    if (m_pages > 1) {
+        dlg.setMinMax(1, m_pages);
+        dlg.setOption(QAbstractPrintDialog::PrintPageRange, true);
+    }
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+    QString err;
+    if (!printTo(printer, &err))
+        QMessageBox::warning(this, QStringLiteral("Print"), err);
+}
+
+// Pictures fitted to the page, centered (as shown: turned and cropped); a
+// PDF's pages (the range picked) at the printer's resolution; text as text.
+bool ViewerWindow::printTo(QPrinter &printer, QString *error)
+{
+    if (m_hex || m_preview.kind == Preview::Kind::Text || m_preview.kind == Preview::Kind::Hex) {
+        m_text->print(&printer);
+        return true;
+    }
+    if (m_preview.kind != Preview::Kind::Image) {
+        if (error)
+            *error = QStringLiteral("This kind of file cannot be printed from the viewer.");
+        return false;
+    }
+    QPainter painter;
+    if (!painter.begin(&printer)) {
+        if (error)
+            *error = QStringLiteral("The printer could not be started.");
+        return false;
+    }
+    const QRect page = printer.pageLayout().paintRectPixels(printer.resolution());
+    auto draw = [&painter, &page](const QImage &img) {
+        const QSize fitted = img.size().scaled(page.size(), Qt::KeepAspectRatio);
+        const QRect target(QPoint((page.width() - fitted.width()) / 2, (page.height() - fitted.height()) / 2), fitted);
+        painter.setRenderHint(QPainter::SmoothPixmapTransform);
+        painter.drawImage(target, img);
+    };
+    if (m_pages > 0) {
+        PdfDoc doc;
+        if (!doc.load(m_preview.path)) {
+            painter.end();
+            if (error)
+                *error = QStringLiteral("The PDF could not be read.");
+            return false;
+        }
+        int from = 1;
+        int to = m_pages;
+        if (printer.printRange() == QPrinter::PageRange && printer.fromPage() > 0) {
+            from = printer.fromPage();
+            to = qMin(m_pages, printer.toPage());
+        } else if (printer.printRange() == QPrinter::CurrentPage) {
+            from = to = m_page + 1;
+        }
+        for (int i = from; i <= to; ++i) {
+            if (i > from)
+                printer.newPage();
+            const QSizeF pt = doc.pagePoints(i - 1);
+            // At the printer's resolution, within the page.
+            QSize px = (pt * printer.resolution() / 72.0).toSize();
+            px = px.scaled(page.size(), Qt::KeepAspectRatio);
+            draw(doc.render(i - 1, px));
+        }
+    } else {
+        draw(m_picture->shown());
+    }
+    painter.end();
+    return true;
 }
 
 void ViewerWindow::showHex()
@@ -873,6 +1130,8 @@ void ViewerWindow::updateActions()
     }
     if (QAction *a = m_actions.value(QStringLiteral("hex")))
         a->setChecked(m_hex);
+    if (QAction *a = m_actions.value(QStringLiteral("print")))
+        a->setEnabled(canPrint());
     if (QAction *a = m_actions.value(QStringLiteral("slideshow")))
         a->setChecked(m_slideOn);
     if (QAction *a = m_actions.value(QStringLiteral("fullscreen")))
@@ -928,6 +1187,7 @@ void ViewerWindow::buildMenus()
                              [this]() { copyOrMoveTo(true); }));
     keep("delete", addAction(file, QStringLiteral("Delete"), QStringLiteral("edit-delete"), QKeySequence(Qt::Key_Delete), [this]() { deleteCurrent(); }));
     keep("wallpaper", addAction(file, QStringLiteral("Set as Wallpaper"), QStringLiteral("preferences-desktop-wallpaper"), {}, [this]() { setWallpaper(); }));
+    keep("print", addAction(file, QStringLiteral("Print..."), QStringLiteral("document-print"), QKeySequence::Print, [this]() { print(); }));
     file->addSeparator();
     keep("selectfile", addAction(file, QStringLiteral("Select in Lister"), QStringLiteral("edit-select"), QKeySequence(Qt::CTRL | Qt::Key_L),
                                  [this]() { selectInLister(); }));
@@ -1017,6 +1277,9 @@ void ViewerWindow::buildMenus()
                                                  [this]() { setSlideshow(!m_slideOn); }));
     slide->setCheckable(true);
     slide->setShortcuts({QKeySequence(Qt::Key_S), QKeySequence(Qt::Key_P)});
+    QAction *pane = keep("markpane", addAction(view, QStringLiteral("Marked Pane"), QStringLiteral("rating"), QKeySequence(Qt::CTRL | Qt::Key_M),
+                                               [this]() { setMarkedPaneShown(!markedPaneShown()); }));
+    pane->setCheckable(true);
     QAction *info = keep("info", addAction(view, QStringLiteral("Information"), QStringLiteral("dialog-information"), QKeySequence(Qt::Key_F10),
                                            [this]() { setInfoShown(!infoShown()); }));
     info->setCheckable(true);
@@ -1089,7 +1352,7 @@ void ViewerWindow::buildMenus()
             m_lister->runCommand(QStringLiteral("Settings PAGE=viewer"));
         }
     }));
-    QAction *menuToggle = keep("menubar", addAction(settings, QStringLiteral("Menu Bar"), QString(), QKeySequence(Qt::CTRL | Qt::Key_M), [this]() {
+    QAction *menuToggle = keep("menubar", addAction(settings, QStringLiteral("Menu Bar"), QString(), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M), [this]() {
         menuWidget()->setVisible(!menuWidget()->isVisible());
     }));
     Q_UNUSED(menuToggle)
@@ -1251,6 +1514,7 @@ void ViewerWindow::setSlideshow(bool on)
 {
     m_slideOn = on && m_files.size() > 1;
     if (!m_slideOn) {
+        m_slideFade = false;
         m_slideTimer.stop();
     } else if (m_preview.kind == Preview::Kind::Media) {
         if (!m_media->playing())
@@ -1370,6 +1634,9 @@ void ViewerWindow::toggleMark()
         m_lastMarked = path;
     }
     m_picture->setMarked(isMarked(path));
+    if (isMarked(path) && Prefs::instance()->values().viewer.markPane)
+        setMarkedPaneShown(true);
+    refreshMarkedPane();
     updateStatus();
     updateActions();
 }
@@ -1597,7 +1864,16 @@ bool ViewerWindow::runViewerCommand(const QString &command, QString *error)
     } else if (word == QLatin1String("fullscreen")) {
         setFullScreenMode(onOff(isFullScreen()));
     } else if (word == QLatin1String("slideshow")) {
-        setSlideshow(onOff(m_slideOn));
+        if (arg == QLatin1String("fade")) {
+            m_slideFade = true;
+            setSlideshow(true);
+        } else {
+            setSlideshow(onOff(m_slideOn));
+        }
+    } else if (word == QLatin1String("print")) {
+        print();
+    } else if (word == QLatin1String("markpane") || (word == QLatin1String("mark") && arg == QLatin1String("pane"))) {
+        setMarkedPaneShown(onOff(markedPaneShown()));
     } else if (word == QLatin1String("info")) {
         setInfoShown(onOff(infoShown()));
     } else if (word == QLatin1String("hex")) {

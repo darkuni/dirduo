@@ -181,17 +181,19 @@ The standalone viewer follows Directory Opus's: one window that shows any file. 
 | H / V | Flip horizontally / vertically |
 | Shift+drag, Ctrl+C, Ctrl+R, Ctrl+Z | Select, copy (the selection or the whole picture), crop to it, restore |
 | F10 | Information over the picture |
-| S or P | Slideshow (music and video play to the end before it moves on) |
+| S or P | Slideshow (music and video play to the end before it moves on); Preferences > Viewer can fade from one picture to the next |
 | M or Insert | Mark; marked files go into a collection (`Marked Pictures - <folder>`), which opens in a tab when the viewer closes |
 | Ctrl+Left / Right, Ctrl+Up / Down, Shift+M, Ctrl+Space | Previous / next marked, first / last marked, move the mark here, back to where you were |
+| Ctrl+M | The marked pane: thumbnails of the marked files (double-click one to see it, right-click to unmark); it opens by itself on the first mark |
+| Ctrl+P | Print: a picture fitted to the page, a PDF's pages (all, a range or the one shown), or text |
 | K, J / `;` | Play / pause, back / forward 10 seconds |
 | Alt+Enter, F11, middle click, double-click | Full screen |
 | Delete | Move the file to the trash |
 | Ctrl+L | Select the file in the lister |
-| Ctrl+M | Hide or show the menu bar |
+| Ctrl+Shift+M | Hide or show the menu bar |
 | Escape | Leave full screen, or close |
 
-File > Follow the Lister (or `Show LISTERLINK`) makes the viewer show whatever is in focus in the lister as you move through it. The File menu also has Copy To, Move To, Save As, Set as Wallpaper (KDE Plasma) and Open in Its Application. `Show VIEWERCMD=...` drives an open viewer from a button: `next`, `prev`, `first`, `last`, `nextrandom`, `goto,5`, `zoom,fit`, `zoom,200`, `rotate,left`, `flip,h`, `fullscreen`, `slideshow,on`, `info`, `hex`, `mark`, `mark,next`, `selectfile`, `playpause`, `delete`, `close`. Preferences > Viewer sets what double-click opens, the zoom each picture starts at, the background, what the wheel does, wrapping round, auto-play and play-next, the slideshow's speed and order, and the marking collection's name.
+File > Follow the Lister (or `Show LISTERLINK`) makes the viewer show whatever is in focus in the lister as you move through it. The File menu also has Copy To, Move To, Save As, Set as Wallpaper (KDE Plasma) and Open in Its Application. `Show VIEWERCMD=...` drives an open viewer from a button: `next`, `prev`, `first`, `last`, `nextrandom`, `goto,5`, `zoom,fit`, `zoom,200`, `rotate,left`, `flip,h`, `fullscreen`, `slideshow,on`, `slideshow,fade`, `markpane`, `print`, `info`, `hex`, `mark`, `mark,next`, `selectfile`, `playpause`, `delete`, `close`. Preferences > Viewer sets what double-click opens, the zoom each picture starts at, the background, what the wheel does, wrapping round, auto-play and play-next, the slideshow's speed and order, and the marking collection's name.
 
 ## Scripts
 

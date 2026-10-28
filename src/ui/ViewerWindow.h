@@ -124,6 +124,16 @@ public:
 
     MediaPanel *media() const { return m_media; }
 
+    // Opus's marked pane (Ctrl+M): thumbnails of the marked files.
+    bool markedPaneShown() const;
+    void setMarkedPaneShown(bool on);
+    QStringList markedPaneFiles() const;
+
+    // Printing (Ctrl+P): pictures, PDFs and text.
+    bool canPrint() const;
+    void print();
+    bool printTo(class QPrinter &printer, QString *error = nullptr);
+
     // PDFs: their pages, one at a time.
     int page() const { return m_page; }
     int pageCount() const { return m_pages; }
@@ -148,6 +158,8 @@ private:
     void load();
     void display(const Preview &p);
     void showHex();
+    void buildMarkedPane();
+    void refreshMarkedPane();
     void pageOrFile(int delta);
     void updateTitle();
     void updateStatus();
@@ -182,6 +194,11 @@ private:
     QString m_lastMarked;
     QString m_markReturn; // where Ctrl+Space goes back to
     int m_pages = 0;
+    bool m_slideFade = false; // Show SLIDESHOW=fade
+    class QDockWidget *m_markDock = nullptr;
+    class QListWidget *m_markList = nullptr;
+    quint64 m_markGeneration = 0;
+    bool m_markSized = false;
     int m_page = 0;
     QSize m_pageSize;
     QString m_pdfPath;

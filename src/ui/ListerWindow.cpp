@@ -3290,8 +3290,12 @@ bool ListerWindow::tool(const ParsedCommand &cmd, QString *error)
         viewer->activateWindow();
         const bool slideshow = cmd.hasFlag(QStringLiteral("SLIDESHOW")) || cmd.hasArg(QStringLiteral("SLIDESHOW"))
             || (Prefs::instance()->values().viewer.slideAuto && viewer->count() > 1 && ViewerWindow::isPicture(files.first()));
-        if (slideshow)
-            viewer->setSlideshow(true);
+        if (slideshow) {
+            if (cmd.value(QStringLiteral("SLIDESHOW")).compare(QLatin1String("fade"), Qt::CaseInsensitive) == 0)
+                viewer->runViewerCommand(QStringLiteral("slideshow,fade"));
+            else
+                viewer->setSlideshow(true);
+        }
         return true;
     }
     if (cmd.is(QStringLiteral("OpenWith"))) {

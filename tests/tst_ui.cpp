@@ -60,6 +60,8 @@
 #include "core/KeyMap.h"
 #include <QShortcut>
 #include <QPdfWriter>
+#include <QPrinter>
+#include "ui/PdfDoc.h"
 #include <QPainter>
 #include <QPageSize>
 #include <QSlider>
@@ -2414,8 +2416,20 @@ dirduo.on("folderOpened", e => { opened.push(e.path); dirduo.save("last", e.path
         viewer->restore();
         QCOMPARE(QImage(d + QStringLiteral("/pics/a1.png")).size(), QSize(40, 20));
 
+        // A picture prints, fitted to the page.
+        {
+            QPrinter printer(QPrinter::HighResolution);
+            printer.setOutputFormat(QPrinter::PdfFormat);
+            printer.setOutputFileName(d + QStringLiteral("/pic.pdf"));
+            QVERIFY(viewer->printTo(printer));
+            QVERIFY(QFileInfo(d + QStringLiteral("/pic.pdf")).size() > 0);
+            QFile::remove(d + QStringLiteral("/pic.pdf"));
+        }
         // Marking puts pictures in a collection.
+        QVERIFY(!viewer->markedPaneShown());
         viewer->toggleMark();
+        QVERIFY(viewer->markedPaneShown()); // shows itself on the first mark
+        QCOMPARE(viewer->markedPaneFiles(), QStringList{d + QStringLiteral("/pics/a1.png")});
         QCOMPARE(viewer->markCollection(), QStringLiteral("Marked Pictures - pics"));
         QVERIFY(viewer->isMarked(d + QStringLiteral("/pics/a1.png")));
         QVERIFY(Collections::instance()->items(viewer->markCollection()).contains(d + QStringLiteral("/pics/a1.png")));
@@ -2424,6 +2438,9 @@ dirduo.on("folderOpened", e => { opened.push(e.path); dirduo.save("last", e.path
         QCOMPARE(viewer->index(), 0);
         viewer->toggleMark();
         QVERIFY(viewer->marked().isEmpty());
+        QTRY_VERIFY(viewer->markedPaneFiles().isEmpty());
+        QVERIFY(viewer->runViewerCommand(QStringLiteral("markpane,off")));
+        QVERIFY(!viewer->markedPaneShown());
 
         // A slideshow moves on by itself.
         Prefs::Values pv = Prefs::instance()->values();
@@ -2435,6 +2452,11 @@ dirduo.on("folderOpened", e => { opened.push(e.path); dirduo.save("last", e.path
         QTRY_COMPARE(viewer->index(), 2);
         viewer->setSlideshow(false);
         QVERIFY(!viewer->isSlideshow());
+        // With a cross-fade.
+        QVERIFY(viewer->runViewerCommand(QStringLiteral("slideshow,fade")));
+        QVERIFY(viewer->isSlideshow());
+        QTRY_COMPARE(viewer->index(), 0); // round again
+        viewer->setSlideshow(false);
 
         // Other files show in the same window: text, hex.
         QVERIFY(w->runCommand(QStringLiteral("Show FILE=\"%1\"").arg(d + QStringLiteral("/pics/readme.txt"))));
@@ -2500,6 +2522,27 @@ dirduo.on("folderOpened", e => { opened.push(e.path); dirduo.save("last", e.path
             QVERIFY(viewer->goPage(2));
             QTest::keyClick(viewer, Qt::Key_Backspace);
             QCOMPARE(viewer->page(), 1);
+            // Printing: every page, or a range.
+            {
+                QPrinter printer(QPrinter::HighResolution);
+                printer.setOutputFormat(QPrinter::PdfFormat);
+                const QString out = d + QStringLiteral("/printed.pdf");
+                printer.setOutputFileName(out);
+                QVERIFY(viewer->canPrint());
+                QVERIFY(viewer->printTo(printer));
+                PdfDoc printed;
+                QVERIFY(printed.load(out));
+                QCOMPARE(printed.pageCount(), 3);
+                QPrinter two(QPrinter::HighResolution);
+                two.setOutputFormat(QPrinter::PdfFormat);
+                two.setOutputFileName(out);
+                two.setPrintRange(QPrinter::PageRange);
+                two.setFromTo(2, 3);
+                QVERIFY(viewer->printTo(two));
+                QVERIFY(printed.load(out));
+                QCOMPARE(printed.pageCount(), 2);
+                QFile::remove(out);
+            }
             QVERIFY(viewer->goPage(2));
             QTest::keyClick(viewer, Qt::Key_Space); // past the last page: the next file
             QTRY_VERIFY(!viewer->current().endsWith(QStringLiteral("manual.pdf")));

@@ -50,6 +50,8 @@ void Prefs::reload()
     w.slideSeconds = qBound(0.2, s.value(QStringLiteral("slideSeconds"), d.slideSeconds).toDouble(), 3600.0);
     w.slideRandom = s.value(QStringLiteral("slideRandom"), d.slideRandom).toBool();
     w.slideAuto = s.value(QStringLiteral("slideAuto"), d.slideAuto).toBool();
+    w.slideFade = s.value(QStringLiteral("slideFade"), d.slideFade).toBool();
+    w.markPane = s.value(QStringLiteral("markPane"), d.markPane).toBool();
     w.markCollection = s.value(QStringLiteral("markCollection"), d.markCollection).toString();
     w.openMarkedOnClose = s.value(QStringLiteral("openMarkedOnClose"), d.openMarkedOnClose).toBool();
     m_values = v;
@@ -88,6 +90,8 @@ void Prefs::setValues(const Values &v)
     s.setValue(QStringLiteral("slideSeconds"), w.slideSeconds);
     s.setValue(QStringLiteral("slideRandom"), w.slideRandom);
     s.setValue(QStringLiteral("slideAuto"), w.slideAuto);
+    s.setValue(QStringLiteral("slideFade"), w.slideFade);
+    s.setValue(QStringLiteral("markPane"), w.markPane);
     s.setValue(QStringLiteral("markCollection"), w.markCollection);
     s.setValue(QStringLiteral("openMarkedOnClose"), w.openMarkedOnClose);
     Q_EMIT changed();
