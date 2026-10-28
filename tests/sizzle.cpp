@@ -43,6 +43,11 @@
 #include <QPainterPath>
 #include <QRandomGenerator>
 #include <QTemporaryDir>
+#include "ui/KeysPage.h"
+#include "ui/PreferencesDialog.h"
+#include "core/FileIndex.h"
+#include "ui/IndexSearch.h"
+#include "ui/ViewerWindow.h"
 #include <QTest>
 
 #include <cmath>
@@ -933,6 +938,52 @@ int main(int argc, char *argv[])
              QStringLiteral("Workbench: C64 SIDs grouped by composer"),
              QStringLiteral("Stacked displays: flat view of every disk image")},
             QStringLiteral("00-highlights"), QStringLiteral("DirDuo on the Steam Deck"));
+
+    // For the website: the viewer, Index Search and the Keys page.
+    run(QStringLiteral("Set THEME=\"DirDuo Dark\""));
+    {
+        const QString pics = r + QStringLiteral("/Pictures/Wallpapers");
+        auto *v = new ViewerWindow(w);
+        v->resize(1280, 800);
+        v->open(pics + QStringLiteral("/Outrun Dusk.png"));
+        v->show();
+        QTest::qWait(900);
+        v->toggleMark();
+        v->step(1);
+        QTest::qWait(600);
+        v->toggleMark();
+        v->step(-1);
+        QTest::qWait(900);
+        v->setInfoShown(true);
+        shot(v, QStringLiteral("30-dark-viewer-marked"), 900);
+        v->toggleMark();
+        v->step(1);
+        QTest::qWait(500);
+        v->toggleMark();
+        v->close();
+        QTest::qWait(200);
+    }
+    {
+        FileIndex::Settings st;
+        st.roots = {r, media};
+        FileIndex::instance()->setSettings(st);
+        FileIndex::instance()->waitIdle(30000);
+        IndexSearch *win = IndexSearch::open(w, QStringLiteral("galaga"));
+        win->resize(1280, 640);
+        win->waitResults(5000);
+        shot(win, QStringLiteral("31-dark-index-search"), 600);
+        win->close();
+        st.enabled = false;
+        FileIndex::instance()->setSettings(st);
+    }
+    {
+        PreferencesDialog prefs(context, w, QStringLiteral("keys"));
+        prefs.resize(1100, 720);
+        prefs.keysPage()->addHotkey({QStringLiteral("ROMs on the SD card"), QStringLiteral("F9"),
+                                     QStringLiteral("Go /run/media/deck/SD/roms"), true});
+        prefs.show();
+        shot(&prefs, QStringLiteral("32-dark-keys"), 600);
+    }
 
     for (const QString &f : std::as_const(g_made))
         printf("%s\n", qPrintable(f));

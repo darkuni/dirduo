@@ -29,6 +29,7 @@
       <li>Add Windows programs and AppImages to Steam from the right-click menu</li>
     </ul>
   </description>
+  <url type="homepage">https://dirduo.com</url>
   <launchable type="desktop-id">com.monroeworld.DirDuo.desktop</launchable>
   <provides>
     <binary>dirduo</binary>

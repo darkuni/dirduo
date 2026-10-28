@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Directory Duo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Directory Duo is a two-display file manager for the Steam Deck and Linux: a source and a destination side by side, toolbars you build yourself, a viewer for everything and instant search.">
+<meta property="og:title" content="Directory Duo - the two-display file manager for SteamOS and Linux">
+<meta property="og:description" content="A source and a destination side by side, and every command works from one to the other.">
+<meta property="og:image" content="https://dirduo.com/img/hero-dual.webp">
+<meta property="og:url" content="https://dirduo.com/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: the page is a lister. Two panes (source blue, destination green) frame
+   the hero, sections carry the app's own role badges, and a status bar closes
+   each screenshot. Dark first, like the Deck's desktop. */
+:root {
+  --bg: #0d1117;
+  --surface: #151b24;
+  --surface-2: #1c2430;
+  --fg: #e7ebf1;
+  --muted: #98a3b4;
+  --line: #273140;
+  --src: #4a9cf0;
+  --src-ink: #08213b;
+  --dst: #34c28a;
+  --dst-ink: #052a1c;
+  --accent: #f0a640;
+  --shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.75);
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --step--1: 0.875rem;
+  --step-0: 1.0625rem;
+  --step-1: 1.3rem;
+  --step-2: 1.75rem;
+  --step-3: clamp(2rem, 4vw, 2.75rem);
+  --step-4: clamp(2.6rem, 6.4vw, 4.6rem);
+  --radius: 10px;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f3f5f8;
+    --surface: #ffffff;
+    --surface-2: #e9edf3;
+    --fg: #121821;
+    --muted: #556173;
+    --line: #d5dbe4;
+    --src: #1f6fc6;
+    --src-ink: #e6f1fd;
+    --dst: #128a5b;
+    --dst-ink: #e3f6ee;
+    --accent: #b56a00;
+    --shadow: 0 30px 70px -35px rgba(20, 35, 60, 0.45);
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --surface-2: #e9edf3;
+  --fg: #121821;
+  --muted: #556173;
+  --line: #d5dbe4;
+  --src: #1f6fc6;
+  --src-ink: #e6f1fd;
+  --dst: #128a5b;
+  --dst-ink: #e3f6ee;
+  --accent: #b56a00;
+  --shadow: 0 30px 70px -35px rgba(20, 35, 60, 0.45);
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--body);
+  font-size: var(--step-0);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: var(--src); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+code, .mono { font-family: var(--mono); }
+
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+}
+h1, h2, h3 { font-family: var(--display); line-height: 1.08; margin: 0; text-wrap: balance; letter-spacing: -0.015em; }
+h2 { font-size: var(--step-3); font-weight: 800; }
+h3 { font-size: var(--step-1); font-weight: 700; letter-spacing: -0.005em; }
+p { margin: 0; }
+.lede { color: var(--muted); font-size: var(--step-1); line-height: 1.5; max-width: 38ch; }
+
+/* The app's role badges, used as section labels. */
+.role {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 0.75rem; font-weight: 500;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 4px;
+  background: var(--surface-2); color: var(--muted);
+}
+.role.src { background: var(--src); color: var(--src-ink); }
+.head > .role, .text > .role, .pane > .role { justify-self: start; }
+.role.dst { background: var(--dst); color: var(--dst-ink); }
+
+/* ---- Header ---- */
+header.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 21; background: var(--bg); }
+.top .wrap { display: flex; align-items: center; gap: 24px; padding-block: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--fg); text-decoration: none; font-family: var(--display); font-weight: 800; font-size: 1.15rem; }
+.brand img { width: 30px; height: 30px; }
+.brand span small { font-family: var(--mono); font-weight: 400; font-size: 0.75rem; color: var(--muted); margin-left: 6px; }
+nav.links { margin-left: auto; display: flex; gap: 22px; flex-wrap: wrap; }
+nav.links a { color: var(--muted); text-decoration: none; font-size: var(--step--1); font-weight: 500; }
+nav.links a:hover { color: var(--fg); }
+@media (max-width: 640px) { nav.links { display: none; } }
+
+/* ---- Hero ---- */
+.hero { padding-block: 72px 40px; }
+.hero-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
+.path {
+  font-family: var(--mono); font-size: var(--step--1); color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+}
+.path b { color: var(--fg); font-weight: 500; }
+.path i { font-style: normal; opacity: 0.5; }
+.hero h1 { font-size: var(--step-4); font-weight: 800; max-width: 15ch; }
+.hero h1 .s { color: var(--src); }
+.hero h1 .d { color: var(--dst); }
+.hero .lede { max-width: 46ch; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 12px 20px; border-radius: 8px; text-decoration: none;
+  font-weight: 600; font-size: var(--step-0);
+  border: 1px solid var(--line); color: var(--fg); background: var(--surface);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.btn:hover { transform: translateY(-1px); border-color: var(--muted); }
+.btn.primary { background: var(--src); border-color: var(--src); color: var(--src-ink); }
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } .btn:hover { transform: none; } }
+
+/* The hero screenshot sits in two glowing panes: source left, destination right. */
+.stage { position: relative; margin-top: 18px; }
+.stage::before, .stage::after {
+  content: ""; position: absolute; top: 8%; bottom: 8%; width: 50%; z-index: 0;
+  filter: blur(60px); opacity: 0.45;
+}
+.stage::before { left: -2%; background: var(--src); }
+.stage::after { right: -2%; background: var(--dst); }
+.shot {
+  position: relative; z-index: 1;
+  border-radius: var(--radius); overflow: hidden;
+  border: 1px solid var(--line); background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.shot img { width: 100%; }
+.statusbar {
+  display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  font-family: var(--mono); font-size: 0.78rem; color: var(--muted);
+  padding: 8px 14px; border-top: 1px solid var(--line); background: var(--surface-2);
+}
+.statusbar b { color: var(--fg); font-weight: 500; }
+
+/* ---- Sections ---- */
+section { padding-block: 84px; }
+section + section { border-top: 1px solid var(--line); }
+.head { display: grid; gap: 14px; margin-bottom: 40px; max-width: 760px; }
+.head p { color: var(--muted); font-size: var(--step-1); line-height: 1.5; }
+
+/* Source / destination */
+.duo { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 18px; align-items: stretch; }
+.pane { border-radius: var(--radius); padding: 26px; border: 1px solid var(--line); background: var(--surface); display: grid; gap: 12px; align-content: start; }
+.pane.src { border-top: 4px solid var(--src); }
+.pane.dst { border-top: 4px solid var(--dst); }
+.pane p { color: var(--muted); }
+.arrow { display: grid; place-items: center; color: var(--muted); font-family: var(--mono); font-size: 0.8rem; text-align: center; gap: 6px; }
+.arrow svg { width: 56px; height: 24px; }
+.verbs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px; }
+.verbs span { font-family: var(--mono); font-size: 0.85rem; padding: 6px 10px; border-radius: 6px; background: var(--surface-2); color: var(--fg); }
+@media (max-width: 760px) {
+  .duo { grid-template-columns: minmax(0, 1fr); }
+  .arrow svg { transform: rotate(90deg); }
+}
+
+/* Features */
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.feat { background: var(--surface); padding: 26px; display: grid; gap: 10px; align-content: start; }
+.feat p { color: var(--muted); font-size: 0.98rem; }
+.feat .k { font-family: var(--mono); font-size: 0.75rem; color: var(--accent); letter-spacing: 0.06em; }
+@media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 580px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Split rows: text beside a screenshot */
+.split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 48px; align-items: center; }
+.split.flip { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+.split.flip .text { order: 2; }
+.split .text { display: grid; gap: 18px; }
+.split .text p { color: var(--muted); }
+.ticks { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.ticks li { padding-left: 26px; position: relative; color: var(--fg); }
+.ticks li::before { content: ""; position: absolute; left: 0; top: 0.55em; width: 12px; height: 12px; border-radius: 3px; background: var(--dst); }
+.ticks li span { color: var(--muted); }
+@media (max-width: 900px) {
+  .split, .split.flip { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .split.flip .text { order: 0; }
+}
+
+/* Commands */
+.cmd { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.cmd .bar { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--surface-2); font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
+.cmd .bar .btnface { padding: 3px 10px; border-radius: 5px; border: 1px solid var(--line); color: var(--fg); background: var(--surface); }
+.cmd pre { margin: 0; padding: 18px 20px; overflow-x: auto; font-family: var(--mono); font-size: 0.92rem; line-height: 1.75; color: var(--fg); }
+.cmd pre .c { color: var(--src); font-weight: 500; }
+.cmd pre .a { color: var(--dst); }
+.cmd pre .m { color: var(--muted); }
+
+/* Themes */
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.tabs button {
+  font: 500 0.92rem var(--body); color: var(--muted); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; cursor: pointer;
+}
+.tabs button[aria-selected="true"] { color: var(--src-ink); background: var(--src); border-color: var(--src); }
+
+/* Gallery */
+.gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.gallery figure { margin: 0; display: grid; gap: 10px; }
+.gallery .shot { aspect-ratio: 16 / 10; max-width: 100%; }
+.gallery .shot img { width: 100%; height: 100%; object-fit: cover; object-position: left top; }
+.gallery figcaption { color: var(--muted); font-size: 0.95rem; }
+.gallery figcaption b { color: var(--fg); font-weight: 600; }
+@media (max-width: 760px) { .gallery { grid-template-columns: minmax(0, 1fr); } }
+
+/* Get it */
+.get { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 40px; align-items: start; }
+.specs { display: grid; gap: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+.specs div { display: grid; grid-template-columns: 9.5rem minmax(0, 1fr); gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line); font-size: 0.95rem; }
+.specs div:first-child { border-top: 0; }
+.specs dt { color: var(--muted); font-family: var(--mono); font-size: 0.8rem; padding-top: 2px; }
+.specs dd { margin: 0; }
+.status-pill { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 0.8rem; color: var(--accent); }
+.status-pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent); }
+@media (max-width: 900px) { .get { grid-template-columns: minmax(0, 1fr); } }
+
+footer { border-top: 1px solid var(--line); padding-block: 36px 48px; color: var(--muted); font-size: 0.9rem; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: center; justify-content: space-between; }
+footer .brand { font-size: 1rem; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="favicon.svg" alt="" width="30" height="30"><span>Directory Duo<small>DirDuo</small></span></a>
+    <nav class="links" aria-label="Sections">
+      <a href="#duo">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#deck">Steam Deck</a>
+      <a href="#screens">Screens</a>
+      <a href="#get">Get it</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <div class="hero">
+    <div class="wrap hero-grid">
+      <div class="path" aria-hidden="true"><i>/</i>home<i>/</i>deck<i>/</i>Emulation<i>/</i><b>roms</b></div>
+      <h1>Two folders. <span class="s">Here</span> to <span class="d">there</span>, in one click.</h1>
+      <p class="lede">Directory Duo is a file manager built around a source and a destination side by side. Copy, move, extract, compare and sync go from one to the other. Made for the Steam Deck in Desktop Mode, and at home on any Linux desktop.</p>
+      <div class="cta">
+        <a class="btn primary" href="#get">Get Directory Duo</a>
+        <a class="btn" href="#screens">See it in action</a>
+      </div>
+      <div class="stage">
+        <div class="shot">
+          <img src="img/hero-dual.webp" width="1280" height="800" alt="Directory Duo on the Steam Deck: ROM folders on the left as the source, the Steam library on the SD card on the right as the destination, with folder sizes as bars and the folder tree.">
+          <div class="statusbar"><span><b>SOURCE</b> 7 folders - 1 selected</span><span><b>DEST</b> 12 folders - 22.0 GB free of 252.0 GB</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section id="duo">
+    <div class="wrap">
+      <div class="head">
+        <span class="role">How it works</span>
+        <h2>One side gives, the other side takes.</h2>
+        <p>Click a display and it becomes the source. The other one is the destination. Every command already knows where things come from and where they go, so there is no "where to?" dialog.</p>
+      </div>
+      <div class="duo">
+        <div class="pane src">
+          <span class="role src">Source</span>
+          <h3>What you are working on</h3>
+          <p>Select files the way you like: click, tick boxes, type a few letters to jump, wildcards, or Select by Comparing to pick everything the other side is missing.</p>
+        </div>
+        <div class="arrow" aria-hidden="true">
+          <svg viewBox="0 0 56 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h48M40 3l11 9-11 9"/></svg>
+          Copy
+        </div>
+        <div class="pane dst">
+          <span class="role dst">Dest</span>
+          <h3>Where it goes</h3>
+          <p>Lock it so it stays put while you browse, swap the two in one click, or stack them top and bottom when the Deck's screen is better used that way.</p>
+        </div>
+      </div>
+      <div class="verbs" aria-label="Commands that go from source to destination">
+        <span>Copy</span><span>Move</span><span>Copy If Newer</span><span>Extract to Destination</span><span>Make Link in Destination</span><span>Synchronize</span><span>Select by Comparing</span><span>Swap</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="head">
+        <span class="role">Features</span>
+        <h2>Everything a power user reaches for.</h2>
+        <p>A file manager that does the job of a dozen small tools, and lets you build the rest yourself.</p>
+      </div>
+      <div class="grid">
+        <div class="feat"><span class="k">Toolbars</span><h3>Buttons you build</h3><p>Drag buttons anywhere, between the displays or along the edges. Each mouse button can run its own commands, and buttons can be menus, split buttons or filter boxes.</p></div>
+        <div class="feat"><span class="k">Ctrl+E</span><h3>Index Search</h3><p>Type part of a name and every match across your home folder and SD card shows at once, sorted, with size and date. Show them all in a tab to copy or tag.</p></div>
+        <div class="feat"><span class="k">Viewer</span><h3>See anything</h3><p>Pictures, music, video, PDFs, text, hex and what is inside archives, in one window. Slideshow, marking, full screen and printing included.</p></div>
+        <div class="feat"><span class="k">Jobs</span><h3>Copies you can trust</h3><p>Every copy runs in its own window with pause, queues per drive, Retry / Skip when a card is pulled, and undo. A notice tells you when a long one is done.</p></div>
+        <div class="feat"><span class="k">Archives</span><h3>Zips as folders</h3><p>Open zip, 7z, RAR and tar as if they were folders, extract with one click, or pack the selection. Password-protected zips too.</p></div>
+        <div class="feat"><span class="k">sftp://</span><h3>Servers and shares</h3><p>Your NAS over SFTP, SMB, FTP or WebDAV, saved by name, with copies that resume where they left off after the network drops.</p></div>
+        <div class="feat"><span class="k">Columns</span><h3>Tags, music, photos</h3><p>Artist and album from music tags, camera and date taken from photos, color labels, star ratings and tags that Dolphin sees too.</p></div>
+        <div class="feat"><span class="k">Tools</span><h3>The usual suspects, built in</h3><p>Synchronize, Find Duplicates, Advanced Rename with undo, checksums, file splitting for FAT32 cards and image conversion.</p></div>
+        <div class="feat"><span class="k">.js</span><h3>Make it yours</h3><p>Your own keys, right-click commands per file type, tab groups, saved filters, status bar layouts and JavaScript scripts that add commands and columns.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="deck">
+    <div class="wrap split">
+      <div class="text">
+        <span class="role">Steam Deck</span>
+        <h2>Made on, and for, the Deck.</h2>
+        <p>Directory Duo started as the file manager Desktop Mode was missing. It runs as a Flatpak, is sized for 1280 x 800, and treats the SD card as the first-class drive it is.</p>
+        <ul class="ticks">
+          <li>The SD card and USB drives on the Drives bar <span>by their label, with free space</span></li>
+          <li>Pinch to zoom a list on the touchscreen <span>or Shift + scroll with the trackpad</span></li>
+          <li>Add to Steam from the right-click menu <span>Windows programs run through Proton</span></li>
+          <li>Steam's Browse Local Files opens in Directory Duo <span>when it is the default file manager</span></li>
+          <li>An ARM64 build for the Steam Frame <span>next to the x86_64 one</span></li>
+        </ul>
+      </div>
+      <div class="shot">
+        <img src="img/stacked-labels.webp" width="1280" height="800" loading="lazy" alt="Stacked displays on the Deck: C64 disk images with color labels and star ratings above, screenshots as thumbnails below, with toolbars between them.">
+        <div class="statusbar"><span><b>SOURCE</b> 3 / 9 - 512.9 KB / 1.84 MB</span><span><b>DEST</b> 0 / 15</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="commands">
+    <div class="wrap split flip">
+      <div class="text">
+        <span class="role">Commands</span>
+        <h2>Every button is a little program.</h2>
+        <p>Buttons, keys, menus and the command console all run the same plain commands. Chain them, and one click does the whole job: here, sending every disc image you don't have yet to the SD card.</p>
+        <p>Saved filters, codes like <code>{sourcepath}</code> and dialogs that ask for a value make a button fit any job you repeat.</p>
+      </div>
+      <div class="cmd">
+        <div class="bar"><span class="btnface">Disc images to SD</span><span>left-click</span></div>
+<pre><span class="c">Go</span> /home/deck/Emulation/roms/psx
+<span class="c">Select</span> <span class="a">PATTERN=</span>"@Disc images"
+<span class="c">Copy</span> <span class="a">TO=</span>/run/media/deck/SD/roms/psx <span class="a">WHENEXISTS=</span>newer
+<span class="m"># right-click: just look</span>
+<span class="c">Go</span> /run/media/deck/SD/roms/psx <span class="a">OPENINDEST</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <section id="themes">
+    <div class="wrap">
+      <div class="head">
+        <span class="role">Themes</span>
+        <h2>Four looks out of the box.</h2>
+        <p>Light, dark, the classic blue Workbench, or whatever your desktop uses. Every color is yours to change in the Theme Editor.</p>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Themes">
+        <button role="tab" id="t-dark" aria-selected="true" aria-controls="theme-shot" data-src="img/theme-dark.webp">DirDuo Dark</button>
+        <button role="tab" id="t-light" aria-selected="false" aria-controls="theme-shot" data-src="img/theme-light.webp">DirDuo Light</button>
+        <button role="tab" id="t-workbench" aria-selected="false" aria-controls="theme-shot" data-src="img/theme-workbench.webp">Workbench</button>
+        <button role="tab" id="t-desktop" aria-selected="false" aria-controls="theme-shot" data-src="img/theme-desktop.webp">Follow Desktop</button>
+      </div>
+      <div class="shot" id="theme-shot" role="tabpanel">
+        <img id="theme-img" src="img/theme-dark.webp" width="1280" height="800" loading="lazy" alt="Directory Duo in the DirDuo Dark theme.">
+      </div>
+    </div>
+  </section>
+
+  <section id="screens">
+    <div class="wrap">
+      <div class="head">
+        <span class="role">Screens</span>
+        <h2>A closer look.</h2>
+      </div>
+      <div class="gallery">
+        <figure>
+          <div class="shot"><img src="img/viewer.webp" width="1280" height="800" loading="lazy" alt="The viewer showing a wallpaper, with two marked pictures in the pane on the left."></div>
+          <figcaption><b>The viewer.</b> Step through a folder, mark the keepers, run a slideshow.</figcaption>
+        </figure>
+        <figure>
+          <div class="shot"><img src="img/index-search.webp" width="1280" height="640" loading="lazy" alt="Index Search finding five files and folders named Galaga across home and the downloads folder."></div>
+          <figcaption><b>Index Search.</b> Every file with "galaga" in its name, before you finish typing.</figcaption>
+        </figure>
+        <figure>
+          <div class="shot"><img src="img/light-thumbnails.webp" width="1280" height="800" loading="lazy" alt="Screenshots as thumbnails in the light theme with the viewer pane on the right."></div>
+          <figcaption><b>Thumbnails and the viewer pane.</b> Screenshots show themselves; F3 previews whatever is in focus.</figcaption>
+        </figure>
+        <figure>
+          <div class="shot"><img src="img/workbench-sids.webp" width="1280" height="800" loading="lazy" alt="C64 SID tunes grouped by composer in the Workbench theme."></div>
+          <figcaption><b>Group by anything.</b> C64 SID tunes grouped by composer, in Workbench blue.</figcaption>
+        </figure>
+        <figure>
+          <div class="shot"><img src="img/flat-filtered.webp" width="1280" height="800" loading="lazy" alt="Flat view of every disk image under a folder, filtered."></div>
+          <figcaption><b>Flat view.</b> Every disk image in every subfolder, in one filtered list.</figcaption>
+        </figure>
+        <figure>
+          <div class="shot"><img src="img/keys.webp" width="1100" height="720" loading="lazy" alt="The Keys page listing hotkeys, menu commands and their keys."></div>
+          <figcaption><b>Every key in one place.</b> Change any of them, or add hotkeys that run your own commands.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="get">
+    <div class="wrap get">
+      <div class="head" style="margin-bottom:0">
+        <span class="status-pill">In testing</span>
+        <h2>Coming soon as a Flatpak.</h2>
+        <p>Directory Duo is in testing on the Steam Deck and desktop Linux now. The first release will install like any other Flatpak, from Discover in Desktop Mode or the command line.</p>
+      </div>
+      <dl class="specs">
+        <div><dt>Runs on</dt><dd>SteamOS Desktop Mode, and any Linux desktop with Flatpak</dd></div>
+        <div><dt>Builds</dt><dd>x86_64 (Steam Deck, PCs) and ARM64 (Steam Frame)</dd></div>
+        <div><dt>Made with</dt><dd>Qt 6 and KDE Frameworks</dd></div>
+        <div><dt>Servers</dt><dd>SFTP, SMB, FTP, WebDAV</dd></div>
+        <div><dt>Archives</dt><dd>zip, 7z, RAR, tar, ISO</dd></div>
+      </dl>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="favicon.svg" alt="" width="24" height="24"><span>Directory Duo</span></a>
+    <span>Made by Shane Monroe - MonroeWorld LLC - &copy; 2026</span>
+  </div>
+</footer>
+
+<script>
+  // Theme screenshots: one tab at a time.
+  (function () {
+    var tabs = document.querySelectorAll('.tabs [role="tab"]');
+    var img = document.getElementById('theme-img');
+    tabs.forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        tabs.forEach(function (t) { t.setAttribute('aria-selected', t === tab ? 'true' : 'false'); });
+        img.src = tab.dataset.src;
+        img.alt = 'Directory Duo in the ' + tab.textContent + ' theme.';
+      });
+    });
+    // Preload the others so switching is instant.
+    tabs.forEach(function (t) { var i = new Image(); i.src = t.dataset.src; });
+  })();
+</script>
+</body>
+</html>
