@@ -187,6 +187,39 @@ section + section { border-top: 1px solid var(--line); }
 .head { display: grid; gap: 14px; margin-bottom: 40px; max-width: 760px; }
 .head p { color: var(--muted); font-size: var(--step-1); line-height: 1.5; }
 
+/* Hero eyebrow and arrangement toggle */
+.eyebrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.eyebrow-x { color: var(--muted); font-family: var(--mono); }
+.eyebrow-t { font-family: var(--mono); font-size: var(--step--1); color: var(--muted); margin-left: 6px; }
+.layout-toggle { position: relative; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
+.layout-toggle button {
+  display: inline-flex; align-items: center; gap: 8px;
+  font: 600 0.95rem var(--body); color: var(--muted); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; cursor: pointer;
+}
+.layout-toggle button svg { width: 20px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.layout-toggle button[aria-selected="true"] { color: var(--fg); border-color: var(--src); box-shadow: inset 0 0 0 1px var(--src); }
+.toggle-note { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); margin-left: 6px; }
+
+/* Versus */
+.versus { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+.vrow { display: grid; grid-template-columns: 11rem minmax(0, 1fr) minmax(0, 1.25fr); border-top: 1px solid var(--line); }
+.vrow:first-child { border-top: 0; }
+.vrow > span { padding: 16px 20px; min-width: 0; }
+.vrow > span:nth-child(1) { font-family: var(--display); font-weight: 700; }
+.vrow > span:nth-child(2) { color: var(--muted); }
+.vrow > span:nth-child(3) { background: color-mix(in srgb, var(--dst) 9%, var(--surface)); border-left: 3px solid var(--dst); }
+.vhead > span { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding-block: 12px; }
+.vhead > span:nth-child(3) { color: var(--dst); }
+@media (max-width: 760px) {
+  .vrow { grid-template-columns: minmax(0, 1fr); }
+  .vhead { display: none; }
+  .vrow > span:nth-child(1) { padding-bottom: 4px; }
+  .vrow > span:nth-child(2) { padding-block: 4px 10px; }
+  .vrow > span:nth-child(2)::before { content: "Usually: "; font-family: var(--mono); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; }
+  .vrow > span:nth-child(3)::before { content: "Directory Duo: "; font-family: var(--mono); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dst); }
+}
+
 /* Source / destination */
 .duo { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 18px; align-items: stretch; }
 .pane { border-radius: var(--radius); padding: 26px; border: 1px solid var(--line); background: var(--surface); display: grid; gap: 12px; align-content: start; }
@@ -273,6 +306,7 @@ footer .brand { font-size: 1rem; }
   <div class="wrap">
     <a class="brand" href="#top"><img src="favicon.svg" alt="" width="30" height="30"><span>Directory Duo<small>DirDuo</small></span></a>
     <nav class="links" aria-label="Sections">
+      <a href="#different">Why it's different</a>
       <a href="#duo">How it works</a>
       <a href="#features">Features</a>
       <a href="#deck">Steam Deck</a>
@@ -285,21 +319,72 @@ footer .brand { font-size: 1rem; }
 <main id="top">
   <div class="hero">
     <div class="wrap hero-grid">
-      <div class="path" aria-hidden="true"><i>/</i>home<i>/</i>deck<i>/</i>Emulation<i>/</i><b>roms</b></div>
+      <div class="eyebrow"><span class="role src">Source</span><span class="eyebrow-x">+</span><span class="role dst">Dest</span><span class="eyebrow-t">Not a file browser. A file manager.</span></div>
       <h1>Two folders. <span class="s">Here</span> to <span class="d">there</span>, in one click.</h1>
-      <p class="lede">Directory Duo is a file manager built around a source and a destination side by side. Copy, move, extract, compare and sync go from one to the other. Made for the Steam Deck in Desktop Mode, and at home on any Linux desktop.</p>
+      <p class="lede">Every other file manager shows you a folder. Directory Duo always shows you two, a source and a destination, stacked or side by side, with your own toolbars running between them. Copy, move, extract, compare and sync go straight from one to the other.</p>
       <div class="cta">
         <a class="btn primary" href="#get">Get Directory Duo</a>
         <a class="btn" href="#screens">See it in action</a>
       </div>
       <div class="stage">
-        <div class="shot">
-          <img src="img/hero-dual.webp" width="1280" height="800" alt="Directory Duo on the Steam Deck: ROM folders on the left as the source, the Steam library on the SD card on the right as the destination, with folder sizes as bars and the folder tree.">
-          <div class="statusbar"><span><b>SOURCE</b> 7 folders - 1 selected</span><span><b>DEST</b> 12 folders - 22.0 GB free of 252.0 GB</span></div>
+        <div class="layout-toggle" role="tablist" aria-label="Arrangement">
+          <button role="tab" id="lay-stacked" aria-selected="true" aria-controls="hero-shot" data-src="img/stacked-labels.webp"
+            data-alt="Stacked displays: C64 disk images with color labels and star ratings on top as the source, screenshots as thumbnails below as the destination, with toolbars running between them."
+            data-l="SOURCE 3 / 9 - 512.9 KB / 1.84 MB" data-r="DEST 15 files - 21.9 GB free">
+            <svg viewBox="0 0 20 16" aria-hidden="true"><rect x="1" y="1" width="18" height="6" rx="1.5"/><rect x="1" y="9" width="18" height="6" rx="1.5"/></svg>Stacked</button>
+          <button role="tab" id="lay-side" aria-selected="false" aria-controls="hero-shot" data-src="img/hero-dual.webp"
+            data-alt="Side by side: ROM folders on the left as the source, the Steam library on the SD card on the right as the destination, with folder sizes as bars and the folder tree."
+            data-l="SOURCE 7 folders - 1 selected" data-r="DEST 12 folders - 22.0 GB free of 252.0 GB">
+            <svg viewBox="0 0 20 16" aria-hidden="true"><rect x="1" y="1" width="8" height="14" rx="1.5"/><rect x="11" y="1" width="8" height="14" rx="1.5"/></svg>Side by side</button>
+          <span class="toggle-note">One click, or <code>Set DUAL=flip</code></span>
+        </div>
+        <div class="shot" id="hero-shot" role="tabpanel">
+          <img id="hero-img" src="img/stacked-labels.webp" width="1280" height="800" alt="Stacked displays: C64 disk images with color labels and star ratings on top as the source, screenshots as thumbnails below as the destination, with toolbars running between them.">
+          <div class="statusbar"><span id="hero-l"><b>SOURCE</b> 3 / 9 - 512.9 KB / 1.84 MB</span><span id="hero-r"><b>DEST</b> 15 files - 21.9 GB free</span></div>
         </div>
       </div>
     </div>
   </div>
+
+  <section id="different">
+    <div class="wrap">
+      <div class="head">
+        <span class="role">Not like the others</span>
+        <h2>Not another file browser.</h2>
+        <p>Most file managers on Linux are a window onto one folder, built for browsing. Directory Duo is built for moving things around: two places at once, and commands that go between them.</p>
+      </div>
+      <div class="versus" role="table" aria-label="The usual file manager compared with Directory Duo">
+        <div class="vrow vhead" role="row"><span role="columnheader"></span><span role="columnheader">The usual file manager</span><span role="columnheader">Directory Duo</span></div>
+        <div class="vrow" role="row"><span role="rowheader">Layout</span><span role="cell">One folder per window. A split view, if there is one, sits in a menu.</span><span role="cell">Two displays, always. Side by side or stacked top and bottom, flipped with one click, each with its own tabs, tree and zoom.</span></div>
+        <div class="vrow" role="row"><span role="rowheader">Copying</span><span role="cell">Copy, find the other window, paste. Or drag and hope.</span><span role="cell">Copy goes straight to the destination. No second window, no "where to?" dialog.</span></div>
+        <div class="vrow" role="row"><span role="rowheader">Toolbars</span><span role="cell">A fixed row of icons along the top.</span><span role="cell">Toolbars you build and place anywhere, including between the two displays. Every button runs commands, and left, right and middle click can each do something else.</span></div>
+        <div class="vrow" role="row"><span role="rowheader">File jobs</span><span role="cell">A progress bar in the corner. Pull the SD card and it is over.</span><span role="cell">Every job in its own window: pause, queues per drive, Retry / Skip when a card is pulled, resume after a network drop, and undo.</span></div>
+        <div class="vrow" role="row"><span role="rowheader">Finding things</span><span role="cell">A search that crawls the disk while you wait.</span><span role="cell">Index Search: any name, anywhere on home and the SD card, before you finish typing.</span></div>
+        <div class="vrow" role="row"><span role="rowheader">Viewing</span><span role="cell">Double-click and wait for another app.</span><span role="cell">A built-in viewer for pictures, music, video, PDFs, text and archives, with slideshow and marking.</span></div>
+        <div class="vrow" role="row"><span role="rowheader">Making it yours</span><span role="cell">A settings page of on/off switches.</span><span role="cell">Your own keys, right-click commands per file type, status bar codes, saved filters, tab groups and JavaScript scripts.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="stacked">
+    <div class="wrap split">
+      <div class="text">
+        <span class="role">Stacked</span>
+        <h2>Top and bottom, built in, not bolted on.</h2>
+        <p>Put the source above the destination and each list gets the full width of the screen: name, size, type, rating, label and tags all in view, no squinting at half-width columns. On the Deck's 16:10 screen it changes everything.</p>
+        <ul class="ticks">
+          <li>Toolbars ride in the band between the two displays <span>and share rows, the way you arrange them</span></li>
+          <li>Flip to side by side and back in one click <span>the folders, tabs and selections stay put</span></li>
+          <li>Save the whole arrangement as a layout <span>and give it a key</span></li>
+          <li>Drop to one display when you need the room <span>and bring the second back with a click</span></li>
+        </ul>
+      </div>
+      <div class="shot">
+        <img src="img/flat-filtered.webp" width="1280" height="800" loading="lazy" alt="Stacked displays in the light theme: a flat, filtered list of every disk image above and the destination below.">
+        <div class="statusbar"><span><b>SOURCE</b> flat view - filter "*.d64"</span><span><b>DEST</b> stacked below</span></div>
+      </div>
+    </div>
+  </section>
 
   <section id="duo">
     <div class="wrap">
@@ -366,8 +451,8 @@ footer .brand { font-size: 1rem; }
         </ul>
       </div>
       <div class="shot">
-        <img src="img/stacked-labels.webp" width="1280" height="800" loading="lazy" alt="Stacked displays on the Deck: C64 disk images with color labels and star ratings above, screenshots as thumbnails below, with toolbars between them.">
-        <div class="statusbar"><span><b>SOURCE</b> 3 / 9 - 512.9 KB / 1.84 MB</span><span><b>DEST</b> 0 / 15</span></div>
+        <img src="img/hero-dual.webp" width="1280" height="800" loading="lazy" alt="Side by side on the Deck: ROM folders as the source, the Steam library on the SD card as the destination, with folder sizes as bars.">
+        <div class="statusbar"><span><b>SOURCE</b> 7 folders - 1 selected</span><span><b>DEST</b> 22.0 GB free of 252.0 GB</span></div>
       </div>
     </div>
   </section>
@@ -434,10 +519,6 @@ footer .brand { font-size: 1rem; }
           <figcaption><b>Group by anything.</b> C64 SID tunes grouped by composer, in Workbench blue.</figcaption>
         </figure>
         <figure>
-          <div class="shot"><img src="img/flat-filtered.webp" width="1280" height="800" loading="lazy" alt="Flat view of every disk image under a folder, filtered."></div>
-          <figcaption><b>Flat view.</b> Every disk image in every subfolder, in one filtered list.</figcaption>
-        </figure>
-        <figure>
           <div class="shot"><img src="img/keys.webp" width="1100" height="720" loading="lazy" alt="The Keys page listing hotkeys, menu commands and their keys."></div>
           <figcaption><b>Every key in one place.</b> Change any of them, or add hotkeys that run your own commands.</figcaption>
         </figure>
@@ -471,6 +552,32 @@ footer .brand { font-size: 1rem; }
 </footer>
 
 <script>
+  // Hero: stacked or side by side.
+  (function () {
+    var tabs = document.querySelectorAll('.layout-toggle [role="tab"]');
+    var img = document.getElementById('hero-img');
+    var l = document.getElementById('hero-l');
+    var r = document.getElementById('hero-r');
+    function label(el, text) {
+      var parts = text.split(' ');
+      el.textContent = '';
+      var b = document.createElement('b');
+      b.textContent = parts.shift();
+      el.appendChild(b);
+      el.appendChild(document.createTextNode(' ' + parts.join(' ')));
+    }
+    tabs.forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        tabs.forEach(function (t) { t.setAttribute('aria-selected', t === tab ? 'true' : 'false'); });
+        img.src = tab.dataset.src;
+        img.alt = tab.dataset.alt;
+        label(l, tab.dataset.l);
+        label(r, tab.dataset.r);
+      });
+      var pre = new Image(); pre.src = tab.dataset.src;
+    });
+  })();
+
   // Theme screenshots: one tab at a time.
   (function () {
     var tabs = document.querySelectorAll('.tabs [role="tab"]');
