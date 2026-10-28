@@ -202,6 +202,7 @@ modules:
       - -DDIRDUO_BUILD_TESTS=OFF
       - -DDIRDUO_REQUIRE_LIBARCHIVE=ON
       - -DDIRDUO_REQUIRE_MULTIMEDIA=ON
+      - -DDIRDUO_REQUIRE_PDF=ON
     sources:
       - type: dir
         path: ..

@@ -10,6 +10,7 @@
 #include <QTimer>
 
 #include <functional>
+#include <memory>
 
 class QLabel;
 class QPlainTextEdit;
@@ -123,6 +124,11 @@ public:
 
     MediaPanel *media() const { return m_media; }
 
+    // PDFs: their pages, one at a time.
+    int page() const { return m_page; }
+    int pageCount() const { return m_pages; }
+    bool goPage(int page, bool atBottom = false);
+
     // Opus's VIEWERCMD: "next", "zoom,fit", "rotate=left", "fullscreen,off"...
     bool runViewerCommand(const QString &command, QString *error = nullptr);
 
@@ -142,6 +148,7 @@ private:
     void load();
     void display(const Preview &p);
     void showHex();
+    void pageOrFile(int delta);
     void updateTitle();
     void updateStatus();
     void updateActions();
@@ -174,6 +181,11 @@ private:
     QString m_markName;
     QString m_lastMarked;
     QString m_markReturn; // where Ctrl+Space goes back to
+    int m_pages = 0;
+    int m_page = 0;
+    QSize m_pageSize;
+    QString m_pdfPath;
+    std::unique_ptr<class QPdfDocument> m_pdf;
 
     QStackedWidget *m_stack;
     PictureView *m_picture;

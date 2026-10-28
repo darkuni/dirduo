@@ -167,7 +167,7 @@ Copy TO=/music/incoming WHENEXISTS=newer
 
 ## The viewer
 
-The standalone viewer follows Directory Opus's: one window that shows any file. Pictures zoom, turn, flip and crop (only what you see; the file is left alone until you Save As). Music and video play with a position bar, volume and mute, cover art when the file has some, and go on to the next file when one ends. Text, `.nfo` files (in the old DOS character set), hex and the contents of archives show too. Next and Previous go through the folder's files of the same kind, or the files you selected.
+The standalone viewer follows Directory Opus's: one window that shows any file. Pictures zoom, turn, flip and crop (only what you see; the file is left alone until you Save As). Music and video play with a position bar, volume and mute, cover art when the file has some, and go on to the next file when one ends. PDFs page through: Page Down, Space or the arrow keys turn the pages and run on to the next file past the last one, Shift+Page Down skips to the next file at once, and zoom, turn and full screen work as on pictures (the viewer pane shows the first page). Text, `.nfo` files (in the old DOS character set), hex and the contents of archives show too. Next and Previous go through the folder's files of the same kind, or the files you selected.
 
 | Key | Does |
 |---|---|

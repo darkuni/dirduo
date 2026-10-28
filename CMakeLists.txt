@@ -226,6 +226,17 @@ elseif(DIRDUO_REQUIRE_MULTIMEDIA)
     message(FATAL_ERROR "Qt Multimedia not found (DIRDUO_REQUIRE_MULTIMEDIA is on)")
 endif()
 
+# PDFs in the viewer and the viewer pane. Optional; the Flatpak has it.
+option(DIRDUO_REQUIRE_PDF "Fail when Qt PDF is missing" OFF)
+find_package(Qt6 QUIET COMPONENTS Pdf)
+if(Qt6Pdf_FOUND)
+    target_link_libraries(dirduo_ui PUBLIC Qt6::Pdf)
+    target_compile_definitions(dirduo_ui PUBLIC DIRDUO_HAVE_PDF)
+    message(STATUS "Qt PDF: PDFs in the viewer on")
+elseif(DIRDUO_REQUIRE_PDF)
+    message(FATAL_ERROR "Qt PDF not found (DIRDUO_REQUIRE_PDF is on)")
+endif()
+
 if(DIRDUO_WITH_KIO)
     add_library(dirduo_kio STATIC
         src/kio/KioBackend.cpp

@@ -59,6 +59,9 @@
 #include <QListWidget>
 #include "core/KeyMap.h"
 #include <QShortcut>
+#include <QPdfWriter>
+#include <QPainter>
+#include <QPageSize>
 #include <QSlider>
 #include <QClipboard>
 #include "ui/MediaPanel.h"
@@ -2463,6 +2466,44 @@ dirduo.on("folderOpened", e => { opened.push(e.path); dirduo.save("last", e.path
             QVERIFY(w->runCommand(QStringLiteral("Show FILE=\"%1\"").arg(d + QStringLiteral("/pics/a1.png"))));
             QTRY_COMPARE(viewer->kind(), Preview::Kind::Image);
             QVERIFY(!viewer->media()->loaded()); // moving on stops it
+        }
+
+        // PDFs: the first page in the pane, every page in the viewer.
+        if (Preview::canShowPdf()) {
+            const QString pdf = d + QStringLiteral("/pics/manual.pdf");
+            {
+                QPdfWriter writer(pdf);
+                writer.setPageSize(QPageSize(QPageSize::A5));
+                QPainter p(&writer);
+                for (int i = 1; i <= 3; ++i) {
+                    if (i > 1)
+                        writer.newPage();
+                    QFont f = p.font();
+                    f.setPointSize(40);
+                    p.setFont(f);
+                    p.drawText(QRect(0, 0, writer.width(), writer.height()), Qt::AlignCenter, QStringLiteral("Page %1").arg(i));
+                }
+            }
+            const Preview pv = Preview::load(pdf);
+            QCOMPARE(pv.kind, Preview::Kind::Image);
+            QCOMPARE(pv.pages, 3);
+            QVERIFY(pv.info.contains(QStringLiteral("3 pages")));
+            QVERIFY(w->runCommand(QStringLiteral("Show FILE=\"%1\"").arg(pdf)));
+            QTRY_COMPARE(viewer->pageCount(), 3);
+            QCOMPARE(viewer->page(), 0);
+            const QImage first = viewer->shownImage();
+            QTest::keyClick(viewer, Qt::Key_Space); // the next page, not the next file
+            QCOMPARE(viewer->page(), 1);
+            QVERIFY(viewer->current().endsWith(QStringLiteral("manual.pdf")));
+            QVERIFY(viewer->shownImage() != first);
+            QVERIFY(viewer->windowTitle().contains(QStringLiteral("page 2 of 3")));
+            QVERIFY(viewer->goPage(2));
+            QTest::keyClick(viewer, Qt::Key_Backspace);
+            QCOMPARE(viewer->page(), 1);
+            QVERIFY(viewer->goPage(2));
+            QTest::keyClick(viewer, Qt::Key_Space); // past the last page: the next file
+            QTRY_VERIFY(!viewer->current().endsWith(QStringLiteral("manual.pdf")));
+            QFile::remove(pdf);
         }
 
         // Linked to the lister: the file in focus shows.

@@ -24,6 +24,8 @@
 #include "core/FileIndex.h"
 #include "ui/IndexSearch.h"
 #include <QPainter>
+#include <QPdfWriter>
+#include <QPageSize>
 #include "ui/ViewerPane.h"
 #include "ui/ImageConvertDialog.h"
 #include "ui/DuplicatesDialog.h"
@@ -663,6 +665,31 @@ int main(int argc, char *argv[])
             v->grab().save(out + QStringLiteral("/48-viewer-picture.png"));
             v->toggleMark();
             v->setInfoShown(false);
+            {
+                const QString pdf = root + QStringLiteral("/Pictures/Screenshots/Manual.pdf");
+                QPdfWriter writer(pdf);
+                writer.setPageSize(QPageSize(QPageSize::A4));
+                QPainter pp(&writer);
+                QFont f = pp.font();
+                for (int i = 1; i <= 4; ++i) {
+                    if (i > 1)
+                        writer.newPage();
+                    f.setPointSize(28);
+                    pp.setFont(f);
+                    pp.drawText(QRect(0, 200, writer.width(), 900), Qt::AlignHCenter, QStringLiteral("Directory Duo"));
+                    f.setPointSize(12);
+                    pp.setFont(f);
+                    pp.drawText(QRect(600, 1400, writer.width() - 1200, writer.height() - 2000), Qt::TextWordWrap,
+                                QStringLiteral("Chapter %1. The viewer pages through PDFs: Page Down or Space for the next page, "
+                                               "and past the last page it goes on to the next file. Zoom, turn and full screen work "
+                                               "as they do on pictures.").arg(i));
+                }
+            }
+            v->open(root + QStringLiteral("/Pictures/Screenshots/Manual.pdf"));
+            QTest::qWait(500);
+            v->goPage(1);
+            QTest::qWait(200);
+            v->grab().save(out + QStringLiteral("/54-viewer-pdf.png"));
             v->open(root + QStringLiteral("/Music/Joan Jett/Bad Reputation.mp3"));
             QTest::qWait(600);
             v->grab().save(out + QStringLiteral("/49-viewer-music.png"));

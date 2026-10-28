@@ -135,6 +135,8 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Ctrl+F, click Saved > Disc images in a ROM folder: only .iso/.chd/.cue show. Type `*.txt;*.nfo`, Saved > Save This Filter: it is in View > Saved Filters.
 - [ ] Copy a big folder (over 10 seconds) to the SD card and switch to another app: a desktop notice says it is done. Click it: DirDuo opens that folder.
 
+- [ ] Right-click a PDF (a game manual) > View: the first page; Page Down and Space turn pages, the status bar says "page 2 of 12"; past the last page it goes on to the next file. F3's pane shows the first page.
+
 ## Keyboard shortcuts
 
 - [ ] File > Keyboard Shortcuts: click Edit > Invert Selection, click in Key and press Ctrl+K. OK. Ctrl+K now inverts the selection; Ctrl+I does nothing.

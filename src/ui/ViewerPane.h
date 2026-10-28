@@ -25,12 +25,18 @@ struct Preview
     bool truncated = false;
     QStringList entries;      // archive: "path\tsize"
     QString error;
+    int pages = 0; // a PDF: how many pages (image is the first)
 
     // Decides what to show for a path and loads it (call from any thread).
     static Preview load(const QString &path, int maxImageSide = 2048);
     // DOS code page 437, for .nfo and .diz files from the BBS days.
     static QString fromCp437(const QByteArray &bytes);
     static QString hexDump(const QByteArray &bytes, qint64 offset = 0);
+    // PDFs (when built with Qt PDF).
+    static bool canShowPdf();
+    static bool isPdf(const QString &path);
+    // A rendered PDF page on white paper (pages are see-through where nothing is drawn).
+    static QImage onPaper(const QImage &page);
 };
 
 // The viewer pane: a dock beside or below the displays that shows the file

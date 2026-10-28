@@ -40,6 +40,13 @@
 #include <QTreeWidget>
 #include <QUrl>
 #include <QtConcurrent>
+#ifdef DIRDUO_HAVE_PDF
+#include <QPdfDocument>
+#else
+class QPdfDocument
+{
+};
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -88,6 +95,22 @@ public:
     {
         m_original = m_shown = QImage();
         update();
+    }
+    // The next page of a PDF: the same zoom and turn, at the top (or bottom).
+    void replaceImage(const QImage &img, bool atBottom = false)
+    {
+        m_original = img;
+        m_shown = img;
+        if (m_rotation) {
+            QTransform t;
+            t.rotate(m_rotation);
+            m_shown = img.transformed(t);
+        }
+        m_selection = {};
+        m_offset = QPointF(0, atBottom ? -1e9 : 1e9);
+        clampOffset();
+        update();
+        changed();
     }
     QImage shown() const { return m_shown; }
     Mode mode() const { return m_mode; }
@@ -647,6 +670,8 @@ void ViewerWindow::load()
 
 void ViewerWindow::display(const Preview &p)
 {
+    m_pages = 0;
+    m_page = 0;
     if (p.kind != Preview::Kind::Media || p.path != m_media->source())
         m_media->stop();
     m_preview = p;
@@ -661,6 +686,11 @@ void ViewerWindow::display(const Preview &p)
         case Preview::Kind::Image:
             m_picture->setImage(p.image, v.resetZoom);
             show = m_picture;
+            if (p.pages > 0) { // a PDF: its first page; the others as they are asked for
+                m_pages = p.pages;
+                m_page = 0;
+                m_pageSize = p.image.size();
+            }
             break;
         case Preview::Kind::Text:
         case Preview::Kind::Hex:
@@ -713,6 +743,46 @@ void ViewerWindow::display(const Preview &p)
     Q_EMIT currentChanged(p.path);
 }
 
+bool ViewerWindow::goPage(int page, bool atBottom)
+{
+#ifdef DIRDUO_HAVE_PDF
+    if (m_pages <= 0 || page < 0 || page >= m_pages || m_hex)
+        return false;
+    if (!m_pdf || m_pdfPath != m_preview.path) {
+        m_pdf = std::make_unique<QPdfDocument>();
+        m_pdf->load(m_preview.path);
+        m_pdfPath = m_preview.path;
+    }
+    if (m_pdf->status() != QPdfDocument::Status::Ready)
+        return false;
+    // As sharp as the first page: the same width (pages can differ in shape).
+    const QSizeF pt = m_pdf->pagePointSize(page);
+    QSize px = pt.toSize();
+    if (pt.width() > 0)
+        px = QSize(m_pageSize.width(), qRound(m_pageSize.width() * pt.height() / pt.width()));
+    const QImage img = Preview::onPaper(m_pdf->render(page, px));
+    if (img.isNull())
+        return false;
+    m_page = page;
+    m_picture->replaceImage(img, atBottom);
+    updateTitle();
+    updateStatus();
+    return true;
+#else
+    Q_UNUSED(page)
+    Q_UNUSED(atBottom)
+    return false;
+#endif
+}
+
+void ViewerWindow::pageOrFile(int delta)
+{
+    // Through a PDF's pages, then on to the next file.
+    if (m_pages > 1 && m_page + delta >= 0 && m_page + delta < m_pages && goPage(m_page + delta, delta < 0))
+        return;
+    step(delta);
+}
+
 void ViewerWindow::showHex()
 {
     QFile f(current());
@@ -731,8 +801,9 @@ void ViewerWindow::updateTitle()
 {
     const QString path = current();
     const QString name = Prefs::instance()->values().viewer.fullPathTitle ? Location::display(path) : Location::fileName(path);
-    setWindowTitle(m_files.size() > 1 ? QStringLiteral("%1 (%2 of %3) - Directory Duo").arg(name).arg(m_index + 1).arg(m_files.size())
-                                      : QStringLiteral("%1 - Directory Duo").arg(name));
+    const QString page = m_pages > 1 ? QStringLiteral(", page %1 of %2").arg(m_page + 1).arg(m_pages) : QString();
+    setWindowTitle(m_files.size() > 1 ? QStringLiteral("%1 (%2 of %3%4) - Directory Duo").arg(name).arg(m_index + 1).arg(m_files.size()).arg(page)
+                                      : QStringLiteral("%1%2 - Directory Duo").arg(name, page));
 }
 
 void ViewerWindow::updateStatus()
@@ -741,9 +812,12 @@ void ViewerWindow::updateStatus()
         return;
     QStringList left;
     left << QStringLiteral("%1 of %2").arg(m_index + 1).arg(m_files.size());
+    if (m_pages > 0 && !m_hex)
+        left << QStringLiteral("page %1 of %2").arg(m_page + 1).arg(m_pages);
     if (m_preview.kind == Preview::Kind::Image && !m_picture->shown().isNull()) {
         const QSize s = m_picture->shown().size();
-        left << QStringLiteral("%1 x %2").arg(s.width()).arg(s.height());
+        if (m_pages == 0)
+            left << QStringLiteral("%1 x %2").arg(s.width()).arg(s.height());
         left << QStringLiteral("%1%").arg(qRound(m_picture->scale() * 100));
         if (m_picture->rotation())
             left << QStringLiteral("turned %1°").arg(m_picture->rotation());
@@ -991,8 +1065,10 @@ void ViewerWindow::buildMenus()
     sb->setCheckable(true);
 
     QMenu *go = menuBar()->addMenu(QStringLiteral("&Go"));
-    keep("prev", addAction(go, QStringLiteral("Previous"), QStringLiteral("go-previous"), QKeySequence(Qt::Key_PageUp), [this]() { step(-1); }));
-    keep("next", addAction(go, QStringLiteral("Next"), QStringLiteral("go-next"), QKeySequence(Qt::Key_PageDown), [this]() { step(1); }));
+    keep("prev", addAction(go, QStringLiteral("Previous"), QStringLiteral("go-previous"), QKeySequence(Qt::Key_PageUp), [this]() { pageOrFile(-1); }));
+    keep("next", addAction(go, QStringLiteral("Next"), QStringLiteral("go-next"), QKeySequence(Qt::Key_PageDown), [this]() { pageOrFile(1); }));
+    keep("prevfile", addAction(go, QStringLiteral("Previous File"), QString(), QKeySequence(Qt::SHIFT | Qt::Key_PageUp), [this]() { step(-1); }));
+    keep("nextfile", addAction(go, QStringLiteral("Next File"), QString(), QKeySequence(Qt::SHIFT | Qt::Key_PageDown), [this]() { step(1); }));
     keep("first", addAction(go, QStringLiteral("First"), QStringLiteral("go-first"), QKeySequence(Qt::Key_Home), [this]() { goTo(0); }));
     keep("last", addAction(go, QStringLiteral("Last"), QStringLiteral("go-last"), QKeySequence(Qt::Key_End), [this]() { goTo(int(m_files.size()) - 1); }));
     keep("random", addAction(go, QStringLiteral("Random"), QStringLiteral("media-playlist-shuffle"), QKeySequence(Qt::Key_X), [this]() { goRandom(); }));
@@ -1588,10 +1664,10 @@ void ViewerWindow::keyPressEvent(QKeyEvent *e)
         if (media)
             m_media->playPause();
         else
-            this->step(1);
+            pageOrFile(1);
         return;
     case Qt::Key_Backspace:
-        this->step(-1);
+        pageOrFile(-1);
         return;
     case Qt::Key_Left:
     case Qt::Key_Right: {
@@ -1599,7 +1675,7 @@ void ViewerWindow::keyPressEvent(QKeyEvent *e)
         if (media)
             m_media->seekBy(dir * 5000);
         else if (!(picture && m_picture->scrollBy(-dir * step, 0)))
-            this->step(dir); // nothing to scroll: previous / next
+            pageOrFile(dir); // nothing to scroll: previous / next (page, then file)
         return;
     }
     case Qt::Key_Up:
@@ -1607,8 +1683,8 @@ void ViewerWindow::keyPressEvent(QKeyEvent *e)
         const int dir = e->key() == Qt::Key_Up ? -1 : 1;
         if (media)
             m_media->setVolume(m_media->volume() - dir * 5);
-        else if (picture)
-            m_picture->scrollBy(0, -dir * step);
+        else if (picture && !m_picture->scrollBy(0, -dir * step) && m_pages > 1)
+            goPage(m_page + dir, dir < 0); // past the end of a page: the next one
         return;
     }
     case Qt::Key_Return:
