@@ -2,7 +2,7 @@
 <component type="desktop-application">
   <id>com.monroeworld.DirDuo</id>
   <name>Directory Duo</name>
-  <summary>Source and destination file manager</summary>
+  <summary>Dual-display file manager for the Steam Deck and desktops</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>LicenseRef-proprietary</project_license>
   <developer id="com.monroeworld">
@@ -10,13 +10,78 @@
   </developer>
   <description>
     <p>
-      A file manager built around a source and a destination: two displays, and
-      every command acts from one to the other. Queued copies per drive,
-      collision handling with side-by-side comparison, aliases, tabs, and
-      buttons that run commands.
+      Directory Duo is a file manager in the spirit of the classic dual-display
+      file managers: two lists side by side or one above the other, one the
+      source and the other the destination, and every command works from one to
+      the other. It is made for the Steam Deck in Desktop Mode as much as for a
+      desktop PC, with touch-friendly sizes, pinch to zoom and SD card support.
     </p>
+    <p>Highlights:</p>
+    <ul>
+      <li>Source and destination displays with tabs, folder trees, flat view, grouping and a filter bar</li>
+      <li>File operations in their own windows with pause, queues per drive, Retry/Skip and undo</li>
+      <li>Toolbars you build yourself: three-button buttons, split buttons, menus and fields, between the displays or at the edges</li>
+      <li>A standalone viewer for pictures, music, video, PDFs, text and archives, with a slideshow and marking</li>
+      <li>Index Search: any file by name, instantly, across home and cards</li>
+      <li>Archives as folders, extract and create zip, 7z and tar; servers over SFTP, FTP, SMB and WebDAV</li>
+      <li>Music and photo columns, labels, ratings and tags, checksums, Synchronize, Find Duplicates and Advanced Rename</li>
+      <li>Your own keys, right-click commands, tab groups, saved filters, status bar and JavaScript scripts</li>
+      <li>Add Windows programs and AppImages to Steam from the right-click menu</li>
+    </ul>
   </description>
   <launchable type="desktop-id">com.monroeworld.DirDuo.desktop</launchable>
+  <provides>
+    <binary>dirduo</binary>
+  </provides>
+  <categories>
+    <category>System</category>
+    <category>FileTools</category>
+    <category>FileManager</category>
+  </categories>
+  <keywords>
+    <keyword>file manager</keyword>
+    <keyword>dual pane</keyword>
+    <keyword>steam deck</keyword>
+    <keyword>commander</keyword>
+  </keywords>
+  <recommends>
+    <display_length compare="ge">768</display_length>
+  </recommends>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+    <control>touch</control>
+  </supports>
+  <branding>
+    <color type="primary" scheme_preference="light">#8fb8e8</color>
+    <color type="primary" scheme_preference="dark">#1b3a6b</color>
+  </branding>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Two displays with folder trees, the toolbar between them, music tags in columns</caption>
+      <image>https://raw.githubusercontent.com/darkuni/dirduo/main/docs/screenshots/main-trees.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Displays on top of each other with the classic toolbar arrangement</caption>
+      <image>https://raw.githubusercontent.com/darkuni/dirduo/main/docs/screenshots/classic-arrangement.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The standalone viewer: pictures, music, video, PDFs and more</caption>
+      <image>https://raw.githubusercontent.com/darkuni/dirduo/main/docs/screenshots/viewer.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Index Search: every file and folder by name as you type</caption>
+      <image>https://raw.githubusercontent.com/darkuni/dirduo/main/docs/screenshots/index-search.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Synchronize two folders, such as ROMs on internal storage and the SD card</caption>
+      <image>https://raw.githubusercontent.com/darkuni/dirduo/main/docs/screenshots/synchronize.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Every key in one place, with hotkeys of your own</caption>
+      <image>https://raw.githubusercontent.com/darkuni/dirduo/main/docs/screenshots/keys.png</image>
+    </screenshot>
+  </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
     <release version="0.1.0" date="2026-10-21">
