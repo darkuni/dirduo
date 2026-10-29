@@ -651,7 +651,7 @@ int main(int argc, char *argv[])
                 f.setPointSize(64);
                 f.setBold(true);
                 p.setFont(f);
-                p.drawText(img.rect(), Qt::AlignCenter, QStringLiteral("Directory Duo"));
+                p.drawText(img.rect(), Qt::AlignCenter, QStringLiteral("DirDuo"));
             }
             for (int i = 1; i <= 3; ++i)
                 img.save(root + QStringLiteral("/Pictures/Screenshots/shot%1.png").arg(i));
@@ -676,7 +676,7 @@ int main(int argc, char *argv[])
                         writer.newPage();
                     f.setPointSize(28);
                     pp.setFont(f);
-                    pp.drawText(QRect(0, 200, writer.width(), 900), Qt::AlignHCenter, QStringLiteral("Directory Duo"));
+                    pp.drawText(QRect(0, 200, writer.width(), 900), Qt::AlignHCenter, QStringLiteral("DirDuo"));
                     f.setPointSize(12);
                     pp.setFont(f);
                     pp.drawText(QRect(600, 1400, writer.width() - 1200, writer.height() - 2000), Qt::TextWordWrap,

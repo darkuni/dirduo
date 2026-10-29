@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <id>com.monroeworld.DirDuo</id>
-  <name>Directory Duo</name>
-  <summary>Dual-display file manager for the Steam Deck and desktops</summary>
+  <name>DirDuo</name>
+  <summary>SteamOS-first dual-display file manager for Linux</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>LicenseRef-proprietary</project_license>
   <developer id="com.monroeworld">
@@ -10,7 +10,7 @@
   </developer>
   <description>
     <p>
-      Directory Duo is a file manager in the spirit of the classic dual-display
+      DirDuo is a file manager in the spirit of the classic dual-display
       file managers: two lists side by side or one above the other, one the
       source and the other the destination, and every command works from one to
       the other. It is made for the Steam Deck in Desktop Mode as much as for a

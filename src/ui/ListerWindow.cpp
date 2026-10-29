@@ -729,10 +729,10 @@ void ListerWindow::buildMenus()
     menuBar()->setCornerWidget(m_menuCorner, Qt::TopRightCorner);
     m_menuCorner->hide();
     QMenu *help = menuBar()->addMenu(QStringLiteral("&Help"));
-    QAction *about = help->addAction(QStringLiteral("About Directory Duo"));
+    QAction *about = help->addAction(QStringLiteral("About DirDuo"));
     connect(about, &QAction::triggered, this, [this]() {
-        QMessageBox::about(this, QStringLiteral("About Directory Duo"),
-                           QStringLiteral("<b>Directory Duo %1</b> (DirDuo)<p>Build %2</p><p>A source and destination file manager for Linux.</p>"
+        QMessageBox::about(this, QStringLiteral("About DirDuo"),
+                           QStringLiteral("<b>DirDuo %1</b><p>Build %2</p><p>A source and destination file manager for Linux.</p>"
                                           "<p>Configuration: %3</p>")
                                .arg(QStringLiteral(DIRDUO_VERSION), QStringLiteral(DIRDUO_BUILD_ID).toHtmlEscaped(),
                                     Paths::configDir().toHtmlEscaped()));

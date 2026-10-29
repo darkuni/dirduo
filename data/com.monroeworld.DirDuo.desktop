@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=Directory Duo
+Name=DirDuo
 GenericName=File Manager
 Comment=Source and destination file manager
 Exec=dirduo %U
@@ -8,5 +8,5 @@ Icon=com.monroeworld.DirDuo
 Terminal=false
 Categories=Qt;KDE;System;FileTools;FileManager;
 MimeType=inode/directory;
-Keywords=files;folders;file manager;dirduo;directory duo;dual pane;two pane;
+Keywords=files;folders;file manager;dirduo;dual pane;two pane;
 StartupWMClass=dirduo

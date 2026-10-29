@@ -7,8 +7,8 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 
 - [ ] Actions > newest green run > Artifacts > `dirduo-x86_64.flatpak`. Unzip it.
 - [ ] `flatpak install --user --reinstall dirduo-x86_64.flatpak`
-- [ ] Directory Duo is in the application menu and opens.
-- [ ] Coming from Linopus: `flatpak uninstall --user com.monroeworld.Linopus`. Directory Duo opens with your old toolbars, favorites, theme and labels.
+- [ ] DirDuo is in the application menu and opens.
+- [ ] Coming from Linopus: `flatpak uninstall --user com.monroeworld.Linopus`. DirDuo opens with your old toolbars, favorites, theme and labels.
 
 ## Look
 

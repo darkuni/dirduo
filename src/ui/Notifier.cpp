@@ -47,7 +47,7 @@ bool Notifier::show(const Notice &n)
     QVariantMap hints;
     hints.insert(QStringLiteral("desktop-entry"), QStringLiteral(DIRDUO_APP_ID));
     // Notify(app_name, replaces_id, app_icon, summary, body, actions, hints, expire_timeout)
-    const QDBusReply<uint> reply = iface.call(QStringLiteral("Notify"), QStringLiteral("Directory Duo"), uint(0),
+    const QDBusReply<uint> reply = iface.call(QStringLiteral("Notify"), QStringLiteral("DirDuo"), uint(0),
                                               n.icon.isEmpty() ? QStringLiteral(DIRDUO_APP_ID) : n.icon, n.title, n.body, actions,
                                               hints, int(-1));
     if (!reply.isValid())

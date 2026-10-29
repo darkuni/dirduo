@@ -125,7 +125,7 @@ IndexSearch::IndexSearch(ListerWindow *lister)
 {
     setAttribute(Qt::WA_DeleteOnClose);
     setObjectName(QStringLiteral("indexSearch"));
-    setWindowTitle(QStringLiteral("Index Search - Directory Duo"));
+    setWindowTitle(QStringLiteral("Index Search - DirDuo"));
     setWindowIcon(QIcon::fromTheme(QStringLiteral("edit-find")));
     auto *layout = new QVBoxLayout(this);
     m_edit = new QLineEdit(this);

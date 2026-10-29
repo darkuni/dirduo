@@ -1,6 +1,6 @@
-# Directory Duo
+# DirDuo
 
-Directory Duo (DirDuo for short) is a source/destination file manager for Linux in the spirit of Windows Directory Opus. Two displays, one SOURCE and one DEST, and every command acts from one to the other.
+DirDuo is a source/destination file manager for Linux in the spirit of Windows Directory Opus. Two displays, one SOURCE and one DEST, and every command acts from one to the other.
 
 Targets: SteamOS Desktop Mode on the Steam Deck (x86_64) and Steam Frame (aarch64), and any Linux desktop after that. Qt 6 Widgets, C++20, shipped as a Flatpak on the KDE runtime.
 
@@ -400,7 +400,7 @@ QT_QPA_PLATFORM=offscreen ./build/dirduo_snapshot /tmp/dirduo-shots
 
 ## Renamed from Linopus
 
-Directory Duo was called Linopus until October 2026. The first time DirDuo starts, it copies the old settings (`~/.config/linopus`, with `linopus.ini` becoming `dirduo.ini`) and data (`~/.local/share/linopus`: the file log and labels kept for cards) to its own folders; the old folders are left alone. Old settings backups restore, old scripts' `# linopus:` lines and `$LINOPUS_SOURCE`-style variables still work, and color labels set under the old name are read and moved to the new attribute when next changed. The Flatpak has a new ID, so remove the old one: `flatpak uninstall --user com.monroeworld.Linopus`, and pick Directory Duo again as the default file manager if it was.
+DirDuo was called Linopus until October 2026. The first time DirDuo starts, it copies the old settings (`~/.config/linopus`, with `linopus.ini` becoming `dirduo.ini`) and data (`~/.local/share/linopus`: the file log and labels kept for cards) to its own folders; the old folders are left alone. Old settings backups restore, old scripts' `# linopus:` lines and `$LINOPUS_SOURCE`-style variables still work, and color labels set under the old name are read and moved to the new attribute when next changed. The Flatpak has a new ID, so remove the old one: `flatpak uninstall --user com.monroeworld.Linopus`, and pick DirDuo again as the default file manager if it was.
 
 ## Known gaps
 

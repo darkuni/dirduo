@@ -1047,8 +1047,8 @@ void ViewerWindow::updateTitle()
     const QString path = current();
     const QString name = Prefs::instance()->values().viewer.fullPathTitle ? Location::display(path) : Location::fileName(path);
     const QString page = m_pages > 1 ? QStringLiteral(", page %1 of %2").arg(m_page + 1).arg(m_pages) : QString();
-    setWindowTitle(m_files.size() > 1 ? QStringLiteral("%1 (%2 of %3%4) - Directory Duo").arg(name).arg(m_index + 1).arg(m_files.size()).arg(page)
-                                      : QStringLiteral("%1%2 - Directory Duo").arg(name, page));
+    setWindowTitle(m_files.size() > 1 ? QStringLiteral("%1 (%2 of %3%4) - DirDuo").arg(name).arg(m_index + 1).arg(m_files.size()).arg(page)
+                                      : QStringLiteral("%1%2 - DirDuo").arg(name, page));
 }
 
 void ViewerWindow::updateStatus()
