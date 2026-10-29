@@ -217,6 +217,7 @@ section + section { border-top: 1px solid var(--line); }
 .cmp td.n b::before { background: transparent; border: 1.5px solid var(--muted); width: 7px; height: 7px; }
 .cmp td small { display: block; color: var(--muted); margin-top: 2px; line-height: 1.35; }
 .cmp tr.grp th { position: static; background: var(--surface-2); font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 8px 14px; }
+.cmp tr.lead th, .cmp tr.lead td { font-size: 1rem; border-bottom: 2px solid var(--line); }
 .cmp-note { color: var(--muted); font-size: var(--step--1); margin-top: 14px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .versus { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
@@ -409,12 +410,14 @@ footer .brand { font-size: 1rem; }
       <div class="head">
         <span class="role">Side by side</span>
         <h2>How it stacks up.</h2>
-        <p>Dolphin and GNOME Files are what you see is what you get. Krusader and Double Commander let you tweak. Directory Duo lets you rebuild it: don't like it, change it.</p>
+        <p>Dolphin and GNOME Files are what you see is what you get. Krusader and Double Commander let you tweak. Directory Duo lets you rebuild it: don't like it, change it. And on SteamOS the first row settles it: only Dolphin and Directory Duo install from Discover.</p>
       </div>
       <div class="grid-scroll" tabindex="0" role="region" aria-label="Feature comparison, scrolls sideways on small screens">
         <table class="cmp">
           <thead><tr><th scope="col"><span class="sr">Feature</span></th><th scope="col" class="us">Directory Duo</th><th scope="col">Dolphin</th><th scope="col">GNOME Files</th><th scope="col">Krusader</th><th scope="col">Double Commander</th></tr></thead>
           <tbody>
+<tr class="grp"><th scope="rowgroup" colspan="6">First things first</th></tr>
+<tr class="lead"><th scope="row">Installs on SteamOS</th><td class="us y"><b>Yes</b><small>Flatpak</small></td><td class="y"><b>Yes</b><small>Preinstalled</small></td><td class="n"><b>No</b><small>Flathub build ended in 2018</small></td><td class="n"><b>No</b><small>Flathub beta only</small></td><td class="n"><b>No</b><small>No Flathub build</small></td></tr>
 <tr class="grp"><th scope="rowgroup" colspan="6">Two places at once</th></tr>
 <tr><th scope="row">Two folders on screen</th><td class="us y"><b>Yes</b><small>Always</small></td><td class="p"><b>Split view</b><small>F3, off by default</small></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
 <tr><th scope="row">Stacked top and bottom</th><td class="us y"><b>Yes</b><small>One click, per window</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b><small>Ctrl+Alt+R</small></td><td class="y"><b>Yes</b><small>Ctrl+Shift+H</small></td></tr>
@@ -438,7 +441,6 @@ footer .brand { font-size: 1rem; }
 <tr><th scope="row">Built-in viewer</th><td class="us y"><b>Yes</b><small>Pictures, music, video, PDF, slideshow</small></td><td class="p"><b>Preview panel</b></td><td class="p"><b>Spacebar preview</b><small>Add-on</small></td><td class="p"><b>Text, hex, images</b></td><td class="p"><b>Text, hex, images</b></td></tr>
 <tr><th scope="row">Instant indexed name search</th><td class="us y"><b>Yes</b><small>Built in</small></td><td class="y"><b>Yes</b><small>Baloo</small></td><td class="y"><b>Yes</b><small>LocalSearch</small></td><td class="n"><b>No</b><small>Crawls the disk</small></td><td class="n"><b>No</b><small>Crawls the disk</small></td></tr>
 <tr><th scope="row">Scripting</th><td class="us y"><b>Yes</b><small>JavaScript: commands and columns</small></td><td class="n"><b>No</b><small>Service menus</small></td><td class="n"><b>No</b><small>Shell scripts</small></td><td class="p"><b>User actions</b><small>Shell</small></td><td class="y"><b>Yes</b><small>Lua</small></td></tr>
-<tr><th scope="row">Installs on SteamOS</th><td class="us y"><b>Yes</b><small>Flatpak</small></td><td class="y"><b>Yes</b><small>Preinstalled</small></td><td class="n"><b>No</b><small>Flathub build ended in 2018</small></td><td class="n"><b>No</b><small>Flathub beta only</small></td><td class="n"><b>No</b><small>No Flathub build</small></td></tr>
           </tbody>
         </table>
       </div>
