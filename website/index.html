@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Directory Duo</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="Directory Duo is a two-display file manager for the Steam Deck and Linux: a source and a destination side by side, toolbars you build yourself, a viewer for everything and instant search.">
-<meta property="og:title" content="Directory Duo - the two-display file manager for SteamOS and Linux">
+<meta name="description" content="Directory Duo is a two-display file manager for Linux, KDE Plasma and SteamOS: a source and a destination side by side, toolbars you build yourself, a viewer for everything and instant search.">
+<meta property="og:title" content="Directory Duo - the two-display file manager for Linux, KDE and SteamOS">
 <meta property="og:description" content="A source and a destination side by side, and every command works from one to the other.">
 <meta property="og:image" content="https://dirduo.com/img/hero-dual.webp">
 <meta property="og:url" content="https://dirduo.com/">
@@ -209,13 +209,14 @@ section + section { border-top: 1px solid var(--line); }
 .cmp tbody th { font-weight: 600; width: 13rem; position: sticky; left: 0; background: var(--surface); z-index: 1; }
 .cmp .us { background: color-mix(in srgb, var(--dst) 10%, var(--surface)); }
 .cmp thead .us { color: var(--dst); border-bottom: 2px solid var(--dst); }
-.cmp td b { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
-.cmp td b::before { content: ""; width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.cmp td b { display: inline-flex; align-items: flex-start; gap: 6px; font-weight: 600; }
+.cmp td b::before { content: ""; width: 9px; height: 9px; border-radius: 50%; flex: none; margin-top: 0.4em; }
 .cmp td.y b::before { background: var(--dst); }
 .cmp td.p b::before { background: var(--accent); }
 .cmp td.n b { color: var(--muted); font-weight: 400; }
 .cmp td.n b::before { background: transparent; border: 1.5px solid var(--muted); width: 7px; height: 7px; }
 .cmp td small { display: block; color: var(--muted); margin-top: 2px; line-height: 1.35; }
+.cmp tr.grp th { position: static; background: var(--surface-2); font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 8px 14px; }
 .cmp-note { color: var(--muted); font-size: var(--step--1); margin-top: 14px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .versus { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
@@ -326,7 +327,7 @@ footer .brand { font-size: 1rem; }
       <a href="#compare">Compare</a>
       <a href="#duo">How it works</a>
       <a href="#features">Features</a>
-      <a href="#deck">Steam Deck</a>
+      <a href="#deck">KDE &amp; SteamOS</a>
       <a href="#screens">Screens</a>
       <a href="#get">Get it</a>
     </nav>
@@ -388,7 +389,7 @@ footer .brand { font-size: 1rem; }
       <div class="text">
         <span class="role">Stacked</span>
         <h2>Top and bottom, built in, not bolted on.</h2>
-        <p>Put the source above the destination and each list gets the full width of the screen: name, size, type, rating, label and tags all in view, no squinting at half-width columns. On the Deck's 16:10 screen it changes everything.</p>
+        <p>Put the source above the destination and each list gets the full width of the screen: name, size, type, rating, label and tags all in view, no squinting at half-width columns. On a laptop screen it changes everything.</p>
         <ul class="ticks">
           <li>Toolbars ride in the band between the two displays <span>and share rows, the way you arrange them</span></li>
           <li>Flip to side by side and back in one click <span>the folders, tabs and selections stay put</span></li>
@@ -408,28 +409,37 @@ footer .brand { font-size: 1rem; }
       <div class="head">
         <span class="role">Side by side</span>
         <h2>How it stacks up.</h2>
-        <p>Dolphin and GNOME Files are great at browsing. Krusader and Double Commander are the classic two-pane managers. Directory Duo takes the two-pane idea, stacks it, and builds it for a handheld.</p>
+        <p>Dolphin and GNOME Files are what you see is what you get. Krusader and Double Commander let you tweak. Directory Duo lets you rebuild it: don't like it, change it.</p>
       </div>
       <div class="grid-scroll" tabindex="0" role="region" aria-label="Feature comparison, scrolls sideways on small screens">
         <table class="cmp">
           <thead><tr><th scope="col"><span class="sr">Feature</span></th><th scope="col" class="us">Directory Duo</th><th scope="col">Dolphin</th><th scope="col">GNOME Files</th><th scope="col">Krusader</th><th scope="col">Double Commander</th></tr></thead>
           <tbody>
+<tr class="grp"><th scope="rowgroup" colspan="6">Two places at once</th></tr>
 <tr><th scope="row">Two folders on screen</th><td class="us y"><b>Yes</b><small>Always</small></td><td class="p"><b>Split view</b><small>F3, off by default</small></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
 <tr><th scope="row">Stacked top and bottom</th><td class="us y"><b>Yes</b><small>One click, per window</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b><small>Setting</small></td><td class="y"><b>Yes</b><small>Setting</small></td></tr>
 <tr><th scope="row">Toolbar between the panes</th><td class="us y"><b>Yes</b><small>Any toolbar, as many as you like</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b><small>Middle toolbar</small></td></tr>
-<tr><th scope="row">Buttons that run your own commands</th><td class="us y"><b>Yes</b><small>Left, right and middle click</small></td><td class="n"><b>No</b><small>Right-click menu only</small></td><td class="n"><b>No</b><small>Scripts menu only</small></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
 <tr><th scope="row">Copy straight to the other pane</th><td class="us y"><b>Yes</b></td><td class="y"><b>Yes</b><small>In split view</small></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
 <tr><th scope="row">Job queues</th><td class="us y"><b>Yes</b><small>Per drive, automatic</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b><small>Queue Manager</small></td><td class="y"><b>Yes</b></td></tr>
 <tr><th scope="row">Folder synchronize</th><td class="us y"><b>Yes</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
 <tr><th scope="row">Archives as folders</th><td class="us y"><b>Yes</b><small>zip, 7z, RAR, tar, ISO</small></td><td class="p"><b>Optional</b><small>Setting</small></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
+<tr class="grp"><th scope="rowgroup" colspan="6">Make it yours</th></tr>
+<tr><th scope="row">Buttons that run your own commands</th><td class="us y"><b>Yes</b><small>Left, right and middle click</small></td><td class="n"><b>No</b><small>Right-click menu only</small></td><td class="n"><b>No</b><small>Scripts menu only</small></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
+<tr><th scope="row">Toolbars you build</th><td class="us y"><b>Yes</b><small>Any number, anywhere, your own buttons</small></td><td class="p"><b>Rearrange</b><small>Built-in actions only</small></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
+<tr><th scope="row">Rebind every key</th><td class="us y"><b>Yes</b></td><td class="y"><b>Yes</b></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
+<tr><th scope="row">Edit every color</th><td class="us y"><b>Yes</b><small>Theme Editor, Workbench included</small></td><td class="p"><b>Plasma scheme</b><small>Shared with the desktop</small></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
+<tr><th scope="row">Your own columns</th><td class="us y"><b>Yes</b><small>JavaScript</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b><small>Content plugins</small></td></tr>
+<tr><th scope="row">Status bar you lay out</th><td class="us y"><b>Yes</b><small>Field codes</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td></tr>
+<tr><th scope="row">Save the whole window as a layout</th><td class="us y"><b>Yes</b><small>Recall in one click</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="p"><b>Panel profiles</b></td><td class="n"><b>No</b></td></tr>
+<tr class="grp"><th scope="rowgroup" colspan="6">Everything else</th></tr>
 <tr><th scope="row">Built-in viewer</th><td class="us y"><b>Yes</b><small>Pictures, music, video, PDF, slideshow</small></td><td class="p"><b>Preview panel</b></td><td class="p"><b>Spacebar preview</b><small>Add-on</small></td><td class="p"><b>Text, hex, images</b></td><td class="p"><b>Text, hex, images</b></td></tr>
 <tr><th scope="row">Instant indexed name search</th><td class="us y"><b>Yes</b><small>Built in</small></td><td class="y"><b>Yes</b><small>Baloo</small></td><td class="y"><b>Yes</b><small>LocalSearch</small></td><td class="n"><b>No</b><small>Crawls the disk</small></td><td class="n"><b>No</b><small>Crawls the disk</small></td></tr>
 <tr><th scope="row">Scripting</th><td class="us y"><b>Yes</b><small>JavaScript: commands and columns</small></td><td class="n"><b>No</b><small>Service menus</small></td><td class="n"><b>No</b><small>Shell scripts</small></td><td class="p"><b>User actions</b><small>Shell</small></td><td class="y"><b>Yes</b><small>Lua</small></td></tr>
-<tr><th scope="row">Made for the Steam Deck</th><td class="us y"><b>Yes</b><small>1280 x 800, touch, Flatpak</small></td><td class="p"><b>Preinstalled</b><small>Desktop-sized</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td></tr>
+<tr><th scope="row">Installs on SteamOS</th><td class="us y"><b>Yes</b><small>Flatpak</small></td><td class="y"><b>Yes</b><small>Preinstalled</small></td><td class="n"><b>No</b><small>Flathub build ended in 2018</small></td><td class="y"><b>Yes</b><small>Flathub</small></td><td class="n"><b>No</b><small>No Flathub build</small></td></tr>
           </tbody>
         </table>
       </div>
-      <p class="cmp-note">Checked October 2026 against each project's current release on Linux. "Setting" means the option exists but is not one click away.</p>
+      <p class="cmp-note">Checked October 2026 against each project's current release on Linux and its Flathub listing. "Setting" means the option exists but is not one click away.</p>
     </div>
   </section>
 
@@ -453,7 +463,7 @@ footer .brand { font-size: 1rem; }
         <div class="pane dst">
           <span class="role dst">Dest</span>
           <h3>Where it goes</h3>
-          <p>Lock it so it stays put while you browse, swap the two in one click, or stack them top and bottom when the Deck's screen is better used that way.</p>
+          <p>Lock it so it stays put while you browse, swap the two in one click, or stack them top and bottom when the screen is better used that way.</p>
         </div>
       </div>
       <div class="verbs" aria-label="Commands that go from source to destination">
@@ -478,7 +488,7 @@ footer .brand { font-size: 1rem; }
         <div class="feat"><span class="k">sftp://</span><h3>Servers and shares</h3><p>Your NAS over SFTP, SMB, FTP or WebDAV, saved by name, with copies that resume where they left off after the network drops.</p></div>
         <div class="feat"><span class="k">Columns</span><h3>Tags, music, photos</h3><p>Artist and album from music tags, camera and date taken from photos, color labels, star ratings and tags that Dolphin sees too.</p></div>
         <div class="feat"><span class="k">Tools</span><h3>The usual suspects, built in</h3><p>Synchronize, Find Duplicates, Advanced Rename with undo, checksums, file splitting for FAT32 cards and image conversion.</p></div>
-        <div class="feat"><span class="k">.js</span><h3>Make it yours</h3><p>Your own keys, right-click commands per file type, tab groups, saved filters, status bar layouts and JavaScript scripts that add commands and columns.</p></div>
+        <div class="feat"><span class="k">.js</span><h3>Don't like it? Change it.</h3><p>Your own keys, right-click commands per file type, tab groups, saved filters, status bar layouts and JavaScript scripts that add commands and columns.</p></div>
       </div>
     </div>
   </section>
@@ -486,19 +496,19 @@ footer .brand { font-size: 1rem; }
   <section id="deck">
     <div class="wrap split">
       <div class="text">
-        <span class="role">Steam Deck</span>
-        <h2>Made on, and for, the Deck.</h2>
-        <p>Directory Duo started as the file manager Desktop Mode was missing. It runs as a Flatpak, is sized for 1280 x 800, and treats the SD card as the first-class drive it is.</p>
+        <span class="role">KDE &amp; SteamOS</span>
+        <h2>At home on Plasma, wherever it runs.</h2>
+        <p>Directory Duo is a Qt 6 and KDE Frameworks app, so it fits right in on any KDE Plasma desktop, from a full workstation to SteamOS Desktop Mode. It installs as a Flatpak and treats removable drives and SD cards as the first-class drives they are.</p>
         <ul class="ticks">
-          <li>The SD card and USB drives on the Drives bar <span>by their label, with free space</span></li>
-          <li>Pinch to zoom a list on the touchscreen <span>or Shift + scroll with the trackpad</span></li>
-          <li>Add to Steam from the right-click menu <span>Windows programs run through Proton</span></li>
+          <li>SD cards and USB drives on the Drives bar <span>by their label, with free space</span></li>
+          <li>Pinch to zoom a list on a touchscreen <span>or Shift + scroll</span></li>
+          <li>On SteamOS, Add to Steam from the right-click menu <span>Windows programs run through Proton</span></li>
           <li>Steam's Browse Local Files opens in Directory Duo <span>when it is the default file manager</span></li>
           <li>An ARM64 build for the Steam Frame <span>next to the x86_64 one</span></li>
         </ul>
       </div>
       <div class="shot">
-        <img src="img/hero-dual.webp" width="1280" height="800" loading="lazy" alt="Side by side on the Deck: ROM folders as the source, the Steam library on the SD card as the destination, with folder sizes as bars.">
+        <img src="img/hero-dual.webp" width="1280" height="800" loading="lazy" alt="Side by side: ROM folders as the source, the Steam library on the SD card as the destination, with folder sizes as bars.">
         <div class="statusbar"><span><b>SOURCE</b> 7 folders - 1 selected</span><span><b>DEST</b> 22.0 GB free of 252.0 GB</span></div>
       </div>
     </div>
@@ -578,11 +588,11 @@ footer .brand { font-size: 1rem; }
       <div class="head" style="margin-bottom:0">
         <span class="status-pill">In testing</span>
         <h2>Coming soon as a Flatpak.</h2>
-        <p>Directory Duo is in testing on the Steam Deck and desktop Linux now. The first release will install like any other Flatpak, from Discover in Desktop Mode or the command line.</p>
+        <p>Directory Duo is in testing on KDE Plasma desktops and SteamOS now. The first release will install like any other Flatpak, from Discover in Desktop Mode or the command line.</p>
       </div>
       <dl class="specs">
-        <div><dt>Runs on</dt><dd>SteamOS Desktop Mode, and any Linux desktop with Flatpak</dd></div>
-        <div><dt>Builds</dt><dd>x86_64 (Steam Deck, PCs) and ARM64 (Steam Frame)</dd></div>
+        <div><dt>Runs on</dt><dd>Any Linux desktop with Flatpak: KDE Plasma first, SteamOS Desktop Mode included</dd></div>
+        <div><dt>Builds</dt><dd>x86_64 (PCs, Steam Deck) and ARM64 (Steam Frame)</dd></div>
         <div><dt>Made with</dt><dd>Qt 6 and KDE Frameworks</dd></div>
         <div><dt>Servers</dt><dd>SFTP, SMB, FTP, WebDAV</dd></div>
         <div><dt>Archives</dt><dd>zip, 7z, RAR, tar, ISO</dd></div>
