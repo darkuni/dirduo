@@ -202,6 +202,22 @@ section + section { border-top: 1px solid var(--line); }
 .toggle-note { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); margin-left: 6px; }
 
 /* Versus */
+.grid-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.cmp { width: 100%; min-width: 820px; border-collapse: collapse; font-size: var(--step--1); }
+.cmp th, .cmp td { padding: 12px 14px; text-align: left; vertical-align: top; border-top: 1px solid var(--line); }
+.cmp thead th { border-top: 0; font-family: var(--display); font-size: 1rem; white-space: nowrap; }
+.cmp tbody th { font-weight: 600; width: 13rem; position: sticky; left: 0; background: var(--surface); z-index: 1; }
+.cmp .us { background: color-mix(in srgb, var(--dst) 10%, var(--surface)); }
+.cmp thead .us { color: var(--dst); border-bottom: 2px solid var(--dst); }
+.cmp td b { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.cmp td b::before { content: ""; width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.cmp td.y b::before { background: var(--dst); }
+.cmp td.p b::before { background: var(--accent); }
+.cmp td.n b { color: var(--muted); font-weight: 400; }
+.cmp td.n b::before { background: transparent; border: 1.5px solid var(--muted); width: 7px; height: 7px; }
+.cmp td small { display: block; color: var(--muted); margin-top: 2px; line-height: 1.35; }
+.cmp-note { color: var(--muted); font-size: var(--step--1); margin-top: 14px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .versus { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
 .vrow { display: grid; grid-template-columns: 11rem minmax(0, 1fr) minmax(0, 1.25fr); border-top: 1px solid var(--line); }
 .vrow:first-child { border-top: 0; }
@@ -307,6 +323,7 @@ footer .brand { font-size: 1rem; }
     <a class="brand" href="#top"><img src="favicon.svg" alt="" width="30" height="30"><span>Directory Duo<small>DirDuo</small></span></a>
     <nav class="links" aria-label="Sections">
       <a href="#different">Why it's different</a>
+      <a href="#compare">Compare</a>
       <a href="#duo">How it works</a>
       <a href="#features">Features</a>
       <a href="#deck">Steam Deck</a>
@@ -383,6 +400,36 @@ footer .brand { font-size: 1rem; }
         <img src="img/flat-filtered.webp" width="1280" height="800" loading="lazy" alt="Stacked displays in the light theme: a flat, filtered list of every disk image above and the destination below.">
         <div class="statusbar"><span><b>SOURCE</b> flat view - filter "*.d64"</span><span><b>DEST</b> stacked below</span></div>
       </div>
+    </div>
+  </section>
+
+  <section id="compare">
+    <div class="wrap">
+      <div class="head">
+        <span class="role">Side by side</span>
+        <h2>How it stacks up.</h2>
+        <p>Dolphin and GNOME Files are great at browsing. Krusader and Double Commander are the classic two-pane managers. Directory Duo takes the two-pane idea, stacks it, and builds it for a handheld.</p>
+      </div>
+      <div class="grid-scroll" tabindex="0" role="region" aria-label="Feature comparison, scrolls sideways on small screens">
+        <table class="cmp">
+          <thead><tr><th scope="col"><span class="sr">Feature</span></th><th scope="col" class="us">Directory Duo</th><th scope="col">Dolphin</th><th scope="col">GNOME Files</th><th scope="col">Krusader</th><th scope="col">Double Commander</th></tr></thead>
+          <tbody>
+<tr><th scope="row">Two folders on screen</th><td class="us y"><b>Yes</b><small>Always</small></td><td class="p"><b>Split view</b><small>F3, off by default</small></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
+<tr><th scope="row">Stacked top and bottom</th><td class="us y"><b>Yes</b><small>One click, per window</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b><small>Setting</small></td><td class="y"><b>Yes</b><small>Setting</small></td></tr>
+<tr><th scope="row">Toolbar between the panes</th><td class="us y"><b>Yes</b><small>Any toolbar, as many as you like</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b><small>Middle toolbar</small></td></tr>
+<tr><th scope="row">Buttons that run your own commands</th><td class="us y"><b>Yes</b><small>Left, right and middle click</small></td><td class="n"><b>No</b><small>Right-click menu only</small></td><td class="n"><b>No</b><small>Scripts menu only</small></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
+<tr><th scope="row">Copy straight to the other pane</th><td class="us y"><b>Yes</b></td><td class="y"><b>Yes</b><small>In split view</small></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
+<tr><th scope="row">Job queues</th><td class="us y"><b>Yes</b><small>Per drive, automatic</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b><small>Queue Manager</small></td><td class="y"><b>Yes</b></td></tr>
+<tr><th scope="row">Folder synchronize</th><td class="us y"><b>Yes</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
+<tr><th scope="row">Archives as folders</th><td class="us y"><b>Yes</b><small>zip, 7z, RAR, tar, ISO</small></td><td class="p"><b>Optional</b><small>Setting</small></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
+<tr><th scope="row">Built-in viewer</th><td class="us y"><b>Yes</b><small>Pictures, music, video, PDF, slideshow</small></td><td class="p"><b>Preview panel</b></td><td class="p"><b>Spacebar preview</b><small>Add-on</small></td><td class="p"><b>Text, hex, images</b></td><td class="p"><b>Text, hex, images</b></td></tr>
+<tr><th scope="row">Instant indexed name search</th><td class="us y"><b>Yes</b><small>Built in</small></td><td class="y"><b>Yes</b><small>Baloo</small></td><td class="y"><b>Yes</b><small>LocalSearch</small></td><td class="n"><b>No</b><small>Crawls the disk</small></td><td class="n"><b>No</b><small>Crawls the disk</small></td></tr>
+<tr><th scope="row">Scripting</th><td class="us y"><b>Yes</b><small>JavaScript: commands and columns</small></td><td class="n"><b>No</b><small>Service menus</small></td><td class="n"><b>No</b><small>Shell scripts</small></td><td class="p"><b>User actions</b><small>Shell</small></td><td class="y"><b>Yes</b><small>Lua</small></td></tr>
+<tr><th scope="row">Made for the Steam Deck</th><td class="us y"><b>Yes</b><small>1280 x 800, touch, Flatpak</small></td><td class="p"><b>Preinstalled</b><small>Desktop-sized</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="cmp-note">Checked October 2026 against each project's current release on Linux. "Setting" means the option exists but is not one click away.</p>
     </div>
   </section>
 
