@@ -439,6 +439,8 @@ footer .brand { font-size: 1rem; }
 <tr><th scope="row">Edit music and photo tags</th><td class="us y"><b>Yes</b><small>Many files at once, with undo</small></td><td class="p"><b>Rating, tags, comment</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td></tr>
 <tr><th scope="row">Add to Steam</th><td class="us y"><b>Yes</b><small>Right-click, Proton for Windows programs</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td></tr>
 <tr><th scope="row">Zoom text and thumbnails together</th><td class="us y"><b>Yes</b><small>Per tab: pinch, Shift + scroll or keys</small></td><td class="p"><b>Icons only</b><small>Text size in settings</small></td><td class="p"><b>Icons only</b></td><td class="n"><b>No</b><small>Sizes in settings</small></td><td class="p"><b>Text only</b><small>Ctrl + wheel; thumbnail size in settings</small></td></tr>
+<tr><th scope="row">Thumbnail size slider</th><td class="us y"><b>Yes</b><small>Live, 32 to 512 px, per tab</small></td><td class="y"><b>Yes</b><small>Zoom slider</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b><small>Size in settings</small></td></tr>
+<tr><th scope="row">Change how thumbnails look</th><td class="us y"><b>Yes</b><small>Frames, crop, labels, stars, film edges</small></td><td class="n"><b>No</b><small>Size only</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="p"><b>Size</b><small>In settings</small></td></tr>
 <tr><th scope="row">Built-in viewer</th><td class="us y"><b>Yes</b><small>Pictures, music, video, PDF, slideshow</small></td><td class="p"><b>Preview panel</b></td><td class="p"><b>Spacebar preview</b><small>Add-on</small></td><td class="p"><b>Text, hex, images</b></td><td class="p"><b>Text, hex, images</b></td></tr>
 <tr><th scope="row">Instant indexed name search</th><td class="us y"><b>Yes</b><small>Built in</small></td><td class="y"><b>Yes</b><small>Baloo</small></td><td class="y"><b>Yes</b><small>LocalSearch</small></td><td class="n"><b>No</b><small>Crawls the disk</small></td><td class="n"><b>No</b><small>Crawls the disk</small></td></tr>
 <tr><th scope="row">Scripting</th><td class="us y"><b>Yes</b><small>JavaScript: commands and columns</small></td><td class="n"><b>No</b><small>Service menus</small></td><td class="n"><b>No</b><small>Shell scripts</small></td><td class="p"><b>User actions</b><small>Shell</small></td><td class="y"><b>Yes</b><small>Lua</small></td></tr>
@@ -492,6 +494,7 @@ footer .brand { font-size: 1rem; }
         <div class="feat"><span class="k">Jobs</span><h3>Copies you can trust</h3><p>Every copy runs in its own window with pause, queues per drive, Retry / Skip when a card is pulled, and undo. A notice tells you when a long one is done.</p></div>
         <div class="feat"><span class="k">Archives</span><h3>Zips as folders</h3><p>Open zip, 7z, RAR and tar as if they were folders, extract with one click, or pack the selection. Password-protected zips too.</p></div>
         <div class="feat"><span class="k">sftp://</span><h3>Servers and shares</h3><p>Your NAS over SFTP, SMB, FTP or WebDAV, saved by name, with copies that resume where they left off after the network drops.</p></div>
+        <div class="feat"><span class="k">Thumbnails</span><h3>Thumbnails of everything</h3><p>Drag the slider and they resize as you watch. Video frames with film edges, PDF pages, album art, folders showing the pictures inside. Frame them as photo prints or 35mm slides, with stars, sizes and dates.</p></div>
         <div class="feat"><span class="k">Columns</span><h3>Tags, music, photos</h3><p>Artist and album from music tags, camera and date taken from photos, as columns. Edit them in the Metadata pane, a whole album at once, with undo. Color labels, star ratings and tags that Dolphin sees too.</p></div>
         <div class="feat"><span class="k">Tools</span><h3>The usual suspects, built in</h3><p>Synchronize, Find Duplicates, Advanced Rename with undo, checksums, file splitting for FAT32 cards and image conversion.</p></div>
         <div class="feat"><span class="k">.js</span><h3>Don't like it? Change it.</h3><p>Your own keys, right-click commands per file type, tab groups, saved filters, status bar layouts and JavaScript scripts that add commands and columns.</p></div>
@@ -574,8 +577,12 @@ footer .brand { font-size: 1rem; }
           <figcaption><b>Index Search.</b> Every file with "galaga" in its name, before you finish typing.</figcaption>
         </figure>
         <figure>
-          <div class="shot"><img src="img/light-thumbnails.webp" width="1280" height="800" loading="lazy" alt="Screenshots as thumbnails in the light theme with the viewer pane on the right."></div>
-          <figcaption><b>Thumbnails and the viewer pane.</b> Screenshots show themselves; F3 previews whatever is in focus.</figcaption>
+          <div class="shot"><img src="img/thumbnails.webp" width="1280" height="800" loading="lazy" alt="Thumbnails of a downloads folder: an album cover inside its folder, rated pictures with stars, a PDF's first page, a video frame with film edges, and below, picture folders showing the pictures inside."></div>
+          <figcaption><b>Thumbnails of everything.</b> PDF pages, video frames, album art, and folders that show what is inside. The slider sits in the corner.</figcaption>
+        </figure>
+        <figure>
+          <div class="shot"><img src="img/thumbnails-prints.webp" width="1280" height="800" loading="lazy" alt="Screenshots as thumbnails framed like photo prints, each with its date taken under the name."></div>
+          <figcaption><b>Your thumbnails, your way.</b> Photo prints with dates here. Or 35mm slides, borders, shadows or nothing at all.</figcaption>
         </figure>
         <figure>
           <div class="shot"><img src="img/workbench-sids.webp" width="1280" height="800" loading="lazy" alt="C64 SID tunes grouped by composer in the Workbench theme."></div>
