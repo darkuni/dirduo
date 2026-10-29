@@ -339,7 +339,7 @@ footer .brand { font-size: 1rem; }
     <div class="wrap hero-grid">
       <div class="eyebrow"><span class="role src">Source</span><span class="eyebrow-x">+</span><span class="role dst">Dest</span><span class="eyebrow-t">Not a file browser. A file manager. SteamOS first.</span></div>
       <h1>Two folders. <span class="s">Here</span> to <span class="d">there</span>, in one click.</h1>
-      <p class="lede">Every other file manager shows you a folder. Directory Duo always shows you two, a source and a destination, stacked or side by side, with your own toolbars running between them. Copy, move, extract, compare and sync go straight from one to the other.</p>
+      <p class="lede">Other file managers can split the window in two. Directory Duo is built around the pair: a source and a destination, stacked or side by side, with your own toolbars running between them. Copy, move, extract, compare and sync go straight from one to the other, and the destination stays put while you browse.</p>
       <div class="cta">
         <a class="btn primary" href="#get">Get Directory Duo</a>
         <a class="btn" href="#screens">See it in action</a>
@@ -422,6 +422,7 @@ footer .brand { font-size: 1rem; }
 <tr><th scope="row">Copy straight to the other pane</th><td class="us y"><b>Yes</b></td><td class="y"><b>Yes</b><small>In split view</small></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
 <tr><th scope="row">Job queues</th><td class="us y"><b>Yes</b><small>Per drive, automatic</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b><small>Queue Manager</small></td><td class="y"><b>Yes</b></td></tr>
 <tr><th scope="row">Folder synchronize</th><td class="us y"><b>Yes</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
+<tr><th scope="row">Select by comparing the panes</th><td class="us y"><b>Yes</b><small>Newer, missing, different</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b><small>Compare directories</small></td><td class="y"><b>Yes</b><small>Compare directories</small></td></tr>
 <tr><th scope="row">Archives as folders</th><td class="us y"><b>Yes</b><small>zip, 7z, RAR, tar, ISO</small></td><td class="p"><b>Optional</b><small>Setting</small></td><td class="n"><b>No</b></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
 <tr class="grp"><th scope="rowgroup" colspan="6">Make it yours</th></tr>
 <tr><th scope="row">Buttons that run your own commands</th><td class="us y"><b>Yes</b><small>Left, right and middle click</small></td><td class="n"><b>No</b><small>Right-click menu only</small></td><td class="n"><b>No</b><small>Scripts menu only</small></td><td class="y"><b>Yes</b></td><td class="y"><b>Yes</b></td></tr>
@@ -432,6 +433,8 @@ footer .brand { font-size: 1rem; }
 <tr><th scope="row">Status bar you lay out</th><td class="us y"><b>Yes</b><small>Field codes</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td></tr>
 <tr><th scope="row">Save the whole window as a layout</th><td class="us y"><b>Yes</b><small>Recall in one click</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="p"><b>Panel profiles</b></td><td class="n"><b>No</b></td></tr>
 <tr class="grp"><th scope="rowgroup" colspan="6">Everything else</th></tr>
+<tr><th scope="row">Edit music and photo tags</th><td class="us y"><b>Yes</b><small>Many files at once, with undo</small></td><td class="p"><b>Rating, tags, comment</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td></tr>
+<tr><th scope="row">Add to Steam</th><td class="us y"><b>Yes</b><small>Right-click, Proton for Windows programs</small></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td><td class="n"><b>No</b></td></tr>
 <tr><th scope="row">Built-in viewer</th><td class="us y"><b>Yes</b><small>Pictures, music, video, PDF, slideshow</small></td><td class="p"><b>Preview panel</b></td><td class="p"><b>Spacebar preview</b><small>Add-on</small></td><td class="p"><b>Text, hex, images</b></td><td class="p"><b>Text, hex, images</b></td></tr>
 <tr><th scope="row">Instant indexed name search</th><td class="us y"><b>Yes</b><small>Built in</small></td><td class="y"><b>Yes</b><small>Baloo</small></td><td class="y"><b>Yes</b><small>LocalSearch</small></td><td class="n"><b>No</b><small>Crawls the disk</small></td><td class="n"><b>No</b><small>Crawls the disk</small></td></tr>
 <tr><th scope="row">Scripting</th><td class="us y"><b>Yes</b><small>JavaScript: commands and columns</small></td><td class="n"><b>No</b><small>Service menus</small></td><td class="n"><b>No</b><small>Shell scripts</small></td><td class="p"><b>User actions</b><small>Shell</small></td><td class="y"><b>Yes</b><small>Lua</small></td></tr>
@@ -486,7 +489,7 @@ footer .brand { font-size: 1rem; }
         <div class="feat"><span class="k">Jobs</span><h3>Copies you can trust</h3><p>Every copy runs in its own window with pause, queues per drive, Retry / Skip when a card is pulled, and undo. A notice tells you when a long one is done.</p></div>
         <div class="feat"><span class="k">Archives</span><h3>Zips as folders</h3><p>Open zip, 7z, RAR and tar as if they were folders, extract with one click, or pack the selection. Password-protected zips too.</p></div>
         <div class="feat"><span class="k">sftp://</span><h3>Servers and shares</h3><p>Your NAS over SFTP, SMB, FTP or WebDAV, saved by name, with copies that resume where they left off after the network drops.</p></div>
-        <div class="feat"><span class="k">Columns</span><h3>Tags, music, photos</h3><p>Artist and album from music tags, camera and date taken from photos, color labels, star ratings and tags that Dolphin sees too.</p></div>
+        <div class="feat"><span class="k">Columns</span><h3>Tags, music, photos</h3><p>Artist and album from music tags, camera and date taken from photos, as columns. Edit them in the Metadata pane, a whole album at once, with undo. Color labels, star ratings and tags that Dolphin sees too.</p></div>
         <div class="feat"><span class="k">Tools</span><h3>The usual suspects, built in</h3><p>Synchronize, Find Duplicates, Advanced Rename with undo, checksums, file splitting for FAT32 cards and image conversion.</p></div>
         <div class="feat"><span class="k">.js</span><h3>Don't like it? Change it.</h3><p>Your own keys, right-click commands per file type, tab groups, saved filters, status bar layouts and JavaScript scripts that add commands and columns.</p></div>
       </div>
