@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QDateTime>
+#include <QImage>
 #include <QVariantMap>
 #include <QStringList>
 
@@ -93,6 +94,10 @@ bool canWrite(const QString &path);
 // Writes the fields that are set. Music fields to music files, photo fields
 // to pictures (artist goes to both); the rest is left alone.
 bool write(const QString &path, const MediaEdit &edit, QString *error);
+// The picture embedded in a music file (ID3v2 APIC, FLAC and Ogg pictures, MP4
+// covr), front cover first; else cover.jpg, folder.jpg... next to it. Null
+// when there is none. Safe from any thread.
+QImage coverArt(const QString &path);
 // "+1h", "-30m", "+2d", "+90s", "-1:30" (hours:minutes): seconds, or false.
 bool parseShift(const QString &text, qint64 *seconds);
 

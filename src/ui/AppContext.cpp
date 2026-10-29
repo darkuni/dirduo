@@ -1,4 +1,5 @@
 #include "ui/AppContext.h"
+#include "ui/ThumbMakers.h"
 #include "core/FileIndex.h"
 #include "core/Prefs.h"
 #include "core/FileOps.h"
@@ -52,6 +53,7 @@ AppContext::AppContext(QObject *parent)
     , m_progress(std::make_unique<ProgressWindows>(*m_jobs))
 {
     g_instance = this;
+    ThumbMakers::install(); // PDF pages and video frames as thumbnails
     // The theme applies before the first lister opens.
     const QString theme = m_settings->value(QStringLiteral("Appearance/theme"), QStringLiteral("Follow Desktop")).toString();
     if (!Style::instance()->setTheme(theme))

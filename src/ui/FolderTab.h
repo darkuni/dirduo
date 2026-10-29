@@ -120,6 +120,15 @@ public:
     // The lister's zoom, in percent of the normal text and icon size.
     void setZoom(int percent);
     int zoom() const { return m_zoom; }
+    // Thumbnails mode's size (the longest side at 100% zoom, 32-512): the
+    // slider in the list's corner, Ctrl+wheel, Set THUMBNAILSIZE.
+    void setThumbnailSize(int px);
+    int thumbnailSize() const { return m_thumbSize; }
+    // What a thumbnail measures on screen now (size times zoom).
+    int thumbnailPixels() const;
+    class QSlider *thumbnailSlider() const { return m_sizeSlider; }
+    QWidget *thumbnailSizeBar() const { return m_sizeBar; }
+    class ThumbDelegate *thumbDelegate() const { return m_thumbDelegate; }
     // Does the name column fill the room left over (not sized by hand)?
     bool nameColumnFills() const;
     // Size in pixels at this text size and zoom.
@@ -245,4 +254,12 @@ private:
     QListView *m_list;
     RenameDelegate *m_delegate;     // details view
     RenameDelegate *m_listDelegate; // list and icon views
+    class ThumbDelegate *m_thumbDelegate; // thumbnails
+    int m_thumbSize = 128;
+    QWidget *m_sizeBar = nullptr;
+    class QSlider *m_sizeSlider = nullptr;
+    class QLabel *m_sizeLabel = nullptr;
+    void updateThumbGrid();
+    void placeSizeBar();
+    void styleSizeBar();
 };

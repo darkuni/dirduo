@@ -58,6 +58,9 @@ and Wayland session, the SD card and a real server. Roughly 15 minutes.
 - [ ] Sizes button on a big folder (Emulation, for example): sizes and bars fill in without freezing.
 - [ ] Flat button on a folder with subfolders: everything below, grouped by folder.
 - [ ] A folder full of screenshots opens as thumbnails by itself; they fill in within a second or two. A folder of videos Dolphin has shown before has thumbnails too.
+- [ ] Thumbnails: drag the size slider in the corner of the list from small to big; they resize as you drag, and past 256 px they sharpen after a moment. Ctrl+wheel over the list does the same.
+- [ ] Thumbnails: a video shows a frame with film edges, a PDF its first page, an album folder its cover, and ~/Pictures its folders with the pictures inside.
+- [ ] Preferences > Thumbnails: try each frame (border, shadow, photo print, 35mm slide), Fill the square, 1 to 3 name lines, picture size and date under the name, stars and the type icon; each shows as soon as you press Apply.
 
 ## Servers (needs the sandbox: SFTP and FTP are bundled in the Flatpak)
 

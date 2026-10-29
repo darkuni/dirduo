@@ -1,4 +1,5 @@
 #include "ui/PreferencesDialog.h"
+#include "ui/ThumbMakers.h"
 #include <QLocale>
 #include "core/FileIndex.h"
 #include <QDialog>
@@ -158,7 +159,7 @@ QString safeFileName(QString name)
 QStringList PreferencesDialog::pageNames()
 {
     return {QStringLiteral("general"), QStringLiteral("appearance"), QStringLiteral("theme"), QStringLiteral("labels"),
-            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("filetypes"), QStringLiteral("toolbars"), QStringLiteral("statusbar"), QStringLiteral("scripts"), QStringLiteral("viewer"), QStringLiteral("keys"), QStringLiteral("filters"), QStringLiteral("tabgroups"), QStringLiteral("contextmenu"), QStringLiteral("index")};
+            QStringLiteral("aliases"), QStringLiteral("formats"), QStringLiteral("filetypes"), QStringLiteral("toolbars"), QStringLiteral("statusbar"), QStringLiteral("scripts"), QStringLiteral("viewer"), QStringLiteral("thumbnails"), QStringLiteral("keys"), QStringLiteral("filters"), QStringLiteral("tabgroups"), QStringLiteral("contextmenu"), QStringLiteral("index")};
 }
 
 PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, const QString &page)
@@ -215,6 +216,10 @@ PreferencesDialog::PreferencesDialog(AppContext &app, ListerWindow *lister, cons
     addPage(QStringLiteral("viewer"), QStringLiteral("Viewer"), QStringLiteral("view-preview"), buildViewer(),
             {QStringLiteral("picture"), QStringLiteral("image"), QStringLiteral("slideshow"), QStringLiteral("music"), QStringLiteral("video"),
              QStringLiteral("player"), QStringLiteral("show"), QStringLiteral("mark"), QStringLiteral("zoom"), QStringLiteral("wheel")});
+    addPage(QStringLiteral("thumbnails"), QStringLiteral("Thumbnails"), QStringLiteral("view-preview"), buildThumbnails(),
+            {QStringLiteral("thumbnail"), QStringLiteral("preview"), QStringLiteral("picture"), QStringLiteral("video"),
+             QStringLiteral("pdf"), QStringLiteral("album art"), QStringLiteral("cover"), QStringLiteral("frame"), QStringLiteral("slider"),
+             QStringLiteral("size"), QStringLiteral("label")});
     addPage(QStringLiteral("contextmenu"), QStringLiteral("Right-Click Menu"), QStringLiteral("application-menu"), buildContextMenu(),
             {QStringLiteral("context"), QStringLiteral("menu"), QStringLiteral("right-click"), QStringLiteral("file type"),
              QStringLiteral("command"), QStringLiteral("hide")});
@@ -380,6 +385,97 @@ QWidget *PreferencesDialog::buildViewer()
     box(QStringLiteral("markpane"), QStringLiteral("Show the marked pane (Ctrl+M) when a picture is marked"), v.markPane, mb, mark);
     mf->addRow(mb);
     layout->addWidget(mark);
+    layout->addStretch(1);
+    return page;
+}
+
+QWidget *PreferencesDialog::buildThumbnails()
+{
+    auto *page = new QWidget;
+    auto *layout = new QVBoxLayout(page);
+    const Prefs::Values::Thumbs &t = Prefs::instance()->values().thumbs;
+    auto box = [&](const QString &key, const QString &text, bool on, QLayout *into, QWidget *parent) {
+        auto *b = new QCheckBox(text, parent);
+        b->setChecked(on);
+        into->addWidget(b);
+        m_thumbBoxes.insert(key, b);
+        return b;
+    };
+    auto *intro = new QLabel(QStringLiteral("Thumbnails mode (View > Thumbnails). Drag the slider in the corner of the list, or "
+                                            "Ctrl+wheel over it, to change the size as you look. Thumbnails are shared with "
+                                            "Dolphin and other programs through ~/.cache/thumbnails."),
+                             page);
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+
+    auto *look = new QGroupBox(QStringLiteral("Size and look"), page);
+    auto *lf = new QFormLayout(look);
+    m_thumbSizeSpin = new QSpinBox(look);
+    m_thumbSizeSpin->setRange(32, 512);
+    m_thumbSizeSpin->setSingleStep(16);
+    m_thumbSizeSpin->setSuffix(QStringLiteral(" px"));
+    m_thumbSizeSpin->setValue(t.size);
+    lf->addRow(QStringLiteral("New tabs start at:"), m_thumbSizeSpin);
+    m_thumbResize = new QComboBox(look);
+    m_thumbResize->addItems({QStringLiteral("Fit inside the square (whole picture)"), QStringLiteral("Fill the square (cropped)")});
+    m_thumbResize->setCurrentIndex(t.resize);
+    lf->addRow(QStringLiteral("Pictures:"), m_thumbResize);
+    m_thumbFrame = new QComboBox(look);
+    m_thumbFrame->addItems({QStringLiteral("None"), QStringLiteral("Thin border"), QStringLiteral("Soft shadow"),
+                            QStringLiteral("Photo print"), QStringLiteral("35mm slide")});
+    m_thumbFrame->setCurrentIndex(t.frame);
+    lf->addRow(QStringLiteral("Frame:"), m_thumbFrame);
+    m_thumbSpacing = new QSpinBox(look);
+    m_thumbSpacing->setRange(0, 64);
+    m_thumbSpacing->setSuffix(QStringLiteral(" px"));
+    m_thumbSpacing->setValue(t.spacing);
+    lf->addRow(QStringLiteral("Space between them:"), m_thumbSpacing);
+    auto *lb = new QVBoxLayout;
+    box(QStringLiteral("spread"), QStringLiteral("Share the room left over between the columns"), t.spread, lb, look);
+    box(QStringLiteral("slider"), QStringLiteral("Show the size slider in the corner of the list"), t.slider, lb, look);
+    lf->addRow(lb);
+    layout->addWidget(look);
+
+    auto *label = new QGroupBox(QStringLiteral("Label"), page);
+    auto *labf = new QFormLayout(label);
+    m_thumbLines = new QSpinBox(label);
+    m_thumbLines->setRange(0, 3);
+    m_thumbLines->setSpecialValueText(QStringLiteral("No name"));
+    m_thumbLines->setValue(t.labelLines);
+    labf->addRow(QStringLiteral("Lines for the name:"), m_thumbLines);
+    auto *lab = new QVBoxLayout;
+    box(QStringLiteral("details"), QStringLiteral("Picture size and file size under the name"), t.labelDetails, lab, label);
+    box(QStringLiteral("date"), QStringLiteral("Date taken (photos) or modified"), t.labelDate, lab, label);
+    labf->addRow(lab);
+    layout->addWidget(label);
+
+    auto *over = new QGroupBox(QStringLiteral("On the thumbnail"), page);
+    auto *ol = new QVBoxLayout(over);
+    box(QStringLiteral("sprockets"), QStringLiteral("Film edges on videos"), t.sprockets, ol, over);
+    box(QStringLiteral("stars"), QStringLiteral("The rating, as stars"), t.stars, ol, over);
+    box(QStringLiteral("typeicon"), QStringLiteral("The file type's icon in the corner"), t.typeIcon, ol, over);
+    box(QStringLiteral("bars"), QStringLiteral("A bar for each picture's size, next to the biggest in the folder"), t.dimensionBars, ol, over);
+    layout->addWidget(over);
+
+    auto *what = new QGroupBox(QStringLiteral("What gets a thumbnail"), page);
+    auto *wl = new QVBoxLayout(what);
+    QCheckBox *video = box(QStringLiteral("video"), QStringLiteral("Videos: a frame from a tenth of the way in"), t.video, wl, what);
+    if (!ThumbMakers::canDoVideo()) {
+        video->setEnabled(false);
+        video->setToolTip(QStringLiteral("This build has no Qt Multimedia; videos show what other programs have cached."));
+    }
+    QCheckBox *docs = box(QStringLiteral("documents"), QStringLiteral("PDFs: the first page"), t.documents, wl, what);
+    if (!ThumbMakers::canDoDocuments())
+        docs->setEnabled(false);
+    box(QStringLiteral("covers"), QStringLiteral("Music: the album art (embedded, or cover.jpg next to it)"), t.covers, wl, what);
+    QCheckBox *folders = box(QStringLiteral("folders"), QStringLiteral("Folders: the pictures inside"), t.folders, wl, what);
+    auto *nl = new QHBoxLayout;
+    nl->setContentsMargins(22, 0, 0, 0);
+    QCheckBox *newest = box(QStringLiteral("newest"), QStringLiteral("The newest pictures (else the first by name)"), t.folderNewest, nl, what);
+    wl->addLayout(nl);
+    newest->setEnabled(t.folders);
+    connect(folders, &QCheckBox::toggled, newest, &QWidget::setEnabled);
+    layout->addWidget(what);
     layout->addStretch(1);
     return page;
 }
@@ -1752,6 +1848,26 @@ bool PreferencesDialog::apply(QString *error)
     vw.wheelSteps = m_viewerWheel->currentIndex() == 0;
     vw.slideSeconds = m_slideSeconds->value();
     vw.markCollection = m_markName->text().trimmed().isEmpty() ? Prefs::Values::Viewer().markCollection : m_markName->text().trimmed();
+    // Thumbnails.
+    Prefs::Values::Thumbs &th = v.thumbs;
+    th.size = m_thumbSizeSpin->value();
+    th.resize = m_thumbResize->currentIndex();
+    th.frame = m_thumbFrame->currentIndex();
+    th.spacing = m_thumbSpacing->value();
+    th.labelLines = m_thumbLines->value();
+    th.spread = m_thumbBoxes.value(QStringLiteral("spread"))->isChecked();
+    th.slider = m_thumbBoxes.value(QStringLiteral("slider"))->isChecked();
+    th.labelDetails = m_thumbBoxes.value(QStringLiteral("details"))->isChecked();
+    th.labelDate = m_thumbBoxes.value(QStringLiteral("date"))->isChecked();
+    th.sprockets = m_thumbBoxes.value(QStringLiteral("sprockets"))->isChecked();
+    th.stars = m_thumbBoxes.value(QStringLiteral("stars"))->isChecked();
+    th.typeIcon = m_thumbBoxes.value(QStringLiteral("typeicon"))->isChecked();
+    th.dimensionBars = m_thumbBoxes.value(QStringLiteral("bars"))->isChecked();
+    th.video = m_thumbBoxes.value(QStringLiteral("video"))->isChecked();
+    th.documents = m_thumbBoxes.value(QStringLiteral("documents"))->isChecked();
+    th.covers = m_thumbBoxes.value(QStringLiteral("covers"))->isChecked();
+    th.folders = m_thumbBoxes.value(QStringLiteral("folders"))->isChecked();
+    th.folderNewest = m_thumbBoxes.value(QStringLiteral("newest"))->isChecked();
     Prefs::instance()->setValues(v);
     if (!m_keysPage->apply(error))
         return false;

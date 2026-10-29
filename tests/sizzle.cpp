@@ -41,6 +41,10 @@
 #include <QLineEdit>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPdfWriter>
+#include <QProcess>
+#include <QStandardPaths>
+#include "core/FileTags.h"
 #include <QRandomGenerator>
 #include <QTemporaryDir>
 #include "ui/KeysPage.h"
@@ -387,7 +391,64 @@ void buildDeck(const QString &r, const QString &media)
     sparse(r + QStringLiteral("/Downloads/kickstart-roms.zip"), 1200000, 1);
     sparse(r + QStringLiteral("/Downloads/SteamOS-recovery.img.bz2"), 2700LL * 1024 * 1024, 4);
     sparse(r + QStringLiteral("/Downloads/Deluxe Galaga 2026 build.zip"), 18 * 1024 * 1024, 9);
-    sparse(r + QStringLiteral("/Downloads/C64 Ultimate manual.pdf"), 6 * 1024 * 1024, 20);
+    {
+        // A real PDF, so its first page shows as the thumbnail.
+        QPdfWriter pdf(r + QStringLiteral("/Downloads/C64 Ultimate manual.pdf"));
+        pdf.setPageSize(QPageSize(QPageSize::Letter));
+        QPainter p(&pdf);
+        const QRect page(0, 0, pdf.width(), pdf.height());
+        p.fillRect(page, QColor(0x35, 0x28, 0x79));
+        p.fillRect(page.adjusted(page.width() / 12, page.height() / 14, -page.width() / 12, -page.height() / 2), QColor(0x6c, 0x5e, 0xb5));
+        QFont f(QStringLiteral("DejaVu Sans"));
+        f.setPixelSize(page.height() / 14);
+        f.setBold(true);
+        p.setFont(f);
+        p.setPen(QColor(0x9a, 0x8c, 0xff));
+        p.drawText(page.adjusted(0, page.height() / 9, 0, 0), Qt::AlignHCenter | Qt::AlignTop, QStringLiteral("COMMODORE 64\nULTIMATE"));
+        f.setPixelSize(page.height() / 28);
+        f.setBold(false);
+        p.setFont(f);
+        p.setPen(Qt::white);
+        p.drawText(page.adjusted(0, page.height() * 3 / 5, 0, 0), Qt::AlignHCenter | Qt::AlignTop, QStringLiteral("User's Manual"));
+    }
+    synthwave(QSize(1600, 1000), 300).save(r + QStringLiteral("/Downloads/Deck wallpaper.png"));
+    platformer(QSize(1200, 900), 4).save(r + QStringLiteral("/Downloads/box art scan.jpg"), nullptr, 90);
+    shooter(QSize(800, 800), 9).save(r + QStringLiteral("/Downloads/title screen.png"));
+    {
+        // Album art next to the music.
+        QImage cover = synthwave(QSize(600, 600), 340);
+        QPainter p(&cover);
+        QFont f(QStringLiteral("DejaVu Sans"));
+        f.setPixelSize(64);
+        f.setBold(true);
+        p.setFont(f);
+        p.setPen(Qt::white);
+        p.drawText(cover.rect().adjusted(0, 40, 0, 0), Qt::AlignHCenter | Qt::AlignTop, QStringLiteral("BAD\nREPUTATION"));
+        p.end();
+        cover.save(r + QStringLiteral("/Music/Joan Jett/Bad Reputation/cover.jpg"), nullptr, 90);
+        QDir().mkpath(r + QStringLiteral("/Downloads/Bad Reputation"));
+        cover.save(r + QStringLiteral("/Downloads/Bad Reputation/cover.jpg"), nullptr, 90);
+    }
+    for (const QString &song : {QStringLiteral("01 - Bad Reputation.flac"), QStringLiteral("02 - Cherry Bomb.flac")})
+        sparse(r + QStringLiteral("/Downloads/Bad Reputation/") + song, 28 * 1024 * 1024, 1);
+    // Short real clips (when ffmpeg is here), for the video frames.
+    if (!QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty()) {
+        const QString tmp = r + QStringLiteral("/.cache/clip-src");
+        QDir().mkpath(tmp);
+        const struct { const char *name; int kind; } clips[] = {
+            {"Forgotten Formats ep 13 b-roll.mp4", 0}, {"Deck docking test.mp4", 1}, {"Galaga attract mode.mp4", 2}};
+        for (const auto &c : clips) {
+            const QString src = tmp + QStringLiteral("/%1.png").arg(c.kind);
+            (c.kind == 0 ? road(QSize(1280, 720), 2) : c.kind == 1 ? synthwave(QSize(1280, 720), 220) : shooter(QSize(1280, 720), 3)).save(src);
+            QProcess::execute(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-loglevel"), QStringLiteral("error"),
+                                                         QStringLiteral("-loop"), QStringLiteral("1"), QStringLiteral("-i"), src,
+                                                         QStringLiteral("-t"), QStringLiteral("3"), QStringLiteral("-r"), QStringLiteral("10"),
+                                                         QStringLiteral("-c:v"), QStringLiteral("mpeg4"), QStringLiteral("-q:v"), QStringLiteral("4"),
+                                                         QStringLiteral("-pix_fmt"), QStringLiteral("yuv420p"),
+                                                         r + QStringLiteral("/Downloads/") + QLatin1String(c.name)});
+        }
+        QDir(tmp).removeRecursively();
+    }
     sparse(r + QStringLiteral("/Downloads/old-backup.tar.gz"), 610 * 1024 * 1024, 200);
     for (const char *f : {"src/main.cpp", "src/Game.cpp", "src/Game.h", "src/Sprites.cpp", "src/Audio.cpp", "CMakeLists.txt",
                           "assets/ships.png", "assets/stage1.png", "README.md", "build.sh"})
@@ -983,6 +1044,54 @@ int main(int argc, char *argv[])
                                      QStringLiteral("Go /run/media/deck/SD/roms"), true});
         prefs.show();
         shot(&prefs, QStringLiteral("32-dark-keys"), 600);
+    }
+
+    {
+        // 33. Thumbnails of everything: a PDF's first page, video frames with
+        // film edges, album art, folders showing what is inside, ratings;
+        // the size slider in the corner.
+        FileTagData five;
+        five.rating = 5;
+        FileTags::write(r + QStringLiteral("/Downloads/Deck wallpaper.png"), five);
+        FileTagData four;
+        four.rating = 4;
+        FileTags::write(r + QStringLiteral("/Downloads/box art scan.jpg"), four);
+        Prefs::Values v = Prefs::instance()->values();
+        const Prefs::Values before = v;
+        v.thumbs.labelDetails = true;
+        v.thumbs.typeIcon = true;
+        v.thumbs.frame = 2;
+        Prefs::instance()->setValues(v);
+        run(QStringLiteral("Set THEME=\"DirDuo Dark\"\nSet DUAL=horizontal\nSet TREE=off"));
+        go(r + QStringLiteral("/Downloads"), r + QStringLiteral("/Pictures"));
+        run(QStringLiteral("Set VIEW=thumbnails\nSet THUMBNAILSIZE=144"));
+        source(1);
+        run(QStringLiteral("Set VIEW=thumbnails\nSet THUMBNAILSIZE=144"));
+        source(0);
+        shot(w, QStringLiteral("33-dark-thumbnails-everything"), 6000);
+
+        // 34. 35mm slides, bigger, in DirDuo Light.
+        v.thumbs.frame = 4;
+        v.thumbs.labelDetails = false;
+        v.thumbs.typeIcon = false;
+        v.thumbs.resize = 1;
+        Prefs::instance()->setValues(v);
+        run(QStringLiteral("Set THEME=\"DirDuo Light\"\nSet DUAL=off"));
+        go(r + QStringLiteral("/Pictures/Wallpapers"), QString());
+        run(QStringLiteral("Set VIEW=thumbnails\nSet THUMBNAILSIZE=220"));
+        shot(w, QStringLiteral("34-light-thumbnails-slides"), 2500);
+
+        // 35. Photo prints.
+        v.thumbs.frame = 3;
+        v.thumbs.resize = 0;
+        v.thumbs.labelDate = true;
+        Prefs::instance()->setValues(v);
+        run(QStringLiteral("Set THEME=\"DirDuo Dark\""));
+        go(r + QStringLiteral("/Pictures/Screenshots"), QString());
+        run(QStringLiteral("Set VIEW=thumbnails\nSet THUMBNAILSIZE=180"));
+        shot(w, QStringLiteral("35-dark-thumbnails-prints"), 2500);
+        Prefs::instance()->setValues(before);
+        run(QStringLiteral("Set DUAL=vertical\nSet VIEW=details"));
     }
 
     for (const QString &f : std::as_const(g_made))

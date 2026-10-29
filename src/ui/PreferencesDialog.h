@@ -71,6 +71,13 @@ public:
 
     // General and file types, for tests.
     QCheckBox *generalBox(const QString &key) const;
+    // Thumbnails page (tests): spread, slider, details, date, sprockets, stars,
+    // typeicon, bars, video, documents, covers, folders, newest.
+    QCheckBox *thumbBox(const QString &key) const { return m_thumbBoxes.value(key); }
+    class QComboBox *thumbFrame() const { return m_thumbFrame; }
+    class QComboBox *thumbResize() const { return m_thumbResize; }
+    class QSpinBox *thumbSize() const { return m_thumbSizeSpin; }
+    class QSpinBox *thumbLines() const { return m_thumbLines; }
     QCheckBox *viewerBox(const QString &key) const; // pictures, media, siblings, reuse, wrap, autoplay, playnext... // counts, selection, free, ask
     QPlainTextEdit *statusDefinitionEdit() const { return m_statusDef; }
     QTreeWidget *scriptList() const { return m_scriptList; }
@@ -107,6 +114,13 @@ private:
     QWidget *buildStatusBar();
     QWidget *buildScripts();
     QWidget *buildViewer();
+    QWidget *buildThumbnails();
+    QHash<QString, QCheckBox *> m_thumbBoxes;
+    class QComboBox *m_thumbFrame = nullptr;
+    class QComboBox *m_thumbResize = nullptr;
+    class QSpinBox *m_thumbSizeSpin = nullptr;
+    class QSpinBox *m_thumbSpacing = nullptr;
+    class QSpinBox *m_thumbLines = nullptr;
     class KeysPage *m_keysPage = nullptr;
     QWidget *buildFilters();
     QWidget *buildContextMenu();

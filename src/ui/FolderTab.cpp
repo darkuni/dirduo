@@ -19,6 +19,7 @@
 #include "ui/FileSortProxy.h"
 #include "ui/GroupTreeView.h"
 #include "ui/RenameDelegate.h"
+#include "ui/ThumbDelegate.h"
 #include "ui/Style.h"
 
 #include <QCheckBox>
@@ -37,6 +38,8 @@
 #include <QKeyEvent>
 #include <QApplication>
 #include <QListView>
+#include <QSlider>
+#include <QFrame>
 #include <QToolTip>
 #include <QLabel>
 #include <QNativeGestureEvent>
@@ -60,7 +63,9 @@ FolderTab::FolderTab(QWidget *parent)
     , m_list(new QListView(this))
     , m_delegate(new RenameDelegate(this))
     , m_listDelegate(new RenameDelegate(this))
+    , m_thumbDelegate(new ThumbDelegate(this))
 {
+    m_thumbSize = Prefs::instance()->values().thumbs.size;
     m_proxy->setSourceModel(m_model);
     m_selection = new QItemSelectionModel(m_proxy, this);
 
@@ -257,6 +262,45 @@ FolderTab::FolderTab(QWidget *parent)
     connect(m_model, &FileListModel::dropRequested, this, &FolderTab::dropRequested);
     connect(m_delegate, &RenameDelegate::travelRequested, this, &FolderTab::travelRename);
     connect(m_listDelegate, &RenameDelegate::travelRequested, this, &FolderTab::travelRename);
+    connect(m_thumbDelegate, &RenameDelegate::travelRequested, this, &FolderTab::travelRename);
+
+    // Thumbnails mode's size slider, in the corner of the list (Opus has it
+    // on its Images toolbar). Dragging resizes them live.
+    m_sizeBar = new QFrame(m_list);
+    m_sizeBar->setObjectName(QStringLiteral("thumbSizeBar"));
+    auto *sb = new QHBoxLayout(m_sizeBar);
+    sb->setContentsMargins(8, 3, 8, 3);
+    sb->setSpacing(6);
+    auto *small = new QLabel(m_sizeBar);
+    small->setPixmap(QIcon::fromTheme(QStringLiteral("image-x-generic")).pixmap(12, 12));
+    m_sizeSlider = new QSlider(Qt::Horizontal, m_sizeBar);
+    m_sizeSlider->setObjectName(QStringLiteral("thumbSizeSlider"));
+    m_sizeSlider->setRange(32, 512);
+    m_sizeSlider->setSingleStep(8);
+    m_sizeSlider->setPageStep(32);
+    m_sizeSlider->setFixedWidth(150);
+    m_sizeSlider->setValue(m_thumbSize);
+    m_sizeSlider->setFocusPolicy(Qt::NoFocus);
+    m_sizeSlider->setToolTip(QStringLiteral("Thumbnail size (Ctrl+wheel over the list)"));
+    auto *big = new QLabel(m_sizeBar);
+    big->setPixmap(QIcon::fromTheme(QStringLiteral("image-x-generic")).pixmap(18, 18));
+    m_sizeLabel = new QLabel(m_sizeBar);
+    m_sizeLabel->setMinimumWidth(QFontMetrics(m_sizeLabel->font()).horizontalAdvance(QStringLiteral("512 px")));
+    m_sizeLabel->setText(QStringLiteral("%1 px").arg(m_thumbSize));
+    sb->addWidget(small);
+    sb->addWidget(m_sizeSlider);
+    sb->addWidget(big);
+    sb->addWidget(m_sizeLabel);
+    m_sizeBar->hide();
+    styleSizeBar();
+    connect(m_sizeSlider, &QSlider::valueChanged, this, [this](int v) { setThumbnailSize(v); });
+    connect(Style::instance(), &Style::changed, this, &FolderTab::styleSizeBar);
+    // Label lines, spacing, frames: the cells change size.
+    connect(Prefs::instance(), &Prefs::changed, this, [this]() {
+        if (m_mode == ViewMode::Thumbnails)
+            setViewMode(m_mode);
+        m_list->viewport()->update();
+    });
     connect(m_selection, &QItemSelectionModel::selectionChanged, this, [this]() {
         Q_EMIT selectionChanged();
         Q_EMIT statusChanged();
@@ -270,6 +314,74 @@ FolderTab::FolderTab(QWidget *parent)
     setViewMode(ViewMode::Details);
     applySize();
     connect(Style::instance(), &Style::changed, this, &FolderTab::applySize);
+}
+
+int FolderTab::thumbnailPixels() const
+{
+    return zoomed(m_thumbSize);
+}
+
+void FolderTab::setThumbnailSize(int px)
+{
+    px = qBound(32, px, 512);
+    if (px == m_thumbSize)
+        return;
+    // Keep the first thumbnail in sight where it is while they grow.
+    const QModelIndex anchor = m_mode == ViewMode::Thumbnails ? m_list->indexAt(QPoint(4, 4)) : QModelIndex();
+    m_thumbSize = px;
+    {
+        const QSignalBlocker block(m_sizeSlider);
+        m_sizeSlider->setValue(px);
+    }
+    m_sizeLabel->setText(QStringLiteral("%1 px").arg(px));
+    if (m_mode != ViewMode::Thumbnails)
+        return;
+    setViewMode(m_mode);
+    if (anchor.isValid())
+        m_list->scrollTo(anchor, QAbstractItemView::PositionAtTop);
+    Q_EMIT viewStateChanged();
+}
+
+void FolderTab::updateThumbGrid()
+{
+    QSize cell = ThumbDelegate::cellSize(thumbnailPixels(), m_list->font());
+    // Share what is left over between the columns (Opus's "spread excess
+    // space"), so a row fills the width instead of leaving a gap on the right.
+    const int width = m_list->viewport()->width();
+    if (Prefs::instance()->values().thumbs.spread && width > cell.width()) {
+        const int columns = qMax(1, width / cell.width());
+        cell.setWidth(width / columns);
+    }
+    if (m_list->gridSize() != cell)
+        m_list->setGridSize(cell);
+}
+
+void FolderTab::placeSizeBar()
+{
+    m_sizeBar->adjustSize();
+    const QRect vp = m_list->viewport()->geometry();
+    m_sizeBar->move(vp.right() - m_sizeBar->width() - 6, vp.bottom() - m_sizeBar->height() - 6);
+    m_sizeBar->raise();
+}
+
+void FolderTab::styleSizeBar()
+{
+    const Theme &t = Style::instance()->theme();
+    QColor bg = t.window;
+    bg.setAlpha(232);
+    QColor edge = t.dimText;
+    edge.setAlpha(110);
+    m_sizeBar->setStyleSheet(QStringLiteral("QFrame#thumbSizeBar { background: rgba(%1,%2,%3,%4); border: 1px solid rgba(%5,%6,%7,%8);"
+                                            " border-radius: 7px; } QLabel { color: %9; background: transparent; border: 0; }")
+                                 .arg(bg.red())
+                                 .arg(bg.green())
+                                 .arg(bg.blue())
+                                 .arg(bg.alpha())
+                                 .arg(edge.red())
+                                 .arg(edge.green())
+                                 .arg(edge.blue())
+                                 .arg(edge.alpha())
+                                 .arg(t.dimText.name()));
 }
 
 int FolderTab::zoomed(int px) const
@@ -831,19 +943,29 @@ void FolderTab::setViewMode(ViewMode mode)
         m_stack->setCurrentWidget(m_list);
         break;
     case ViewMode::Thumbnails: {
-        const int px = zoomed(128);
+        const int px = thumbnailPixels();
         m_list->setViewMode(QListView::IconMode);
         m_list->setFlow(QListView::LeftToRight);
         m_list->setWrapping(true);
         m_list->setIconSize(QSize(px, px));
-        m_list->setGridSize(QSize(px + zoomed(24), px + m_list->fontMetrics().lineSpacing() * 2 + zoomed(12)));
-        m_list->setSpacing(4);
+        m_list->setSpacing(0);
         m_list->setWordWrap(true);
         m_list->setMovement(QListView::Static);
+        m_thumbDelegate->setPixels(px);
+        m_model->setThumbnailPixels(qRound(px * m_list->devicePixelRatioF()));
+        updateThumbGrid();
         m_stack->setCurrentWidget(m_list);
         break;
     }
     }
+    // Thumbnails draw themselves; the other list modes use the plain delegate.
+    QAbstractItemDelegate *want = mode == ViewMode::Thumbnails ? static_cast<QAbstractItemDelegate *>(m_thumbDelegate)
+                                                              : static_cast<QAbstractItemDelegate *>(m_listDelegate);
+    if (m_list->itemDelegate() != want)
+        m_list->setItemDelegate(want);
+    m_sizeBar->setVisible(mode == ViewMode::Thumbnails && Prefs::instance()->values().thumbs.slider);
+    if (m_sizeBar->isVisible())
+        placeSizeBar();
     // Pictures show as themselves in both icon views.
     m_model->setThumbnails(mode == ViewMode::Icons || mode == ViewMode::Thumbnails);
     updateExpandable();
@@ -865,7 +987,7 @@ bool FolderTab::showHidden() const
 
 bool FolderTab::isRenaming() const
 {
-    return m_delegate->isEditing() || m_listDelegate->isEditing();
+    return m_delegate->isEditing() || m_listDelegate->isEditing() || m_thumbDelegate->isEditing();
 }
 
 bool FolderTab::beginRename()
@@ -1011,6 +1133,23 @@ bool FolderTab::eventFilter(QObject *watched, QEvent *event)
         // Shift+wheel zooms, as in Opus. Some systems turn Shift+wheel into a
         // sideways scroll, so either direction counts.
         auto *we = static_cast<QWheelEvent *>(event);
+        if (isViewport && m_mode == ViewMode::Thumbnails && (we->modifiers() & Qt::ControlModifier)) {
+            // Ctrl+wheel: thumbnail size, as in Opus.
+            const QPoint d = we->angleDelta();
+            m_wheelZoom += d.y() != 0 ? d.y() : d.x();
+            int steps = 0;
+            while (m_wheelZoom >= 120) {
+                ++steps;
+                m_wheelZoom -= 120;
+            }
+            while (m_wheelZoom <= -120) {
+                --steps;
+                m_wheelZoom += 120;
+            }
+            if (steps)
+                setThumbnailSize(m_thumbSize + steps * 16);
+            return true;
+        }
         if (!isViewport || !(we->modifiers() & Qt::ShiftModifier))
             break;
         const QPoint d = we->angleDelta();
@@ -1061,6 +1200,10 @@ bool FolderTab::eventFilter(QObject *watched, QEvent *event)
     case QEvent::Resize:
         if (watched == m_details->viewport())
             fitNameColumn();
+        if (watched == m_list->viewport() && m_mode == ViewMode::Thumbnails)
+            updateThumbGrid();
+        if (watched == m_list && m_sizeBar->isVisible())
+            QTimer::singleShot(0, this, &FolderTab::placeSizeBar);
         break;
     case QEvent::MouseMove: {
         // Hovering a folder measures it; the size fills in when ready.
@@ -1455,6 +1598,7 @@ void FolderTab::setCheckMode(bool on)
 {
     m_delegate->setCheckMode(on, m_selection);
     m_listDelegate->setCheckMode(on, m_selection);
+    m_thumbDelegate->setCheckMode(on, m_selection);
     m_details->doItemsLayout();
     m_list->doItemsLayout();
     m_details->viewport()->update();
@@ -1547,6 +1691,7 @@ FolderFormat FolderTab::currentFormat() const
     f.header = headerState();
     f.groupBy = FileListModel::groupByName(groupBy());
     f.view = viewModeName(m_autoIcons ? m_modeBeforeAuto : m_mode);
+    f.thumbSize = m_thumbSize;
     return f;
 }
 
@@ -1569,6 +1714,8 @@ void FolderTab::applyFormat(const FolderFormat &format)
     FileListModel::GroupBy g;
     if (FileListModel::groupByFromName(format.groupBy, g) && m_lister->flatMode() != DirLister::FlatMode::Grouped)
         setGroupBy(g);
+    if (format.thumbSize > 0)
+        setThumbnailSize(format.thumbSize);
     ViewMode mode;
     if (viewModeFromName(format.view, mode))
         setViewMode(mode);

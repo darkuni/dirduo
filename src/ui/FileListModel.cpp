@@ -7,6 +7,7 @@
 #include "core/Metadata.h"
 #include "core/Checksum.h"
 #include "core/Scripting.h"
+#include "core/Prefs.h"
 #include "core/Thumbnails.h"
 #include "ui/Style.h"
 
@@ -421,6 +422,65 @@ void FileListModel::setThumbnails(bool on)
         Q_EMIT dataChanged(index(0, NameColumn), index(m_items.size() - 1, NameColumn), {Qt::DecorationRole});
 }
 
+void FileListModel::setThumbnailPixels(int px)
+{
+    px = qBound(16, px, 2048);
+    if (px == m_thumbPx)
+        return;
+    const bool bigger = Thumbnails::bucketFor(px) > Thumbnails::bucketFor(m_thumbPx);
+    m_thumbPx = px;
+    if (bigger && m_thumbs && !m_items.isEmpty())
+        Q_EMIT dataChanged(index(0, NameColumn), index(m_items.size() - 1, NameColumn), {ThumbImageRole});
+}
+
+QVariant FileListModel::thumbRole(int row, int role) const
+{
+    const FileItem &it = m_items.at(row);
+    switch (role) {
+    case ThumbKindRole:
+        return it.isDir ? 0 : int(Thumbnails::kindOf(it.name));
+    case TypeIconRole:
+        return iconFor(row);
+    case RatingRole:
+        return it.tags.rating;
+    case LabelDateRole: {
+        MediaInfo info;
+        if (!it.isDir && Metadata::kindFor(it.name) == MediaInfo::Kind::Image && mediaInfo(row, &info) && info.taken.isValid())
+            return info.taken;
+        return it.modified;
+    }
+    default:
+        break;
+    }
+    if (!m_thumbs || !Location::isLocal(it.path) || it.path.startsWith(QLatin1String("coll:")))
+        return {};
+    const Prefs::Values::Thumbs &prefs = Prefs::instance()->values().thumbs;
+    ThumbnailCache::Result r;
+    bool have;
+    if (it.isDir) {
+        if (!prefs.folders)
+            return {};
+        have = ThumbnailCache::instance()->lookupFolder(it.path, it.modified, m_thumbPx, prefs.folderNewest, &r);
+    } else {
+        // Other kinds still show what other programs put in the shared cache.
+        have = ThumbnailCache::instance()->lookup(it.path, it.modified, m_thumbPx, &r);
+    }
+    if (!have && r.image.isNull())
+        return {};
+    if (r.full.isValid())
+        m_maxArea = qMax(m_maxArea, qint64(r.full.width()) * r.full.height());
+    switch (role) {
+    case ThumbImageRole:
+        return r.image.isNull() ? QVariant() : QVariant(r.image);
+    case ThumbFullRole:
+        return r.full;
+    case ThumbSharpRole:
+        return r.sharp;
+    default:
+        return {};
+    }
+}
+
 QVariant FileListModel::thumbnailFor(int row) const
 {
     const FileItem &it = m_items.at(row);
@@ -479,7 +539,7 @@ void FileListModel::onThumbnailReady(const QString &path)
         const QSet<int> rows = std::exchange(m_thumbRows, {});
         for (int r : rows) {
             if (r < m_items.size())
-                Q_EMIT dataChanged(index(r, NameColumn), index(r, NameColumn), {Qt::DecorationRole});
+                Q_EMIT dataChanged(index(r, NameColumn), index(r, NameColumn), {Qt::DecorationRole, ThumbImageRole});
         }
     });
 }
@@ -608,6 +668,7 @@ void FileListModel::setListing(const QString &dir, const FileItemList &items)
     m_items = items;
     m_mimeNames = QVector<QString>(m_items.size());
     m_thumbIcons.clear();
+    m_maxArea = 0;
     m_expanded.clear();
     rebuildIndex();
     endResetModel();
@@ -1051,6 +1112,14 @@ QVariant FileListModel::data(const QModelIndex &index, int role) const
         if (col == NameColumn)
             return it.name;
         break;
+    case ThumbImageRole:
+    case ThumbFullRole:
+    case ThumbSharpRole:
+    case ThumbKindRole:
+    case TypeIconRole:
+    case RatingRole:
+    case LabelDateRole:
+        return thumbRole(index.row(), role);
     case Qt::DecorationRole:
         if (col == NameColumn && m_thumbs) {
             const QVariant thumb = thumbnailFor(index.row());

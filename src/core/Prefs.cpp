@@ -54,6 +54,28 @@ void Prefs::reload()
     w.markPane = s.value(QStringLiteral("markPane"), d.markPane).toBool();
     w.markCollection = s.value(QStringLiteral("markCollection"), d.markCollection).toString();
     w.openMarkedOnClose = s.value(QStringLiteral("openMarkedOnClose"), d.openMarkedOnClose).toBool();
+    s.endGroup();
+    s.beginGroup(QStringLiteral("Thumbnails"));
+    Values::Thumbs &t = v.thumbs;
+    const Values::Thumbs td;
+    t.size = qBound(32, s.value(QStringLiteral("size"), td.size).toInt(), 512);
+    t.resize = qBound(0, s.value(QStringLiteral("resize"), td.resize).toInt(), 1);
+    t.frame = qBound(0, s.value(QStringLiteral("frame"), td.frame).toInt(), 4);
+    t.spacing = qBound(0, s.value(QStringLiteral("spacing"), td.spacing).toInt(), 64);
+    t.spread = s.value(QStringLiteral("spread"), td.spread).toBool();
+    t.slider = s.value(QStringLiteral("slider"), td.slider).toBool();
+    t.labelLines = qBound(0, s.value(QStringLiteral("labelLines"), td.labelLines).toInt(), 3);
+    t.labelDetails = s.value(QStringLiteral("labelDetails"), td.labelDetails).toBool();
+    t.labelDate = s.value(QStringLiteral("labelDate"), td.labelDate).toBool();
+    t.sprockets = s.value(QStringLiteral("sprockets"), td.sprockets).toBool();
+    t.stars = s.value(QStringLiteral("stars"), td.stars).toBool();
+    t.typeIcon = s.value(QStringLiteral("typeIcon"), td.typeIcon).toBool();
+    t.dimensionBars = s.value(QStringLiteral("dimensionBars"), td.dimensionBars).toBool();
+    t.video = s.value(QStringLiteral("video"), td.video).toBool();
+    t.documents = s.value(QStringLiteral("documents"), td.documents).toBool();
+    t.covers = s.value(QStringLiteral("covers"), td.covers).toBool();
+    t.folders = s.value(QStringLiteral("folders"), td.folders).toBool();
+    t.folderNewest = s.value(QStringLiteral("folderNewest"), td.folderNewest).toBool();
     m_values = v;
 }
 
@@ -94,6 +116,27 @@ void Prefs::setValues(const Values &v)
     s.setValue(QStringLiteral("markPane"), w.markPane);
     s.setValue(QStringLiteral("markCollection"), w.markCollection);
     s.setValue(QStringLiteral("openMarkedOnClose"), w.openMarkedOnClose);
+    s.endGroup();
+    s.beginGroup(QStringLiteral("Thumbnails"));
+    const Values::Thumbs &t = v.thumbs;
+    s.setValue(QStringLiteral("size"), t.size);
+    s.setValue(QStringLiteral("resize"), t.resize);
+    s.setValue(QStringLiteral("frame"), t.frame);
+    s.setValue(QStringLiteral("spacing"), t.spacing);
+    s.setValue(QStringLiteral("spread"), t.spread);
+    s.setValue(QStringLiteral("slider"), t.slider);
+    s.setValue(QStringLiteral("labelLines"), t.labelLines);
+    s.setValue(QStringLiteral("labelDetails"), t.labelDetails);
+    s.setValue(QStringLiteral("labelDate"), t.labelDate);
+    s.setValue(QStringLiteral("sprockets"), t.sprockets);
+    s.setValue(QStringLiteral("stars"), t.stars);
+    s.setValue(QStringLiteral("typeIcon"), t.typeIcon);
+    s.setValue(QStringLiteral("dimensionBars"), t.dimensionBars);
+    s.setValue(QStringLiteral("video"), t.video);
+    s.setValue(QStringLiteral("documents"), t.documents);
+    s.setValue(QStringLiteral("covers"), t.covers);
+    s.setValue(QStringLiteral("folders"), t.folders);
+    s.setValue(QStringLiteral("folderNewest"), t.folderNewest);
     Q_EMIT changed();
 }
 

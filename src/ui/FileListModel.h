@@ -76,6 +76,14 @@ public:
         FolderBarRole,   // 0..1 share of the biggest folder (live sizes), -1 for none
         DepthRole,       // int: 0 at the top, 1 inside an expanded folder, ...
         ExpandRole,      // int: -1 cannot expand, 0 collapsed, 1 expanded
+        // Thumbnails mode (ThumbDelegate).
+        ThumbImageRole,  // QImage at the size set with setThumbnailPixels; invalid while loading or none
+        ThumbFullRole,   // QSize: the picture's own size, when known
+        ThumbSharpRole,  // bool: false while a bigger one is being made
+        ThumbKindRole,   // int: Thumbnails::Kind
+        TypeIconRole,    // QIcon: the file type's icon (never the thumbnail)
+        RatingRole,      // int 0-5
+        LabelDateRole,   // QDateTime: date taken for photos (when read), else modified
     };
     enum class GroupBy { None, Type, Name, Size, Modified, Extension, Folder, Label, Rating, Artist, Album, Genre, Year, Camera, Taken };
     static QList<GroupBy> allGroupings();
@@ -126,6 +134,13 @@ public:
     // thumbnail) show as themselves.
     void setThumbnails(bool on);
     bool thumbnails() const { return m_thumbs; }
+    // How big ThumbImageRole's images are shown (device pixels), so the
+    // right size is made.
+    void setThumbnailPixels(int px);
+    int thumbnailPixels() const { return m_thumbPx; }
+    // The biggest picture seen in this folder (width x height), for the
+    // relative dimension bars.
+    qint64 maxPictureArea() const { return m_maxArea; }
 
     // Tags and photo details of a row, if read; starts reading otherwise.
     bool mediaInfo(int row, MediaInfo *out) const;
@@ -187,4 +202,7 @@ private:
     mutable QHash<QString, QIcon> m_thumbIcons; // framed, ready to paint
     QSet<int> m_thumbRows;
     bool m_thumbPending = false;
+    int m_thumbPx = 256;
+    mutable qint64 m_maxArea = 0;
+    QVariant thumbRole(int row, int role) const;
 };

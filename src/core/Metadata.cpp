@@ -3,6 +3,7 @@
 #include "core/FileKind.h"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QImageReader>
@@ -15,7 +16,17 @@
 #include <mutex>
 
 #ifdef DIRDUO_HAVE_TAGLIB
+#include <taglib/attachedpictureframe.h>
 #include <taglib/audioproperties.h>
+#include <taglib/flacfile.h>
+#include <taglib/flacpicture.h>
+#include <taglib/id3v2tag.h>
+#include <taglib/mp4file.h>
+#include <taglib/mp4tag.h>
+#include <taglib/mpegfile.h>
+#include <taglib/opusfile.h>
+#include <taglib/vorbisfile.h>
+#include <taglib/xiphcomment.h>
 #include <taglib/fileref.h>
 #include <taglib/tag.h>
 #include <taglib/tpropertymap.h>
@@ -610,6 +621,112 @@ bool parseShift(const QString &raw, qint64 *seconds)
     if (seconds)
         *seconds = sign * secs;
     return true;
+}
+
+
+namespace {
+#ifdef DIRDUO_HAVE_TAGLIB
+QImage fromBytes(const TagLib::ByteVector &b)
+{
+    if (b.isEmpty())
+        return {};
+    return QImage::fromData(reinterpret_cast<const uchar *>(b.data()), int(b.size()));
+}
+
+QImage fromPictures(const TagLib::List<TagLib::FLAC::Picture *> &pics)
+{
+    QImage any;
+    for (TagLib::FLAC::Picture *p : pics) {
+        QImage img = fromBytes(p->data());
+        if (img.isNull())
+            continue;
+        if (p->type() == TagLib::FLAC::Picture::FrontCover)
+            return img;
+        if (any.isNull())
+            any = img;
+    }
+    return any;
+}
+
+QImage embeddedCover(const QString &path)
+{
+    const QByteArray name = QFile::encodeName(path);
+    const QString ext = FileKind::extensionOf(path);
+    if (ext == QLatin1String("mp3") || ext == QLatin1String("mp2")) {
+        TagLib::MPEG::File f(name.constData(), false);
+        if (!f.isValid() || !f.hasID3v2Tag())
+            return {};
+        QImage any;
+        for (TagLib::ID3v2::Frame *fr : f.ID3v2Tag()->frameListMap()["APIC"]) {
+            auto *pic = dynamic_cast<TagLib::ID3v2::AttachedPictureFrame *>(fr);
+            if (!pic)
+                continue;
+            QImage img = fromBytes(pic->picture());
+            if (img.isNull())
+                continue;
+            if (pic->type() == TagLib::ID3v2::AttachedPictureFrame::FrontCover)
+                return img;
+            if (any.isNull())
+                any = img;
+        }
+        return any;
+    }
+    if (ext == QLatin1String("flac")) {
+        TagLib::FLAC::File f(name.constData(), false);
+        return f.isValid() ? fromPictures(f.pictureList()) : QImage();
+    }
+    if (ext == QLatin1String("m4a") || ext == QLatin1String("mp4a") || ext == QLatin1String("aac") || ext == QLatin1String("m4b")) {
+        TagLib::MP4::File f(name.constData(), false);
+        if (!f.isValid() || !f.tag() || !f.tag()->contains("covr"))
+            return {};
+        const TagLib::MP4::CoverArtList covers = f.tag()->item("covr").toCoverArtList();
+        for (const TagLib::MP4::CoverArt &c : covers) {
+            QImage img = fromBytes(c.data());
+            if (!img.isNull())
+                return img;
+        }
+        return {};
+    }
+    if (ext == QLatin1String("ogg") || ext == QLatin1String("oga")) {
+        TagLib::Ogg::Vorbis::File f(name.constData(), false);
+        return f.isValid() && f.tag() ? fromPictures(f.tag()->pictureList()) : QImage();
+    }
+    if (ext == QLatin1String("opus")) {
+        TagLib::Ogg::Opus::File f(name.constData(), false);
+        return f.isValid() && f.tag() ? fromPictures(f.tag()->pictureList()) : QImage();
+    }
+    return {};
+}
+#endif
+} // namespace
+
+QImage coverArt(const QString &path)
+{
+    if (kindFor(path) != MediaInfo::Kind::Audio)
+        return {};
+#ifdef DIRDUO_HAVE_TAGLIB
+    QImage img = embeddedCover(path);
+    if (!img.isNull())
+        return img;
+#endif
+    // The album's picture next to it, as players look for it.
+    const QDir dir = QFileInfo(path).dir();
+    static const QStringList names = {QStringLiteral("cover"), QStringLiteral("folder"), QStringLiteral("front"),
+                                      QStringLiteral("albumart"), QStringLiteral("album")};
+    const QStringList entries = dir.entryList(QDir::Files);
+    for (const QString &n : names) {
+        for (const QString &e : entries) {
+            const QString base = e.section(QLatin1Char('.'), 0, -2);
+            const QString ext = e.section(QLatin1Char('.'), -1).toLower();
+            if (base.compare(n, Qt::CaseInsensitive) == 0
+                && (ext == QLatin1String("jpg") || ext == QLatin1String("jpeg") || ext == QLatin1String("png") || ext == QLatin1String("webp"))) {
+                QImage img(dir.filePath(e));
+                if (!img.isNull())
+                    return img;
+            }
+        }
+    }
+    return {};
 }
 
 } // namespace Metadata

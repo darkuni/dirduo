@@ -3,6 +3,8 @@
 #include "core/JobManager.h"
 #include "core/Paths.h"
 #include "ui/AppContext.h"
+#include <QListView>
+#include "ui/ThumbDelegate.h"
 #include "ui/BreadcrumbBar.h"
 #include "ui/ButtonBar.h"
 #include "ui/AdvancedRenameDialog.h"
@@ -2830,6 +2832,135 @@ dirduo.on("folderOpened", e => { opened.push(e.path); dirduo.save("last", e.path
         QVERIFY(!model->thumbnails());
         QVERIFY(w->runCommand(QStringLiteral("Set VIEW=thumbnails")));
         QCOMPARE(t->viewMode(), FolderTab::ViewMode::Thumbnails);
+        Paths::setCacheHomeOverride(QString());
+    }
+
+    void thumbnailsSliderAndLook()
+    {
+        Paths::setCacheHomeOverride(m_dir->filePath(QStringLiteral("cache")));
+        const Prefs::Values saved = Prefs::instance()->values();
+        const QString pics = root + QStringLiteral("/gallery");
+        QDir().mkpath(pics + QStringLiteral("/inside"));
+        auto save = [](const QString &path, const QSize &size, const QColor &c) {
+            QImage img(size, QImage::Format_RGB32);
+            img.fill(c);
+            return img.save(path);
+        };
+        QVERIFY(save(pics + QStringLiteral("/a red.png"), QSize(1200, 800), Qt::red));
+        QVERIFY(save(pics + QStringLiteral("/b green.png"), QSize(400, 600), Qt::green));
+        QVERIFY(save(pics + QStringLiteral("/c blue.png"), QSize(500, 500), Qt::blue));
+        QVERIFY(save(pics + QStringLiteral("/inside/x.png"), QSize(300, 300), Qt::yellow));
+        {
+            QPdfWriter pdf(pics + QStringLiteral("/manual.pdf"));
+            QPainter p(&pdf);
+            p.fillRect(QRect(0, 0, pdf.width(), pdf.height()), Qt::darkBlue);
+        }
+        FolderTab *t = w->display(0)->currentTab();
+        t->navigate(pics);
+        waitListed(t, 5);
+        QVERIFY(w->runCommand(QStringLiteral("Set VIEW=thumbnails")));
+        QCOMPARE(t->view()->itemDelegate(), static_cast<QAbstractItemDelegate *>(t->thumbDelegate()));
+        QVERIFY(t->thumbnailSizeBar()->isVisibleTo(t));
+
+        // The slider: live, and the grid follows.
+        QCOMPARE(t->thumbnailSize(), saved.thumbs.size);
+        t->thumbnailSlider()->setValue(256);
+        QCOMPARE(t->thumbnailSize(), 256);
+        QCOMPARE(t->thumbDelegate()->pixels(), t->thumbnailPixels());
+        auto *list = qobject_cast<QListView *>(t->view());
+        QVERIFY(list);
+        QVERIFY(list->gridSize().width() >= t->thumbnailPixels());
+        // The room left over is shared between the columns.
+        const int vpw = list->viewport()->width();
+        const int cols = vpw / list->gridSize().width();
+        QVERIFY(cols >= 1);
+        QVERIFY(vpw - cols * list->gridSize().width() < cols);
+        QVERIFY(w->runCommand(QStringLiteral("Set THUMBNAILSIZE=bigger")));
+        QCOMPARE(t->thumbnailSize(), 288);
+        QCOMPARE(t->thumbnailSlider()->value(), 288);
+        QVERIFY(w->runCommand(QStringLiteral("Set THUMBNAILSIZE=160")));
+        QCOMPARE(t->thumbnailSize(), 160);
+        QTimer::singleShot(100, []() {
+            if (QWidget *box = QApplication::activeModalWidget())
+                box->close();
+        });
+        QVERIFY(!w->runCommand(QStringLiteral("Set THUMBNAILSIZE=9000"))); // refused, with a message
+        QCOMPARE(t->thumbnailSize(), 160);
+        // Ctrl+wheel, as in Opus.
+        QWidget *vp = list->viewport();
+        const QPoint at = vp->rect().center();
+        QWheelEvent wheel(at, vp->mapToGlobal(at), QPoint(), QPoint(0, 120), Qt::NoButton, Qt::ControlModifier, Qt::NoScrollPhase, false);
+        QApplication::sendEvent(vp, &wheel);
+        QCOMPARE(t->thumbnailSize(), 176);
+        QCOMPARE(t->currentFormat().thumbSize, 176); // folder formats keep it
+        QVERIFY(w->runCommand(QStringLiteral("Set THUMBNAILSIZE=reset")));
+        QCOMPARE(t->thumbnailSize(), saved.thumbs.size);
+
+        // Pictures, the folder's pictures, a PDF page.
+        auto idx = [t, pics](const QString &name) {
+            const QAbstractItemModel *m = t->view()->model();
+            for (int r = 0; r < m->rowCount(); ++r) {
+                if (m->index(r, 0).data(FileListModel::PathRole).toString() == pics + QLatin1Char('/') + name)
+                    return m->index(r, 0);
+            }
+            return QModelIndex();
+        };
+        const QModelIndex red = idx(QStringLiteral("a red.png"));
+        QVERIFY(red.isValid());
+        QTRY_VERIFY(red.data(FileListModel::ThumbImageRole).isValid());
+        QCOMPARE(red.data(FileListModel::ThumbFullRole).toSize(), QSize(1200, 800));
+        QTRY_VERIFY(idx(QStringLiteral("inside")).data(FileListModel::ThumbImageRole).isValid());
+        if (PdfDoc::available())
+            QTRY_VERIFY(idx(QStringLiteral("manual.pdf")).data(FileListModel::ThumbImageRole).isValid());
+
+        // The label's extra lines.
+        Prefs::Values v = saved;
+        v.thumbs.labelDetails = true;
+        v.thumbs.labelDate = true;
+        Prefs::instance()->setValues(v);
+        const QStringList lines = ThumbDelegate::detailLines(red);
+        QCOMPARE(lines.size(), 2);
+        QVERIFY2(lines.at(0).startsWith(QStringLiteral("1200 × 800 - ")), qPrintable(lines.at(0)));
+        QVERIFY(!lines.at(1).isEmpty());
+
+        // Every frame draws the picture in the middle of its square.
+        for (int frame = 0; frame <= 4; ++frame) {
+            v.thumbs.frame = frame;
+            v.thumbs.resize = frame == 4 ? 1 : 0;
+            Prefs::instance()->setValues(v);
+            QApplication::processEvents();
+            const QRect cell = list->visualRect(red);
+            const QRect box = t->thumbDelegate()->imageRect(cell);
+            const QImage shot = vp->grab().toImage();
+            const QPoint mid = (box.center() + QPoint(0, -box.height() / 10)) * shot.devicePixelRatio();
+            const QColor c = shot.pixelColor(mid);
+            QVERIFY2(c.red() > 200 && c.green() < 60 && c.blue() < 60,
+                     qPrintable(QStringLiteral("frame %1: %2").arg(frame).arg(c.name())));
+        }
+
+        // Preferences > Thumbnails.
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("thumbnails"));
+            QCOMPARE(dlg.currentPage(), QStringLiteral("thumbnails"));
+            QVERIFY(dlg.search(QStringLiteral("album art")).contains(QStringLiteral("thumbnails")));
+            dlg.thumbFrame()->setCurrentIndex(3);
+            dlg.thumbLines()->setValue(1);
+            dlg.thumbBox(QStringLiteral("slider"))->setChecked(false);
+            dlg.thumbBox(QStringLiteral("typeicon"))->setChecked(true);
+            QVERIFY(dlg.apply());
+        }
+        QCOMPARE(Prefs::instance()->values().thumbs.frame, 3);
+        QCOMPARE(Prefs::instance()->values().thumbs.labelLines, 1);
+        QVERIFY(Prefs::instance()->values().thumbs.typeIcon);
+        QVERIFY(!t->thumbnailSizeBar()->isVisibleTo(t));
+        Prefs::instance()->reload();
+        QCOMPARE(Prefs::instance()->values().thumbs.frame, 3); // saved
+
+        // Other views use the plain delegate again.
+        QVERIFY(w->runCommand(QStringLiteral("Set VIEW=icons")));
+        QVERIFY(t->view()->itemDelegate() != static_cast<QAbstractItemDelegate *>(t->thumbDelegate()));
+        QVERIFY(!t->thumbnailSizeBar()->isVisibleTo(t));
+        Prefs::instance()->setValues(saved);
         Paths::setCacheHomeOverride(QString());
     }
 

@@ -165,6 +165,8 @@ add_library(dirduo_ui STATIC
     src/ui/FileSortProxy.cpp
     src/ui/RenameDelegate.cpp
     src/ui/FolderTab.cpp
+    src/ui/ThumbDelegate.cpp
+    src/ui/ThumbMakers.cpp
     src/ui/BreadcrumbBar.cpp
     src/ui/FileDisplay.cpp
     src/ui/ButtonBar.cpp

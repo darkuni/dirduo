@@ -15,6 +15,7 @@ struct FolderFormat
     QByteArray header;     // QHeaderView state: columns, widths, sort
     QString groupBy;       // FileListModel::groupByName
     QString view;          // FolderTab::viewModeName
+    int thumbSize = 0;     // thumbnails mode's size; 0: as it was
 };
 
 class FolderFormats

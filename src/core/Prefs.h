@@ -50,6 +50,29 @@ public:
             QString markCollection = QStringLiteral("Marked Pictures - %F"); // %F folder, %D date
             bool openMarkedOnClose = true;
         } viewer;
+
+        // Thumbnails mode, as Opus's Thumbnails Mode pages.
+        struct Thumbs
+        {
+            int size = 128;            // longest side, in pixels at 100% zoom (the slider's default)
+            int resize = 0;            // 0 fit inside, 1 fill the square (crop)
+            int frame = 2;             // 0 none, 1 thin border, 2 shadow, 3 photo print, 4 35mm slide
+            int spacing = 8;           // pixels between thumbnails
+            bool spread = true;        // share the room left over between the columns
+            bool slider = true;        // the size slider in the corner of the list
+            int labelLines = 2;        // lines of the name (1-3); 0 no label
+            bool labelDetails = false; // "1920 x 1080 - 2.4 MB" under the name
+            bool labelDate = false;    // date taken (photos) or modified
+            bool sprockets = true;     // film edges on videos
+            bool stars = true;         // the rating on the thumbnail
+            bool typeIcon = false;     // the file type's icon in the corner
+            bool dimensionBars = false;// a bar for each picture's size next to the biggest in the folder
+            bool video = true;         // a frame from videos
+            bool documents = true;     // the first page of PDFs
+            bool covers = true;        // album art for music
+            bool folders = true;       // folders show the pictures inside
+            bool folderNewest = false; // ...the newest ones (else the first by name)
+        } thumbs;
     };
 
     const Values &values() const { return m_values; }

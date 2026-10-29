@@ -1850,9 +1850,30 @@ bool ListerWindow::set(const ParsedCommand &cmd, QString *error)
         } else if (key == QLatin1String("VIEW")) {
             FolderTab::ViewMode mode;
             if (!FolderTab::viewModeFromName(value, mode))
-                return fail(QStringLiteral("VIEW takes details, list or icons."));
+                return fail(QStringLiteral("VIEW takes details, list, icons or thumbnails."));
             sourceTab()->setViewMode(mode);
             syncViewActions();
+        } else if (key == QLatin1String("THUMBNAILSIZE")) {
+            // Opus's Set THUMBNAILSIZE: a size, or bigger / smaller / reset.
+            FolderTab *t = sourceTab();
+            QString v = value;
+            v.remove(QStringLiteral("px"));
+            bool isNumber = false;
+            const int px = v.toInt(&isNumber);
+            if (v == QLatin1String("bigger") || v == QLatin1String("in") || v == QLatin1String("+"))
+                t->setThumbnailSize(t->thumbnailSize() + 32);
+            else if (v == QLatin1String("smaller") || v == QLatin1String("out") || v == QLatin1String("-"))
+                t->setThumbnailSize(t->thumbnailSize() - 32);
+            else if (v == QLatin1String("reset") || v == QLatin1String("default"))
+                t->setThumbnailSize(Prefs::instance()->values().thumbs.size);
+            else if (isNumber && px >= 32 && px <= 512)
+                t->setThumbnailSize(px);
+            else
+                return fail(QStringLiteral("THUMBNAILSIZE takes a size from 32 to 512, bigger, smaller or reset."));
+            if (t->viewMode() != FolderTab::ViewMode::Thumbnails) {
+                t->setViewMode(FolderTab::ViewMode::Thumbnails);
+                syncViewActions();
+            }
         } else if (key == QLatin1String("HIDDEN")) {
             bool on = sourceDisplay()->showHidden();
             if (!parseSwitch(value, on, on))

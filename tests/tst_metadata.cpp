@@ -6,10 +6,14 @@
 #include <QImage>
 #include <QSignalSpy>
 #include <QTemporaryDir>
+#include <QBuffer>
 #include <QTest>
 
 #ifdef DIRDUO_HAVE_TAGLIB
+#include <taglib/attachedpictureframe.h>
 #include <taglib/fileref.h>
+#include <taglib/id3v2tag.h>
+#include <taglib/mpegfile.h>
 #include <taglib/tag.h>
 #include <taglib/tpropertymap.h>
 #endif
@@ -64,6 +68,63 @@ class TestMetadata : public QObject
 {
     Q_OBJECT
 private Q_SLOTS:
+    void embeddedAlbumArt()
+    {
+#ifndef DIRDUO_HAVE_TAGLIB
+        QSKIP("Built without TagLib");
+#else
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("song.mp3"));
+        {
+            // Twenty silent MPEG-1 layer III frames (128 kbit/s, 44.1 kHz).
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            for (int i = 0; i < 20; ++i) {
+                QByteArray frame(417, '\0');
+                frame[0] = char(0xFF);
+                frame[1] = char(0xFB);
+                frame[2] = char(0x90);
+                frame[3] = char(0x64);
+                f.write(frame);
+            }
+        }
+        QImage art(300, 300, QImage::Format_RGB32);
+        art.fill(Qt::red);
+        QByteArray png;
+        {
+            QBuffer buf(&png);
+            QVERIFY(buf.open(QIODevice::WriteOnly));
+            QVERIFY(art.save(&buf, "PNG"));
+        }
+        QVERIFY(Metadata::coverArt(path).isNull());
+        {
+            TagLib::MPEG::File f(QFile::encodeName(path).constData());
+            QVERIFY(f.isValid());
+            auto *back = new TagLib::ID3v2::AttachedPictureFrame;
+            back->setType(TagLib::ID3v2::AttachedPictureFrame::BackCover);
+            back->setMimeType("image/png");
+            QImage other(10, 10, QImage::Format_RGB32);
+            other.fill(Qt::green);
+            QByteArray otherPng;
+            QBuffer ob(&otherPng);
+            QVERIFY(ob.open(QIODevice::WriteOnly));
+            QVERIFY(other.save(&ob, "PNG"));
+            back->setPicture(TagLib::ByteVector(otherPng.constData(), uint(otherPng.size())));
+            f.ID3v2Tag(true)->addFrame(back);
+            auto *front = new TagLib::ID3v2::AttachedPictureFrame;
+            front->setType(TagLib::ID3v2::AttachedPictureFrame::FrontCover);
+            front->setMimeType("image/png");
+            front->setPicture(TagLib::ByteVector(png.constData(), uint(png.size())));
+            f.ID3v2Tag(true)->addFrame(front);
+            QVERIFY(f.save());
+        }
+        // The front cover wins over the back.
+        const QImage cover = Metadata::coverArt(path);
+        QCOMPARE(cover.size(), QSize(300, 300));
+        QCOMPARE(QColor(cover.pixel(5, 5)), QColor(Qt::red));
+#endif
+    }
+
     void kinds()
     {
         QCOMPARE(Metadata::kindFor(QStringLiteral("Song.MP3")), MediaInfo::Kind::Audio);

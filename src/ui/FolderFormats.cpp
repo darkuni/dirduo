@@ -37,6 +37,7 @@ FolderFormat readFormat(QSettings &s)
     f.header = QByteArray::fromBase64(s.value(QStringLiteral("header")).toByteArray());
     f.groupBy = s.value(QStringLiteral("groupBy")).toString();
     f.view = s.value(QStringLiteral("view")).toString();
+    f.thumbSize = s.value(QStringLiteral("thumbSize"), 0).toInt();
     return f;
 }
 
@@ -47,6 +48,10 @@ void writeFormat(QSettings &s, const FolderFormat &f)
     s.setValue(QStringLiteral("header"), f.header.toBase64());
     s.setValue(QStringLiteral("groupBy"), f.groupBy);
     s.setValue(QStringLiteral("view"), f.view);
+    if (f.thumbSize > 0)
+        s.setValue(QStringLiteral("thumbSize"), f.thumbSize);
+    else
+        s.remove(QStringLiteral("thumbSize"));
 }
 
 } // namespace
