@@ -85,7 +85,11 @@ public:
     // The file display's right-click menu (onItem: clicked on a file).
     void fillContextMenu(QMenu &menu, FileDisplay *d, bool onItem);
     void customizeContextMenu(QMenu &menu, const QStringList &paths, FolderTab *t);
-    // Opens a file: DirDuo's default app for its type, else the desktop's.
+    // Double-clicked programs run; scripts as Preferences > General says.
+    // True when it was a program (run, asked about, or canceled).
+    bool runProgram(const QString &path);
+    // Opens a file: programs run, else DirDuo's default app for its type,
+    // else the desktop's.
     void openFile(const QString &path);
     bool isDual() const { return m_dual; }
 

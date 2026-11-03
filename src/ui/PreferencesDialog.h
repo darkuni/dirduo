@@ -75,6 +75,7 @@ public:
     // typeicon, bars, video, documents, covers, folders, newest.
     QCheckBox *thumbBox(const QString &key) const { return m_thumbBoxes.value(key); }
     class QComboBox *thumbFrame() const { return m_thumbFrame; }
+    class QComboBox *scriptsChoice() const { return m_scripts; }
     class QComboBox *thumbResize() const { return m_thumbResize; }
     class QSpinBox *thumbSize() const { return m_thumbSizeSpin; }
     class QSpinBox *thumbLines() const { return m_thumbLines; }
@@ -136,6 +137,7 @@ private:
     QTreeWidget *m_filterList = nullptr;
     QTreeWidget *m_groupList = nullptr;
     class QSpinBox *m_notifyAfter = nullptr;
+    class QComboBox *m_scripts = nullptr;
     QHash<QString, QCheckBox *> m_viewerBoxes;
     class QComboBox *m_viewerZoom = nullptr;
     class QComboBox *m_viewerBackground = nullptr;

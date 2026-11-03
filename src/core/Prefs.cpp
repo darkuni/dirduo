@@ -32,6 +32,7 @@ void Prefs::reload()
     v.terminal = s.value(QStringLiteral("terminal")).toString();
     v.notifyJobs = s.value(QStringLiteral("notifyJobs"), true).toBool();
     v.notifyAfter = qBound(0, s.value(QStringLiteral("notifyAfter"), 10).toInt(), 3600);
+    v.scripts = qBound(0, s.value(QStringLiteral("scripts"), 0).toInt(), 3);
     s.endGroup();
     s.beginGroup(QStringLiteral("Viewer"));
     Values::Viewer &w = v.viewer;
@@ -95,6 +96,7 @@ void Prefs::setValues(const Values &v)
     s.setValue(QStringLiteral("terminal"), v.terminal);
     s.setValue(QStringLiteral("notifyJobs"), v.notifyJobs);
     s.setValue(QStringLiteral("notifyAfter"), v.notifyAfter);
+    s.setValue(QStringLiteral("scripts"), v.scripts);
     s.endGroup();
     s.beginGroup(QStringLiteral("Viewer"));
     const Values::Viewer &w = v.viewer;

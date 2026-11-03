@@ -27,6 +27,9 @@ public:
         QString terminal;            // empty: Konsole, else the first one installed
         bool notifyJobs = true;      // a desktop notice when a job finishes while DirDuo is in the background
         int notifyAfter = 10;        // ...and it took at least this many seconds
+        // Double-clicking a script marked executable: 0 ask, 1 run it, 2 run
+        // it in a terminal, 3 open it (as text). Programs always run.
+        int scripts = 0;
 
         // The standalone viewer (Show), as Opus's Viewer pages.
         struct Viewer

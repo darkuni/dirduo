@@ -285,6 +285,19 @@ QWidget *PreferencesDialog::buildGeneral()
     box(QStringLiteral("junk"), QStringLiteral("Treat .DS_Store, ._ files, Thumbs.db, desktop.ini and __MACOSX as hidden files"), v.junkHidden, fl, files);
     box(QStringLiteral("treelines"), QStringLiteral("Folder trees: dotted branch lines and + / - boxes"), v.treeLines, fl, files);
     box(QStringLiteral("treepath"), QStringLiteral("Folder trees: draw the way to the current folder in the display's color"), v.treePath, fl, files);
+    {
+        // Programs run when double-clicked; scripts can go either way.
+        auto *row = new QHBoxLayout;
+        row->addWidget(new QLabel(QStringLiteral("Double-clicking an executable script:"), files));
+        m_scripts = new QComboBox(files);
+        m_scripts->addItems({QStringLiteral("Ask each time"), QStringLiteral("Run it"), QStringLiteral("Run it in a terminal"),
+                             QStringLiteral("Open it as text")});
+        m_scripts->setCurrentIndex(v.scripts);
+        m_scripts->setToolTip(QStringLiteral("Programs and AppImages always run, as in Dolphin."));
+        row->addWidget(m_scripts);
+        row->addStretch(1);
+        fl->addLayout(row);
+    }
     layout->addWidget(files);
     auto *term = new QGroupBox(QStringLiteral("Terminal"), page);
     auto *tl = new QFormLayout(term);
@@ -1825,6 +1838,7 @@ bool PreferencesDialog::apply(QString *error)
     v.treePath = m_general.value(QStringLiteral("treepath"))->isChecked();
     v.notifyJobs = m_general.value(QStringLiteral("notify"))->isChecked();
     v.notifyAfter = m_notifyAfter->value();
+    v.scripts = m_scripts->currentIndex();
     const QString typed = m_terminal->currentText().trimmed();
     const int at = m_terminal->findText(typed);
     v.terminal = at >= 0 ? m_terminal->itemData(at).toString() : typed;

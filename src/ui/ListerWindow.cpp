@@ -34,6 +34,7 @@
 #include "core/Prefs.h"
 #include "ui/OpenWithDialog.h"
 #include "core/Apps.h"
+#include "core/Executables.h"
 #include "ui/ServerDialog.h"
 #include "core/Servers.h"
 #include "ui/PropertiesDialog.h"
@@ -83,6 +84,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QCheckBox>
 #include <QMimeData>
 #include <QSaveFile>
 #include <QSettings>
@@ -2633,6 +2635,9 @@ void ListerWindow::openFile(const QString &path)
             showError(QStringLiteral("Open"), QStringLiteral("Remote files need the KIO build of DirDuo."));
         return;
     }
+    // Programs run, as in Dolphin, rather than going to "open with".
+    if (runProgram(path))
+        return;
     // Pictures, music and video in DirDuo's viewer when Preferences > Viewer says so.
     const Prefs::Values::Viewer &vp = Prefs::instance()->values().viewer;
     if ((vp.openPictures && ViewerWindow::isPicture(path)) || (vp.openMedia && ViewerWindow::isMedia(path))) {
@@ -2649,6 +2654,75 @@ void ListerWindow::openFile(const QString &path)
     }
     if (!QDesktopServices::openUrl(QUrl::fromLocalFile(path)))
         showError(QStringLiteral("Open"), QStringLiteral("No application is set up to open \"%1\".").arg(QFileInfo(path).fileName()));
+}
+
+bool ListerWindow::runProgram(const QString &path)
+{
+    const Executables::Kind kind = Executables::kindOf(path);
+    if (kind == Executables::Kind::None)
+        return false;
+    const QString name = QFileInfo(path).fileName();
+    QString err;
+    if (!Executables::isMarkedExecutable(path)) {
+        // A script that is not executable is just text: it opens as usual.
+        if (kind == Executables::Kind::Script)
+            return false;
+        // A program or AppImage that lost its x bit (downloads do): offer
+        // to fix that, the question Dolphin asks too.
+        QMessageBox box(QMessageBox::Question, QStringLiteral("Run %1").arg(Executables::kindName(kind)),
+                        QStringLiteral("\"%1\" is a %2, but it is not marked as executable.\n\nMake it executable and run it?")
+                            .arg(name, Executables::kindName(kind)),
+                        QMessageBox::NoButton, this);
+        QPushButton *yes = box.addButton(QStringLiteral("Make Executable and Run"), QMessageBox::AcceptRole);
+        yes->setObjectName(QStringLiteral("makeexec"));
+        box.addButton(QMessageBox::Cancel);
+        box.setDefaultButton(yes);
+        box.exec();
+        if (box.clickedButton() != yes)
+            return true;
+        if (!Executables::makeExecutable(path, &err)) {
+            showError(QStringLiteral("Run"), err);
+            return true;
+        }
+        if (FolderTab *t = sourceTab())
+            t->refresh();
+    }
+    if (kind == Executables::Kind::Script) {
+        int choice = Prefs::instance()->values().scripts;
+        if (choice == 0) {
+            QMessageBox box(QMessageBox::Question, QStringLiteral("Run script"),
+                            QStringLiteral("\"%1\" is an executable script. Run it, or open it?").arg(name), QMessageBox::NoButton, this);
+            QPushButton *runB = box.addButton(QStringLiteral("Run"), QMessageBox::AcceptRole);
+            runB->setObjectName(QStringLiteral("run"));
+            QPushButton *termB = box.addButton(QStringLiteral("Run in Terminal"), QMessageBox::AcceptRole);
+            termB->setObjectName(QStringLiteral("terminal"));
+            QPushButton *openB = box.addButton(QStringLiteral("Open"), QMessageBox::AcceptRole);
+            openB->setObjectName(QStringLiteral("open"));
+            box.addButton(QMessageBox::Cancel);
+            box.setDefaultButton(termB);
+            auto *remember = new QCheckBox(QStringLiteral("Do this every time (Preferences > General can change it)"), &box);
+            remember->setObjectName(QStringLiteral("remember"));
+            box.setCheckBox(remember);
+            box.exec();
+            QAbstractButton *c = box.clickedButton();
+            choice = c == runB ? 1 : c == termB ? 2 : c == openB ? 3 : 0;
+            if (choice == 0)
+                return true; // canceled
+            if (remember->isChecked()) {
+                Prefs::Values v = Prefs::instance()->values();
+                v.scripts = choice;
+                Prefs::instance()->setValues(v);
+            }
+        }
+        if (choice == 3)
+            return false; // open it as text, the usual way
+        if (!(choice == 2 ? Executables::runInTerminal(path, &err) : Executables::run(path, &err)))
+            showError(QStringLiteral("Run"), err.isEmpty() ? QStringLiteral("Could not run \"%1\".").arg(name) : err);
+        return true;
+    }
+    if (!Executables::run(path, &err))
+        showError(QStringLiteral("Run"), err.isEmpty() ? QStringLiteral("Could not run \"%1\".").arg(name) : err);
+    return true;
 }
 
 void ListerWindow::rebuildAliasMenu()

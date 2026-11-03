@@ -2964,6 +2964,101 @@ dirduo.on("folderOpened", e => { opened.push(e.path); dirduo.save("last", e.path
         Paths::setCacheHomeOverride(QString());
     }
 
+    void doubleClickRunsPrograms()
+    {
+        QList<QStringList> ran;
+        HostRun::setStarter([&](const QStringList &line, const QString &) {
+            ran << line;
+            return true;
+        });
+        const Prefs::Values saved = Prefs::instance()->values();
+        Prefs::Values v = saved;
+        v.scripts = 0;
+        Prefs::instance()->setValues(v);
+        const QString dir = root + QStringLiteral("/progs");
+        QDir().mkpath(dir);
+        // A program: runs at once, no questions.
+        const QString game = dir + QStringLiteral("/game");
+        QVERIFY(QFile::copy(QStandardPaths::findExecutable(QStringLiteral("true")), game));
+        QFile(game).setPermissions(QFile(game).permissions() | QFileDevice::ExeOwner | QFileDevice::ExeUser);
+        w->openFile(game);
+        QCOMPARE(ran.size(), 1);
+        QCOMPARE(ran.last().last(), game);
+
+        // An AppImage that lost its x bit: asked, made executable, run.
+        const QString app = dir + QStringLiteral("/Tool.AppImage");
+        QVERIFY(QFile::copy(QStandardPaths::findExecutable(QStringLiteral("true")), app));
+        QFile(app).setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ReadUser | QFileDevice::WriteUser);
+        auto click = [](const QString &name, bool tick) {
+            QTimer::singleShot(150, [name, tick]() {
+                auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+                if (!box)
+                    return;
+                if (tick)
+                    if (auto *c = box->findChild<QCheckBox *>(QStringLiteral("remember")))
+                        c->setChecked(true);
+                if (auto *b = box->findChild<QPushButton *>(name))
+                    b->click();
+                else
+                    box->reject();
+            });
+        };
+        click(QStringLiteral("makeexec"), false);
+        w->openFile(app);
+        QVERIFY(QFileInfo(app).isExecutable());
+        QCOMPARE(ran.size(), 2);
+        QCOMPARE(ran.last().last(), app);
+
+        // A script: asked; "Run in Terminal", and remembered.
+        const QString script = dir + QStringLiteral("/bios check.sh");
+        {
+            QFile f(script);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("#!/bin/bash\necho checking\n");
+        }
+        QFile(script).setPermissions(QFile(script).permissions() | QFileDevice::ExeOwner | QFileDevice::ExeUser);
+        click(QStringLiteral("terminal"), true);
+        w->openFile(script);
+        QCOMPARE(ran.size(), 3);
+        QVERIFY(ran.last().last().contains(QStringLiteral("konsole --hold")));
+        QCOMPARE(Prefs::instance()->values().scripts, 2);
+        // Remembered: no question this time.
+        w->openFile(script);
+        QCOMPARE(ran.size(), 4);
+        // "Run it" straight away.
+        v = Prefs::instance()->values();
+        v.scripts = 1;
+        Prefs::instance()->setValues(v);
+        w->openFile(script);
+        QCOMPARE(ran.size(), 5);
+        QCOMPARE(ran.last().last(), script);
+        // "Open it as text", and scripts without the x bit: not run.
+        v.scripts = 3;
+        Prefs::instance()->setValues(v);
+        QVERIFY(!w->runProgram(script));
+        v.scripts = 1;
+        Prefs::instance()->setValues(v);
+        QFile(script).setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ReadUser | QFileDevice::WriteUser);
+        QVERIFY(!w->runProgram(script));
+        // Canceling the question runs nothing.
+        v.scripts = 0;
+        Prefs::instance()->setValues(v);
+        QFile(script).setPermissions(QFile(script).permissions() | QFileDevice::ExeOwner | QFileDevice::ExeUser);
+        click(QStringLiteral("nothing"), false);
+        QVERIFY(w->runProgram(script));
+        QCOMPARE(ran.size(), 5);
+        // Preferences > General.
+        {
+            PreferencesDialog dlg(*m_app, w, QStringLiteral("general"));
+            QCOMPARE(dlg.scriptsChoice()->currentIndex(), 0);
+            dlg.scriptsChoice()->setCurrentIndex(2);
+            QVERIFY(dlg.apply());
+        }
+        QCOMPARE(Prefs::instance()->values().scripts, 2);
+        Prefs::instance()->setValues(saved);
+        HostRun::setStarter({});
+    }
+
     void zoomPerLister()
     {
         FolderTab *t = w->display(0)->currentTab();
