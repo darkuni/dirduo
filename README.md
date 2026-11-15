@@ -369,6 +369,21 @@ ctest --test-dir build
 ./build/dirduo
 ```
 
+### Install a release
+
+Download from [Releases](https://github.com/darkuni/dirduo/releases/latest):
+
+- `dirduo-x86_64.flatpak`: Steam Deck, Linux PCs
+- `dirduo-aarch64.flatpak`: Steam Frame, ARM Linux
+
+In Desktop Mode open Konsole in the download folder and run (use the aarch64 file on a Frame):
+
+```sh
+flatpak install --user dirduo-x86_64.flatpak
+```
+
+It fetches the KDE runtime from Flathub the first time (a few hundred MB). DirDuo then shows up in the application menu, and runs as `flatpak run com.monroeworld.DirDuo`. Installing a newer one the same way updates it.
+
 ### Flatpak on the Deck
 
 Two ways to get a test build.

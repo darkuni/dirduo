@@ -85,6 +85,18 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.2.0" date="2026-11-15" type="development">
+      <description>
+        <p>First test release, for the Steam Deck, Steam Frame and Linux desktops.</p>
+        <ul>
+          <li>Two displays, stacked or side by side, with toolbars between them</li>
+          <li>Queued copy and move jobs per drive, sync, compare, archives as folders</li>
+          <li>Index Search, a standalone viewer for pictures, music, video and PDFs</li>
+          <li>Thumbnails of pictures, videos, PDFs, album art and folders, with a live size slider</li>
+          <li>Double-clicked programs and AppImages run; scripts can run in a terminal</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-10-21">
       <description>
         <p>Phase 1: listers, dual displays, tabs, breadcrumbs, inline rename, aliases and the queued job manager.</p>
